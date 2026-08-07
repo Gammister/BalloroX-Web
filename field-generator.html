@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>BalloroX - Генератор поля</title>
+  <link rel="stylesheet" href="field-generator.css?v=20260715-4">
+</head>
+<body>
+  <main class="generator-shell">
+    <header class="generator-header">
+      <div class="generator-brand" aria-label="BalloroX">
+        <span>Balloro</span><strong>X</strong>
+      </div>
+      <div class="generator-title">
+        <h1>Генератор поля</h1>
+        <p>КОНФИГУРАЦИИ 5-10 ЛИНИЙ</p>
+      </div>
+      <a class="game-link" href="index.html">ИГРА</a>
+    </header>
+
+    <section class="control-band" aria-label="Настройки поля">
+      <div class="line-control">
+        <span class="control-label">ЛИНИИ</span>
+        <div id="lineButtons" class="line-buttons" role="group" aria-label="Количество линий"></div>
+      </div>
+      <div id="statePicker" class="state-picker" role="group" aria-label="Тип ячейки для установки">
+        <button class="state-option" type="button" data-state="0" aria-pressed="false">
+          <i class="swatch empty" aria-hidden="true"></i><span>ПУСТАЯ</span>
+        </button>
+        <button class="state-option active" type="button" data-state="1" aria-pressed="true">
+          <i class="swatch low" aria-hidden="true"></i><span>НИЗКИЙ</span>
+        </button>
+        <button class="state-option" type="button" data-state="2" aria-pressed="false">
+          <i class="swatch middle" aria-hidden="true"></i><span>СРЕДНИЙ</span>
+        </button>
+        <button class="state-option" type="button" data-state="3" aria-pressed="false">
+          <i class="swatch high" aria-hidden="true"></i><span>ВЫСОКИЙ</span>
+        </button>
+        <button class="state-option" type="button" data-state="4" aria-pressed="false">
+          <i class="swatch ex-multi" aria-hidden="true">★</i><span>EX MULTI</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="generator-workspace">
+      <div class="board-area">
+        <div class="board-heading">
+          <h2 id="boardTitle">Поле 5 линий</h2>
+          <span id="draftStatus" class="draft-status">ЧЕРНОВИК</span>
+        </div>
+
+        <section id="weightMeter" class="weight-meter" data-level="green" aria-label="Вес множителей поля">
+          <div class="weight-meter-header">
+            <div class="weight-meter-title">
+              <span>ВЕС ПОЛЯ</span>
+              <strong id="weightStatus">НИЖЕ ЦЕЛИ</strong>
+            </div>
+            <div class="weight-meter-total">
+              <strong id="weightPoints">0 / 0 ОЧКОВ</strong>
+              <span id="weightPercent">0%</span>
+            </div>
+          </div>
+          <div id="weightTrack" class="weight-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="weightFill" class="weight-fill"></span>
+          </div>
+          <div id="weightLegend" class="weight-legend" aria-label="Вес одной ячейки"></div>
+          <div class="weight-meter-footer">
+            <strong id="estimatedRtp">ОЦЕНКА RTP 0%</strong>
+            <span id="weightGeometry">КЛЕТКА 0 · ШАР Ø0</span>
+          </div>
+        </section>
+
+        <div class="diamond-stage">
+          <div id="fieldGrid" class="diamond-grid" role="grid" aria-label="Редактор ячеек поля"></div>
+        </div>
+
+        <div class="board-toolbar">
+          <div id="cellStats" class="cell-stats" aria-live="polite"></div>
+          <button id="clearLineButton" class="secondary-button" type="button">ОЧИСТИТЬ ЛИНИЮ</button>
+        </div>
+      </div>
+
+      <aside class="configuration-panel" aria-label="Сохраненные конфигурации">
+        <div class="panel-section">
+          <div class="panel-heading">
+            <h2>Комплект полей</h2>
+            <span id="nextNumber" class="number-badge">СЛЕДУЮЩИЙ №1</span>
+          </div>
+          <button id="saveConfigurationButton" class="primary-button" type="button">СОХРАНИТЬ КОМПЛЕКТ</button>
+        </div>
+
+        <div class="panel-section load-section">
+          <label for="configurationNumber">НОМЕР КОНФИГУРАЦИИ</label>
+          <div class="load-row">
+            <input id="configurationNumber" type="number" min="1" step="1" inputmode="numeric" placeholder="№">
+            <button id="loadConfigurationButton" class="secondary-button" type="button">ЗАГРУЗИТЬ</button>
+          </div>
+          <p id="saveStatus" class="save-status" aria-live="polite"></p>
+        </div>
+
+        <div class="panel-section saved-section">
+          <div class="panel-heading">
+            <h2>Сохраненные</h2>
+            <span id="savedCount" class="saved-count">0</span>
+          </div>
+          <div id="savedConfigurations" class="saved-configurations"></div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="math/field-configuration-1.js?v=20260715-4"></script>
+  <script src="math/field-configuration-2.js?v=20260715-5"></script>
+  <script src="math/field-configuration-3.js?v=20260715-7"></script>
+  <script src="math/field-configuration-4.js?v=20260716-17"></script>
+  <script src="math/field-configuration-5.js?v=20260716-18"></script>
+  <script src="math/puck-luck-layout-modes.js?v=20260716-19"></script>
+  <script src="field-generator-model.js?v=20260715-4"></script>
+  <script src="field-generator.js?v=20260716-18"></script>
+</body>
+</html>
