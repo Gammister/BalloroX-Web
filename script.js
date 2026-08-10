@@ -17,7 +17,8 @@ const BACKGROUND_MUSIC_SRC = "assets/background-casino-jazz-loop.ogg";
 const HAPTICS_STORAGE_KEY = "puckLuckHapticsV1";
 const SECRET_ZONE_IDS = ["top", "right", "bottom", "left"];
 const FIELD_POCKET_ZONE_ID = "field";
-const BACKGROUND_MUSIC_VOLUME = 0.08;
+// Keep the music clearly behind impacts, pickups, and win cues on phone speakers.
+const BACKGROUND_MUSIC_VOLUME = 0.025;
 const GAME_MECHANICS_VARIANT = document.location.pathname.endsWith("/billiard.html")
   || new URLSearchParams(window.location.search).get("mode") === "billiard"
   ? "billiard"
@@ -1448,10 +1449,17 @@ function setupCanvas() {
   const winLabelStyle = window.getComputedStyle(els.roundWinLabel);
   const winLabelBottom = Number.parseFloat(winLabelStyle.bottom) || 18;
   const winLabelHeight = Number.parseFloat(winLabelStyle.fontSize) || 25;
-  const topFieldReserve = clamp(height * 0.11, 58, 104);
-  const bottomFieldReserve = winLabelBottom + winLabelHeight + clamp(height * 0.052, 30, 58);
+  const isMobileField = width <= 720;
+  const wallSafeInset = isMobileField ? clamp(width * 0.016, 6, 9) : width * 0.04;
+  const topFieldReserve = isMobileField
+    ? clamp(height * 0.025, 10, 18)
+    : clamp(height * 0.11, 58, 104);
+  const bottomFieldReserve = winLabelBottom + winLabelHeight + (isMobileField
+    ? clamp(height * 0.012, 6, 12)
+    : clamp(height * 0.052, 30, 58));
   const verticalFieldLimit = Math.max(1, height - topFieldReserve - bottomFieldReserve);
-  const maxDiamondSize = Math.min(width * 0.92, verticalFieldLimit);
+  const horizontalFieldLimit = Math.max(1, width - wallSafeInset * 2);
+  const maxDiamondSize = Math.min(horizontalFieldLimit, verticalFieldLimit);
   const diamondBottomAnchor = height - bottomFieldReserve;
   state.field.width = width;
   state.field.height = height;
@@ -2694,7 +2702,8 @@ function getIdleFieldMultiplierOpacity() {
 function drawField() {
   const { half, grid } = state.field;
   const bonusGridActive = state.crownsCollected >= getRequiredStars();
-  const innerGridColor = "rgba(27, 184, 102, 0.28)";
+  // Same perceived color as the former translucent line over #05070c, but without alpha seams.
+  const innerGridColor = "rgb(11, 57, 37)";
   const corners = [
     toScreen(-half, -half),
     toScreen(half, -half),
@@ -2719,12 +2728,6 @@ function drawField() {
   ctx.fill();
   ctx.clip();
 
-  for (let i = 0; i < 18; i += 1) {
-    const alpha = 0.02 + i * 0.002;
-    const offset = -half + (i / 17) * half * 2;
-    drawLine(toScreen(-half, offset), toScreen(half, offset), `rgba(117, 217, 255, ${alpha})`, 1);
-  }
-
   drawGridLines(half, grid, innerGridColor, 4);
   const mergedMultiplierCells = buildMergedMultiplierCells();
   const fieldFill = "#05070c";
@@ -2744,14 +2747,14 @@ function drawField() {
         cell.col,
         cell.row,
         "rgba(202, 104, 255, 0.38)",
-        "rgba(226, 172, 255, 0.92)"
+        innerGridColor
       );
       drawMultiplierCellHighlight(
         mergedMultiplierCells,
         cell.col,
         cell.row,
         "rgba(130, 46, 200, 0.22)",
-        "rgba(202, 104, 255, 0.68)"
+        innerGridColor
       );
       return;
     }
@@ -2760,7 +2763,7 @@ function drawField() {
       cell.col,
       cell.row,
       "rgba(117, 217, 255, 0.26)",
-      "rgba(117, 217, 255, 0.54)"
+      innerGridColor
     );
   });
 
@@ -2833,6 +2836,28 @@ function drawField() {
 
   ctx.restore();
 
+  if (usesFieldPocketMechanics()) {
+    secretZones.forEach((zone) => drawSecretPocket(
+      zone,
+      "rgb(117, 217, 255)",
+      false,
+      "rgba(117, 217, 255, 0.29)",
+      true
+    ));
+  } else {
+    secretZones.forEach((zone) => drawSecretPocket(zone, "rgba(27, 184, 102, 0.62)", bonusGridActive));
+    drawSecretPocketRimsOverlay();
+  }
+
+  ctx.save();
+  traceRoundedPolygon(corners, cornerRadius);
+  ctx.strokeStyle = fieldFill;
+  ctx.lineWidth = 9;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.restore();
+
   ctx.save();
   ctx.globalAlpha = getIdleFieldMultiplierOpacity();
   traceRoundedPolygon(corners, cornerRadius);
@@ -2854,18 +2879,6 @@ function drawField() {
     ctx.stroke();
     drawPurpleNeonPolygonStroke(corners, 9, cornerRadius);
     ctx.restore();
-  }
-  if (usesFieldPocketMechanics()) {
-    secretZones.forEach((zone) => drawSecretPocket(
-      zone,
-      "rgb(117, 217, 255)",
-      false,
-      "rgba(117, 217, 255, 0.29)",
-      true
-    ));
-  } else {
-    secretZones.forEach((zone) => drawSecretPocket(zone, "rgba(27, 184, 102, 0.62)", bonusGridActive));
-    drawSecretPocketRimsOverlay();
   }
 }
 
