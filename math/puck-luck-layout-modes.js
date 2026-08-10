@@ -41,8 +41,11 @@
   const BONUS_WIN_PROBABILITY_LIFT = 0.07;
   const DUAL_BONUS_WIN_PROBABILITY_LIFT = 0.09;
   const SESSION_EVENT_MIN_PROBABILITY = 0.025;
-  const ONE_OF_TWO_STAR_PROBABILITY = 0.85;
-  const TWO_OF_THREE_STAR_PROBABILITY = 0.85;
+  // Do not manufacture one-away bonus near misses. A non-bonus round can show
+  // early progress, but never exactly one missing diamond.
+  const ONE_OF_TWO_STAR_PROBABILITY = 0;
+  const TWO_OF_THREE_STAR_PROBABILITY = 0;
+  const ONE_OF_THREE_STAR_PROBABILITY = 0.7;
   const CONFIGURATOR_1_LAYOUT_MODE = "configurator_1";
   const CONFIGURATOR_2_LAYOUT_MODE = "configurator_2";
   const CONFIGURATOR_3_LAYOUT_MODE = "configurator_3";
@@ -102,7 +105,7 @@
   const SECRET_ROOM_MULTI_PLUS_EXTRA_CELLS = Object.freeze({ 5: 1, 6: 1, 7: 2, 8: 2, 9: 3, 10: 4 });
   const SECRET_ROOM_IDS = ["top", "right", "bottom", "left"];
   const CATEGORIES = ["empty", "outer", "middle", "center", "multi_plus"];
-  const PROFILE_VERSION = "BalloroX V24 / Integration Audit";
+  const PROFILE_VERSION = "BalloroX V25 / Natural Bonus Presentation";
   const BASE_LINE_PAYTABLES = {
     5: { empty: 0, outer: 0.55, middle: 1.25, center: 2.20 },
     6: { empty: 0, outer: 0.65, middle: 1.50, center: 3.00 },
@@ -933,11 +936,8 @@
   function pickSector(rng, sectors) { return sectors[rng.int(sectors.length)]; }
   function samplePartialStarCount(rng, pucks) {
     const roll = rng.next();
-    if (pucks === 2) return roll < ONE_OF_TWO_STAR_PROBABILITY ? 1 : 0;
-    if (pucks === 3) {
-      if (roll < TWO_OF_THREE_STAR_PROBABILITY) return 2;
-      return roll < 0.95 ? 1 : 0;
-    }
+    if (pucks === 2) return 0;
+    if (pucks === 3) return roll < ONE_OF_THREE_STAR_PROBABILITY ? 1 : 0;
     return 0;
   }
   function placeStars(rng, config) {
@@ -1369,7 +1369,7 @@
     TARGET_RTP, BONUS_PRESENTATION_TARGET_RATE, EMPTY_BONUS_PRESENTATION_MULTIPLIER,
     BONUS_FREQUENCY_MULTIPLIER, BONUS_WIN_PROBABILITY_LIFT,
     DUAL_BONUS_WIN_PROBABILITY_LIFT, SESSION_EVENT_MIN_PROBABILITY,
-    ONE_OF_TWO_STAR_PROBABILITY, TWO_OF_THREE_STAR_PROBABILITY,
+    ONE_OF_TWO_STAR_PROBABILITY, TWO_OF_THREE_STAR_PROBABILITY, ONE_OF_THREE_STAR_PROBABILITY,
     PROFILE_VERSION, PAYTABLES, PREMIUM_CELL_PROBABILITY_FLOOR, LAYOUT_MODES, LAYOUT_LABELS,
     CONFIGURATOR_LAYOUT_MODE, CONFIGURATOR_1_LAYOUT_MODE, CONFIGURATOR_2_LAYOUT_MODE,
     CONFIGURATOR_3_LAYOUT_MODE, CONFIGURATOR_4_LAYOUT_MODE, CONFIGURATOR_5_LAYOUT_MODE,

@@ -6,6 +6,7 @@ const avatars = Array.from({ length: 50 }, (_, index) => ({
 let GRID_SIZE = 5;
 const BET_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
 const FIXED_PHYSICS_STEP = window.PuckLuckMath?.FIXED_TIMESTEP || 1 / 120;
+const INITIAL_REPLAY_PLAYBACK_RATE = 0.64;
 const AUTO_PLAY_ROUND_GAP_MS = 350;
 const TODAY_WINS_STORAGE_PREFIX = "puckLuckTodayWinsV1";
 const LANGUAGE_STORAGE_KEY = "puckLuckLanguageV1";
@@ -28,12 +29,32 @@ const PURPLE_POCKET_MULTIPLIER = 10;
 const PURPLE_NEON_RENDERED_PIXEL_SOFT_LIMIT = 820000;
 const PURPLE_NEON_RENDERED_PIXEL_HARD_LIMIT = 1400000;
 const COLLECTIBLE_IDLE_FRAME_INTERVAL_MS = 50;
-const COUNTER_FLY_IN_DURATION_MS = 360;
+const COUNTER_PICKUP_HOLD_DURATION_MS = 500;
+const COUNTER_FLY_IN_DURATION_MS = 562;
 const RESULT_BOOST_REVEAL_DURATION_MS = 240;
+const BONUS_FIELD_CASCADE_DURATION_MS = 1000;
+const BONUS_FIELD_CELL_REVEAL_DURATION_MS = 180;
+const BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS = 300;
 const BLUE_POCKET_WAVE_TIME_SCALE_MS = 72.5;
 const MAX_RESULT_SOUND_LEVELS = 9;
 const WIN_SOUND_PITCH_RATIOS = [1, 1.12, 1.26, 1.42, 1.6, 1.81, 2.04, 2.28, 2.55];
 const PURPLE_WIN_SOUND_PITCH_RATIOS = [1, 1.08, 1.16, 1.27, 1.4, 1.54, 1.7, 1.88, 2.08];
+// Visual-only collectible proximity experiment. Set enabled to false for a one-line rollback.
+// It never changes collection radii, trajectories, results, payouts, or game math.
+const BONUS_PROXIMITY_VISUAL_EXPERIMENT = Object.freeze({
+  enabled: true,
+  glowSurfaceGapInBallDiameters: 1,
+  maximumSpeedFraction: 0.5,
+  maximumPulseAmplitudeMultiplier: 2,
+  pulseTimeScaleMs: 260
+});
+// Visual-only field HUD experiment. Set enabled to false to restore the original
+// left-column counters and 50% idle multiplier labels in one place.
+const FIELD_HUD_VISIBILITY_EXPERIMENT = Object.freeze({
+  enabled: false,
+  idleOpacity: 0.7,
+  fallbackIdleMultiplierOpacity: 0.5
+});
 const LOCALES = { en: "en-US", ru: "ru-RU", es: "es-419", pt: "pt-BR", de: "de-DE", fr: "fr-FR" };
 const TRANSLATIONS = {
   en: {
@@ -237,6 +258,7 @@ const state = {
   gameplayTestRows: [],
   crownsCollected: 0,
   x10BoostActivated: false,
+  bonusFieldTransitionStartedAt: 0,
   crownBonusAwarded: false,
   multiPlusActive: false,
   multiPlusToken: null,
@@ -338,6 +360,9 @@ const els = {
   crownCounter: document.getElementById("crownCounter"),
   multiPlusCounter: document.getElementById("multiPlusCounter"),
   pocketBonusCounter: document.getElementById("pocketBonusCounter"),
+  diamondBonusEdge: document.getElementById("diamondBonusEdge"),
+  multiPlusBonusEdge: document.getElementById("multiPlusBonusEdge"),
+  pocketBonusEdge: document.getElementById("pocketBonusEdge"),
   purpleLeaderboard: document.getElementById("purpleLeaderboard"),
   purpleLeaderboardPanel: document.querySelector(".purple-leaderboard"),
   purpleLeaderboardToggle: document.getElementById("purpleLeaderboardToggle"),
@@ -1388,6 +1413,7 @@ function resetDiamondBoostAfterPuckCountChange() {
   clearCounterFlyIns("diamond");
   state.crownsCollected = 0;
   state.x10BoostActivated = false;
+  state.bonusFieldTransitionStartedAt = 0;
   state.crownBonusAwarded = false;
   state.starPickupLog = [];
   updateCrownCounter();
@@ -1436,6 +1462,28 @@ function setupCanvas() {
   state.field.cy = diamondBottomAnchor - maxDiamondSize / 2;
   const mathConfig = getMathConfiguration();
   state.field.puckRadius = mathConfig ? state.field.half * mathConfig.puck_radius : state.field.grid / 4;
+  positionBonusCountersOnFieldEdges();
+}
+
+function positionBonusCountersOnFieldEdges() {
+  if (!FIELD_HUD_VISIBILITY_EXPERIMENT.enabled) return;
+  const { cx, cy, half } = state.field;
+  const diamondRadius = half * Math.SQRT2;
+  const edgeMidpointOffset = diamondRadius * 0.5;
+  const outwardOffset = clamp(diamondRadius * 0.075, 18, 30);
+  const scale = clamp(diamondRadius / 310, 0.78, 1);
+  const placements = [
+    [els.diamondBonusEdge, cx - edgeMidpointOffset - outwardOffset, cy - edgeMidpointOffset - outwardOffset, -45],
+    [els.multiPlusBonusEdge, cx + edgeMidpointOffset + outwardOffset, cy - edgeMidpointOffset - outwardOffset, 45],
+    [els.pocketBonusEdge, cx - edgeMidpointOffset - outwardOffset, cy + edgeMidpointOffset + outwardOffset, 45]
+  ];
+  placements.forEach(([element, x, y, angle]) => {
+    if (!element) return;
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+    element.style.setProperty("--bonus-edge-angle", `${angle}deg`);
+    element.style.setProperty("--bonus-edge-scale", scale.toFixed(3));
+  });
 }
 
 function toScreen(x, y) {
@@ -1462,7 +1510,7 @@ function getCellFromPoint(x, y) {
   return { col, row };
 }
 
-function drawCell(col, row, fill, stroke = null) {
+function drawCell(col, row, fill, stroke = null, strokeWidth = 2) {
   const { half, grid } = state.field;
   const x0 = -half + grid * col;
   const y0 = -half + grid * row;
@@ -1487,7 +1535,7 @@ function drawCell(col, row, fill, stroke = null) {
 
   if (stroke) {
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = strokeWidth;
     ctx.stroke();
   }
 }
@@ -1904,20 +1952,129 @@ function drawPurpleNeonPocketGlow(point, radius) {
   ctx.restore();
 }
 
-function drawPurpleNeonMultiplierText(text, x, y, color) {
+const fieldMultiplierOutlineSpriteCache = new Map();
+
+function getFieldMultiplierOutlineSprite(text, font, color, lineWidth, shadowColor, shadowBlur) {
+  const key = [text, font, color, lineWidth, shadowColor, shadowBlur].join("|");
+  const cached = fieldMultiplierOutlineSpriteCache.get(key);
+  if (cached) return cached;
+
+  const measurementCanvas = document.createElement("canvas");
+  const measurementContext = measurementCanvas.getContext("2d");
+  measurementContext.font = font;
+  const metrics = measurementContext.measureText(text);
+  const fontSize = Number.parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] || "24");
+  const outlineRadius = Math.max(0.5, lineWidth * 0.5);
+  const padding = Math.ceil(outlineRadius + shadowBlur * 2 + 4);
+  const width = Math.max(1, Math.ceil(metrics.width + padding * 2));
+  const height = Math.max(1, Math.ceil(fontSize * 1.5 + padding * 2));
+  const glyphCanvas = document.createElement("canvas");
+  glyphCanvas.width = width;
+  glyphCanvas.height = height;
+  const glyphContext = glyphCanvas.getContext("2d");
+  const contourCanvas = document.createElement("canvas");
+  contourCanvas.width = width;
+  contourCanvas.height = height;
+  const contourContext = contourCanvas.getContext("2d");
+  const spriteCanvas = document.createElement("canvas");
+  spriteCanvas.width = width;
+  spriteCanvas.height = height;
+  const spriteContext = spriteCanvas.getContext("2d");
+  const anchorX = width / 2;
+  const anchorY = height / 2;
+
+  glyphContext.font = font;
+  glyphContext.textAlign = "center";
+  glyphContext.textBaseline = "middle";
+  glyphContext.fillStyle = "#fff";
+  glyphContext.fillText(text, anchorX, anchorY);
+
+  // Build a round dilation of the filled glyph instead of using strokeText.
+  // This avoids font-path joins that can create inward spikes in digits such as 2.
+  const outlineSamples = 24;
+  for (let sample = 0; sample < outlineSamples; sample += 1) {
+    const angle = sample / outlineSamples * Math.PI * 2;
+    contourContext.drawImage(
+      glyphCanvas,
+      Math.cos(angle) * outlineRadius,
+      Math.sin(angle) * outlineRadius
+    );
+  }
+  contourContext.globalCompositeOperation = "destination-out";
+  contourContext.drawImage(glyphCanvas, 0, 0);
+  contourContext.globalCompositeOperation = "source-in";
+  contourContext.fillStyle = color;
+  contourContext.fillRect(0, 0, width, height);
+
+  spriteContext.shadowColor = shadowColor;
+  spriteContext.shadowBlur = shadowBlur;
+  spriteContext.drawImage(contourCanvas, 0, 0);
+
+  const sprite = { canvas: spriteCanvas, anchorX, anchorY };
+  fieldMultiplierOutlineSpriteCache.set(key, sprite);
+  return sprite;
+}
+
+function drawFieldMultiplierOuterContour(text, x, y, color, lineWidth, shadowColor, shadowBlur) {
+  const sprite = getFieldMultiplierOutlineSprite(
+    text,
+    ctx.font,
+    color,
+    lineWidth,
+    shadowColor,
+    shadowBlur
+  );
+  ctx.drawImage(sprite.canvas, x - sprite.anchorX, y - sprite.anchorY);
+}
+
+function drawPurpleNeonMultiplierText(text, x, y, color, filled = false) {
   const neonScale = getPurpleNeonPerformanceScale();
+  const fontSize = Number.parseFloat(ctx.font.match(/(\d+(?:\.\d+)?)px/)?.[1] || "24");
+  const outlineWidth = clamp(fontSize * 0.035, 0.5, 1.8);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  ctx.lineJoin = "round";
-  ctx.shadowColor = `rgba(202, 104, 255, ${0.46 * neonScale})`;
-  ctx.shadowBlur = Math.max(2, 7 * neonScale);
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = `rgba(187, 91, 255, ${0.18 * neonScale})`;
-  ctx.strokeText(text, x, y);
-  ctx.shadowColor = `rgba(202, 104, 255, ${0.42 * neonScale})`;
-  ctx.shadowBlur = Math.max(2, 5 * neonScale);
-  ctx.fillStyle = color;
-  ctx.fillText(text, x, y);
+  ctx.globalAlpha *= 0.78;
+  drawFieldMultiplierOuterContour(
+    text,
+    x,
+    y,
+    color,
+    outlineWidth,
+    `rgba(213, 122, 255, ${0.82 * neonScale})`,
+    Math.max(5, 10 * neonScale)
+  );
+  ctx.restore();
+
+  ctx.save();
+  drawFieldMultiplierOuterContour(
+    text,
+    x,
+    y,
+    color,
+    outlineWidth,
+    `rgba(235, 176, 255, ${0.68 * neonScale})`,
+    Math.max(2, 5 * neonScale)
+  );
+  if (filled) {
+    ctx.fillStyle = color;
+    ctx.shadowColor = `rgba(223, 145, 255, ${0.9 * neonScale})`;
+    ctx.shadowBlur = Math.max(4, 8 * neonScale);
+    ctx.fillText(text, x, y);
+  }
+  ctx.restore();
+}
+
+function drawFieldMultiplierOutlineText(text, x, y, color, fontSize) {
+  ctx.save();
+  drawFieldMultiplierOuterContour(
+    text,
+    x,
+    y,
+    color,
+    clamp(fontSize * 0.035, 0.5, 1.8),
+    "rgba(0, 0, 0, 0)",
+    0
+  );
   ctx.restore();
 }
 
@@ -1964,7 +2121,6 @@ function drawSecretMultiplierCell(zone, bonusGridActive) {
     const center = secretRoomLocalPoint(zone, cell.u, cell.v);
     const screenCenter = toScreen(center.x, center.y);
     let fontSize = Math.max(11, Math.min(34, state.field.grid * 0.38));
-    ctx.fillStyle = multiplierColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
@@ -2191,7 +2347,17 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
   const { puckRadius } = state.field;
   const point = zone.screenHole;
   const pulseSeed = 4.8 + zone.hole.x * 0.007 + zone.hole.y * 0.011;
-  const collectibleBubble = pulseInnerEdge ? getCollectibleIdleBubble(pulseSeed) : null;
+  const proximityMetrics = pulseInnerEdge
+    ? getBonusProximityMetrics(zone.hole.x, zone.hole.y)
+    : null;
+  const collectibleBubble = pulseInnerEdge
+    ? getCollectibleIdleBubble(
+      pulseSeed,
+      proximityMetrics.glowIntensity,
+      proximityMetrics.pulseIntensity,
+      state.fieldPocket
+    )
+    : null;
   const pocketScale = pulseInnerEdge
     ? 1 + (collectibleBubble.scale - 1) * 0.35
     : 1;
@@ -2236,9 +2402,9 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
   ctx.shadowBlur = radius * 0.45;
   ctx.fill();
   ctx.shadowBlur = 0;
-  if (pulseInnerEdge) {
-    const pulse = clamp((collectibleBubble.glowAlpha - 0.9) / 0.52, 0, 1);
-    const glowAlpha = (0.26 + pulse * 0.19) * 0.8;
+  if (pulseInnerEdge && collectibleBubble.glowAlpha > 0.001) {
+    const pulse = collectibleBubble.glowAlpha;
+    const glowAlpha = pulse * 0.48;
     const glowBandInnerRadius = Math.max(0, radius * 0.98 - 8 * 1.2);
     const innerGlow = ctx.createRadialGradient(
       point.x,
@@ -2275,9 +2441,10 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
   ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
   ctx.strokeStyle = activePocketStrokeColor;
   ctx.lineWidth = 4;
-  if (outerGlowColor) {
+  if (outerGlowColor && (!pulseInnerEdge || collectibleBubble.glowAlpha > 0.001)) {
     ctx.shadowColor = outerGlowColor;
-    ctx.shadowBlur = Math.max(4, radius * 0.34);
+    const outerGlowScale = pulseInnerEdge ? collectibleBubble.glowScale : 1;
+    ctx.shadowBlur = Math.max(4, radius * outerGlowScale * 0.42);
   }
   ctx.stroke();
   ctx.shadowBlur = 0;
@@ -2321,15 +2488,104 @@ function puckIsUsingSecretRoom(puck) {
   return ["capturing", "pocket_wait", "pocket"].includes(phase);
 }
 
+function getBonusFieldCascadeTiming(col, row, size = 1) {
+  if (!state.animationsEnabled || !state.bonusFieldTransitionStartedAt) {
+    return { delay: 0, fieldProgress: 1, multiplierProgress: 1 };
+  }
+  const center = (GRID_SIZE - 1) / 2;
+  const cellCenterCol = col + (size - 1) / 2;
+  const cellCenterRow = row + (size - 1) / 2;
+  const radialDistance = Math.max(
+    Math.abs(cellCenterCol - center),
+    Math.abs(cellCenterRow - center)
+  );
+  const maximumDistance = Math.max(center, 0.5);
+  const waveTravelDuration = BONUS_FIELD_CASCADE_DURATION_MS
+    - BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS;
+  const delay = radialDistance / maximumDistance * waveTravelDuration;
+  const elapsed = performance.now() - state.bonusFieldTransitionStartedAt;
+  const fieldProgress = clamp(
+    (elapsed - delay) / BONUS_FIELD_CELL_REVEAL_DURATION_MS,
+    0,
+    1
+  );
+  const multiplierProgress = clamp(
+    (elapsed - delay) / BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS,
+    0,
+    1
+  );
+  return { delay, fieldProgress, multiplierProgress };
+}
+
+function getBonusFieldEdgeProgress() {
+  if (!state.animationsEnabled || !state.bonusFieldTransitionStartedAt) return 1;
+  const edgeStart = BONUS_FIELD_CASCADE_DURATION_MS
+    - BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS;
+  return clamp(
+    (performance.now() - state.bonusFieldTransitionStartedAt - edgeStart)
+      / BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS,
+    0,
+    1
+  );
+}
+
+function getBonusMultiplierBounceMotion(col, row, size, endY) {
+  const progress = getBonusFieldCascadeTiming(col, row, size).multiplierProgress;
+  if (progress <= 0) return { y: endY, alpha: 0, scale: 0 };
+  if (progress >= 1) return { y: endY, alpha: 1, scale: 1 };
+  const overshoot = 1.70158;
+  const shifted = progress - 1;
+  const scale = 1 + (overshoot + 1) * shifted ** 3 + overshoot * shifted ** 2;
+  return {
+    y: endY,
+    alpha: clamp(progress * 4, 0, 1),
+    scale: Math.max(0, scale)
+  };
+}
+
+function drawBonusFieldCascade(mergedMultiplierCells) {
+  const drawCascadeCell = (col, row, size = 1) => {
+    const rawProgress = getBonusFieldCascadeTiming(col, row, size).fieldProgress;
+    if (rawProgress <= 0) return;
+    const progress = rawProgress * rawProgress * (3 - 2 * rawProgress);
+    ctx.save();
+    ctx.globalAlpha = progress;
+    if (size > 1) {
+      drawMergedMultiplierCell(
+        { col, row, size },
+        "#14091b",
+        "rgba(190, 124, 234, 0.27)",
+        4
+      );
+    } else {
+      drawCell(col, row, "#14091b", "rgba(190, 124, 234, 0.27)", 4);
+    }
+    ctx.restore();
+  };
+
+  mergedMultiplierCells.groups.forEach((group) => {
+    drawCascadeCell(group.col, group.row, group.size);
+  });
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      if (!mergedMultiplierCells.covered.has(`${col}_${row}`)) {
+        drawCascadeCell(col, row);
+      }
+    }
+  }
+}
+
 function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid) {
   mergedMultiplierCells.groups.forEach((group) => {
     const center = toScreen(
       -half + grid * group.col + grid * group.size / 2,
       -half + grid * group.row + grid * group.size / 2
     );
-    const reveal = group.category === "multi_plus"
-      ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y)
-      : { y: center.y, alpha: 1 };
+    const reveal = bonusGridActive
+      ? getBonusMultiplierBounceMotion(group.col, group.row, group.size, center.y)
+      : group.category === "multi_plus"
+        ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y)
+        : { y: center.y, alpha: 1, scale: 1 };
     const displayedMultiplier = bonusGridActive ? group.multiplier * 10 : group.multiplier;
     const text = getFieldMultiplierText(displayedMultiplier, group.category);
     const maxTextWidth = grid * group.size * 1.02;
@@ -2337,7 +2593,6 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
     const multiplierColor = bonusGridActive
       ? getBonusMultiplierColor(group.multiplier)
       : getMultiplierColor(group.multiplier);
-    ctx.fillStyle = multiplierColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
@@ -2354,11 +2609,20 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         && puckCell.row >= group.row
         && puckCell.row < group.row + group.size;
     });
-    ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
+    const idleOpacity = getIdleFieldMultiplierOpacity();
+    ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : idleOpacity) * reveal.alpha;
+    if (bonusGridActive && reveal.scale !== 1) {
+      ctx.translate(center.x, reveal.y);
+      ctx.scale(reveal.scale, reveal.scale);
+      ctx.translate(-center.x, -reveal.y);
+    }
     if (bonusGridActive) {
-      drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
-    } else {
+      drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor, hasPuck);
+    } else if (hasPuck) {
+      ctx.fillStyle = multiplierColor;
       ctx.fillText(text, center.x, reveal.y);
+    } else {
+      drawFieldMultiplierOutlineText(text, center.x, reveal.y, multiplierColor, fontSize);
     }
     ctx.restore();
   });
@@ -2378,15 +2642,16 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         -half + grid * row + grid / 2
       );
       const category = getCellCategory(col, row);
-      const reveal = category === "multi_plus"
-        ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y)
-        : { y: center.y, alpha: 1 };
+      const reveal = bonusGridActive
+        ? getBonusMultiplierBounceMotion(col, row, 1, center.y)
+        : category === "multi_plus"
+          ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y)
+          : { y: center.y, alpha: 1, scale: 1 };
       const displayedMultiplier = bonusGridActive ? multiplier * 10 : multiplier;
       const text = getFieldMultiplierText(displayedMultiplier, category);
       const maxTextWidth = grid * 1.02;
       let fontSize = Math.max(10, Math.min(42, grid * 0.42));
       const multiplierColor = bonusGridActive ? getBonusMultiplierColor(multiplier) : getMultiplierColor(multiplier);
-      ctx.fillStyle = multiplierColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
@@ -2400,21 +2665,36 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         const puckCell = getCellFromPoint(puck.x, puck.y);
         return puckCell.col === col && puckCell.row === row;
       });
-      ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
+      const idleOpacity = getIdleFieldMultiplierOpacity();
+      ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : idleOpacity) * reveal.alpha;
+      if (bonusGridActive && reveal.scale !== 1) {
+        ctx.translate(center.x, reveal.y);
+        ctx.scale(reveal.scale, reveal.scale);
+        ctx.translate(-center.x, -reveal.y);
+      }
       if (bonusGridActive) {
-        drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
-      } else {
+        drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor, hasPuck);
+      } else if (hasPuck) {
+        ctx.fillStyle = multiplierColor;
         ctx.fillText(text, center.x, reveal.y);
+      } else {
+        drawFieldMultiplierOutlineText(text, center.x, reveal.y, multiplierColor, fontSize);
       }
       ctx.restore();
     }
   }
 }
 
+function getIdleFieldMultiplierOpacity() {
+  return FIELD_HUD_VISIBILITY_EXPERIMENT.enabled
+    ? FIELD_HUD_VISIBILITY_EXPERIMENT.idleOpacity
+    : FIELD_HUD_VISIBILITY_EXPERIMENT.fallbackIdleMultiplierOpacity;
+}
+
 function drawField() {
   const { half, grid } = state.field;
   const bonusGridActive = state.crownsCollected >= getRequiredStars();
-  const innerGridColor = bonusGridActive ? "rgba(190, 124, 234, 0.46)" : "rgba(27, 184, 102, 0.28)";
+  const innerGridColor = "rgba(27, 184, 102, 0.28)";
   const corners = [
     toScreen(-half, -half),
     toScreen(half, -half),
@@ -2426,7 +2706,8 @@ function drawField() {
   ctx.fillStyle = "#010205";
   ctx.fillRect(0, 0, state.field.width, state.field.height);
 
-  const borderGradient = createFieldBorderGradient(corners, bonusGridActive);
+  const borderGradient = createFieldBorderGradient(corners, false);
+  const purpleBorderGradient = bonusGridActive ? createFieldBorderGradient(corners, true) : null;
   const secretZones = usesFieldPocketMechanics()
     ? [getFieldPocketGeometry()].filter(Boolean)
     : SECRET_ZONE_IDS.map(getSecretZoneGeometry);
@@ -2434,7 +2715,7 @@ function drawField() {
 
   ctx.save();
   traceRoundedPolygon(corners, cornerRadius);
-  ctx.fillStyle = bonusGridActive ? "#14091b" : "#05070c";
+  ctx.fillStyle = "#05070c";
   ctx.fill();
   ctx.clip();
 
@@ -2446,8 +2727,11 @@ function drawField() {
 
   drawGridLines(half, grid, innerGridColor, 4);
   const mergedMultiplierCells = buildMergedMultiplierCells();
-  const fieldFill = bonusGridActive ? "#14091b" : "#05070c";
+  const fieldFill = "#05070c";
   eraseMergedMultiplierInternalLines(mergedMultiplierCells.groups, fieldFill);
+  if (bonusGridActive) {
+    drawBonusFieldCascade(mergedMultiplierCells);
+  }
 
   state.pucks.forEach((puck) => {
     if (puck.stopped || puckIsUsingSecretRoom(puck)) {
@@ -2549,14 +2833,27 @@ function drawField() {
 
   ctx.restore();
 
+  ctx.save();
+  ctx.globalAlpha = getIdleFieldMultiplierOpacity();
   traceRoundedPolygon(corners, cornerRadius);
   ctx.strokeStyle = borderGradient;
   ctx.lineWidth = 9;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.stroke();
+  ctx.restore();
   if (bonusGridActive) {
+    const edgeProgress = getBonusFieldEdgeProgress();
+    ctx.save();
+    ctx.globalAlpha = edgeProgress;
+    traceRoundedPolygon(corners, cornerRadius);
+    ctx.strokeStyle = purpleBorderGradient;
+    ctx.lineWidth = 9;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
     drawPurpleNeonPolygonStroke(corners, 9, cornerRadius);
+    ctx.restore();
   }
   if (usesFieldPocketMechanics()) {
     secretZones.forEach((zone) => drawSecretPocket(
@@ -2733,20 +3030,91 @@ function drawDiamondFacets(x, y, size, color) {
   ctx.stroke();
 }
 
-function getCollectibleIdleBubble(seed = 0) {
+function getBonusProximityMetrics(x, y, target = null) {
+  const heldGlowIntensity = clamp(Number(target?.proximityGlowHeld) || 0, 0, 1);
+  if (!BONUS_PROXIMITY_VISUAL_EXPERIMENT.enabled
+    || !state.animationsEnabled
+    || !Number.isFinite(x)
+    || !Number.isFinite(y)) {
+    return { glowIntensity: heldGlowIntensity, pulseIntensity: 0 };
+  }
+
+  const positionedPucks = state.pucks.filter((puck) => Number.isFinite(puck.x)
+    && Number.isFinite(puck.y));
+  if (!positionedPucks.length) {
+    return { glowIntensity: heldGlowIntensity, pulseIntensity: 0 };
+  }
+  const movingPucks = positionedPucks.filter((puck) => !puck.stopped
+    && Number.isFinite(puck.speed)
+    && puck.speed > 0);
+
+  const puckRadius = state.field.puckRadius;
+  const symbolRadius = Number.isFinite(target?.radius) ? target.radius : puckRadius * 0.56;
+  const contactDistance = puckRadius + symbolRadius;
+  const triggerDistance = contactDistance + puckRadius * 2
+    * BONUS_PROXIMITY_VISUAL_EXPERIMENT.glowSurfaceGapInBallDiameters;
+  const distanceRange = Math.max(1, triggerDistance - contactDistance);
+  let glowIntensity = 0;
+  let pulseIntensity = 0;
+
+  positionedPucks.forEach((puck) => {
+    const distance = Math.hypot(puck.x - x, puck.y - y);
+    const proximity = clamp((triggerDistance - distance) / distanceRange, 0, 1);
+    glowIntensity = Math.max(glowIntensity, proximity);
+  });
+
+  movingPucks.forEach((puck) => {
+    const distance = Math.hypot(puck.x - x, puck.y - y);
+    const proximity = clamp((triggerDistance - distance) / distanceRange, 0, 1);
+    const hasLostHalfSpeed = Number.isFinite(puck.bonusPulseReferenceSpeed)
+      && puck.bonusPulseReferenceSpeed > 0
+      && puck.speed <= puck.bonusPulseReferenceSpeed
+        * BONUS_PROXIMITY_VISUAL_EXPERIMENT.maximumSpeedFraction;
+    if (hasLostHalfSpeed) pulseIntensity = Math.max(pulseIntensity, proximity);
+  });
+
+  if (target) {
+    // Keep the exact distance-based intensity, including already stopped balls, visible until
+    // launchPuck starts the next paid round and clears the stored values.
+    target.proximityGlowHeld = glowIntensity;
+  }
+  return { glowIntensity, pulseIntensity };
+}
+
+function clearBonusProximityGlowHolds() {
+  state.bonusStars.forEach((star) => { star.proximityGlowHeld = 0; });
+  if (state.multiPlusToken) state.multiPlusToken.proximityGlowHeld = 0;
+}
+
+function getCycleLockedPulseIntensity(target, seed, proximityIntensity, now) {
+  if (!target) return proximityIntensity;
+  const phase = now / BONUS_PROXIMITY_VISUAL_EXPERIMENT.pulseTimeScaleMs + seed;
+  const cycleIndex = Math.floor(phase / (Math.PI * 2));
+  if (target.proximityPulseCycle !== cycleIndex) {
+    target.proximityPulseCycle = cycleIndex;
+    target.proximityPulseIntensity = proximityIntensity;
+  }
+  return clamp(target.proximityPulseIntensity || 0, 0, 1);
+}
+
+function getCollectibleIdleBubble(seed = 0, glowIntensity = 0, pulseIntensity = 0, pulseTarget = null) {
   if (!state.animationsEnabled) {
-    return { scale: 1, glowScale: 1, glowAlpha: 1 };
+    return { scale: 1, glowScale: 1, glowAlpha: 0, proximity: 0 };
   }
   const now = performance.now();
-  const mainWave = Math.sin(now / 260 + seed);
-  const beatWave = Math.sin(now / 132 + seed * 0.45 + 0.7);
-  const softWave = Math.sin(now / 540 + seed * 0.73 + 1.4);
-  const pop = Math.pow(0.5 + mainWave * 0.5, 1.35);
-  const beat = 0.5 + beatWave * 0.5;
+  const glowProximity = Math.pow(clamp(glowIntensity, 0, 1), 1.12);
+  const pulseProximity = clamp(pulseIntensity, 0, 1);
+  const phase = now / BONUS_PROXIMITY_VISUAL_EXPERIMENT.pulseTimeScaleMs + seed;
+  const pulse = Math.pow(0.5 - Math.cos(phase) * 0.5, 1.35);
+  const lockedProximity = getCycleLockedPulseIntensity(pulseTarget, seed, pulseProximity, now);
+  const maximumMultiplier = BONUS_PROXIMITY_VISUAL_EXPERIMENT.maximumPulseAmplitudeMultiplier;
+  const pulseAmplitudeMultiplier = 1 + lockedProximity * (maximumMultiplier - 1);
+  const glowPulse = 0.48 + pulse * 0.4;
   return {
-    scale: 0.91 + pop * 0.21 + beat * 0.025 + softWave * 0.015,
-    glowScale: 1.02 + pop * 0.48 + beat * 0.08,
-    glowAlpha: 0.9 + pop * 0.3 + (0.5 + softWave * 0.5) * 0.22
+    scale: 1 + pulse * 0.14 * pulseAmplitudeMultiplier,
+    glowScale: 1.15 + pulse * 0.42 + glowProximity * (1.08 + pulse * 0.82),
+    glowAlpha: clamp(glowPulse * (1 + glowProximity * 0.82), 0, 1),
+    proximity: glowProximity
   };
 }
 
@@ -2866,20 +3234,28 @@ function drawBonusStar() {
 
     const point = toScreen(star.x, star.y);
     const outer = star.radius;
-    const bubble = getCollectibleIdleBubble((star.index ?? index) * 0.63 + index * 0.37);
+    const proximityMetrics = getBonusProximityMetrics(star.x, star.y, star);
+    const bubble = getCollectibleIdleBubble(
+      (star.index ?? index) * 0.63 + index * 0.37,
+      proximityMetrics.glowIntensity,
+      proximityMetrics.pulseIntensity,
+      star
+    );
     const visualOuter = outer * bubble.scale;
     const glowOuter = outer * bubble.glowScale;
     const starStrokeWidth = Math.max(3, outer * 0.28);
 
     ctx.save();
-    const glow = ctx.createRadialGradient(point.x, point.y, glowOuter * 0.1, point.x, point.y, glowOuter * 2.15);
-    glow.addColorStop(0, `rgba(232, 194, 255, ${0.34 * bubble.glowAlpha})`);
-    glow.addColorStop(0.48, `rgba(202, 104, 255, ${0.16 * bubble.glowAlpha})`);
-    glow.addColorStop(1, "rgba(202, 104, 255, 0)");
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, glowOuter * 2.15, 0, Math.PI * 2);
-    ctx.fillStyle = glow;
-    ctx.fill();
+    if (bubble.glowAlpha > 0.001) {
+      const glow = ctx.createRadialGradient(point.x, point.y, glowOuter * 0.1, point.x, point.y, glowOuter * 2.15);
+      glow.addColorStop(0, `rgba(232, 194, 255, ${0.6 * bubble.glowAlpha})`);
+      glow.addColorStop(0.48, `rgba(202, 104, 255, ${0.28 * bubble.glowAlpha})`);
+      glow.addColorStop(1, "rgba(202, 104, 255, 0)");
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, glowOuter * 2.15, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
+    }
 
     drawDiamondPath(point.x, point.y, visualOuter);
     ctx.lineWidth = starStrokeWidth + 2;
@@ -2888,7 +3264,7 @@ function drawBonusStar() {
     ctx.stroke();
 
     ctx.shadowColor = "rgba(218, 142, 255, 0.72)";
-    ctx.shadowBlur = glowOuter * 1.05;
+    ctx.shadowBlur = bubble.glowAlpha > 0.001 ? glowOuter * bubble.glowAlpha * 1.05 : 0;
     drawDiamondPath(point.x, point.y, visualOuter);
     ctx.fillStyle = "rgba(214, 171, 255, 0.96)";
     ctx.fill();
@@ -2908,21 +3284,29 @@ function drawMultiPlusToken() {
   if (!token || token.collected) return;
   const point = toScreen(token.x, token.y);
   const radius = token.radius;
-  const bubble = getCollectibleIdleBubble((token.col ?? 0) * 0.79 + (token.row ?? 0) * 1.13 + 2.4);
+  const proximityMetrics = getBonusProximityMetrics(token.x, token.y, token);
+  const bubble = getCollectibleIdleBubble(
+    (token.col ?? 0) * 0.79 + (token.row ?? 0) * 1.13 + 2.4,
+    proximityMetrics.glowIntensity,
+    proximityMetrics.pulseIntensity,
+    token
+  );
   const visualRadius = radius * bubble.scale;
   const glowRadius = radius * bubble.glowScale;
   const inner = visualRadius * 0.46;
   const starStrokeWidth = Math.max(3, radius * 0.28);
 
   ctx.save();
-  const glow = ctx.createRadialGradient(point.x, point.y, glowRadius * 0.1, point.x, point.y, glowRadius * 2.15);
-  glow.addColorStop(0, `rgba(255, 224, 70, ${0.34 * bubble.glowAlpha})`);
-  glow.addColorStop(0.48, `rgba(255, 198, 20, ${0.16 * bubble.glowAlpha})`);
-  glow.addColorStop(1, "rgba(255, 198, 20, 0)");
-  ctx.beginPath();
-  ctx.arc(point.x, point.y, glowRadius * 2.15, 0, Math.PI * 2);
-  ctx.fillStyle = glow;
-  ctx.fill();
+  if (bubble.glowAlpha > 0.001) {
+    const glow = ctx.createRadialGradient(point.x, point.y, glowRadius * 0.1, point.x, point.y, glowRadius * 2.15);
+    glow.addColorStop(0, `rgba(255, 224, 70, ${0.6 * bubble.glowAlpha})`);
+    glow.addColorStop(0.48, `rgba(255, 198, 20, ${0.28 * bubble.glowAlpha})`);
+    glow.addColorStop(1, "rgba(255, 198, 20, 0)");
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, glowRadius * 2.15, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+  }
 
   drawStarPath(point.x, point.y, visualRadius, inner);
   ctx.lineWidth = starStrokeWidth + 2;
@@ -2931,7 +3315,7 @@ function drawMultiPlusToken() {
   ctx.stroke();
 
   ctx.shadowColor = "rgba(255, 215, 45, 0.72)";
-  ctx.shadowBlur = glowRadius * 1.05;
+  ctx.shadowBlur = bubble.glowAlpha > 0.001 ? glowRadius * bubble.glowAlpha * 1.05 : 0;
   drawStarPath(point.x, point.y, visualRadius, inner);
   ctx.fillStyle = "rgba(255, 235, 128, 0.98)";
   ctx.fill();
@@ -3080,7 +3464,9 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
     sourceSize,
     targetSize,
     startedAt: performance.now(),
-    duration: COUNTER_FLY_IN_DURATION_MS,
+    holdDuration: COUNTER_PICKUP_HOLD_DURATION_MS,
+    flightDuration: COUNTER_FLY_IN_DURATION_MS,
+    duration: COUNTER_PICKUP_HOLD_DURATION_MS + COUNTER_FLY_IN_DURATION_MS,
     element: createCounterFlyInElement(kind),
     onComplete
   };
@@ -3090,22 +3476,53 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
   return flyIn;
 }
 
+function getCounterFlyInMotion(flyIn, now) {
+  const elapsed = Math.max(0, now - flyIn.startedAt);
+  const holdLift = Math.max(22, state.field.puckRadius * 1.2);
+  if (elapsed < flyIn.holdDuration) {
+    const holdProgress = clamp(elapsed / flyIn.holdDuration, 0, 1);
+    const riseProgress = clamp(holdProgress / 0.3, 0, 1);
+    const riseEased = 1 - Math.pow(1 - riseProgress, 3);
+    const jumpOvershoot = Math.sin(riseProgress * Math.PI) * 0.12;
+    const hover = holdProgress > 0.3
+      ? Math.sin((holdProgress - 0.3) / 0.7 * Math.PI * 2) * 1.4
+      : 0;
+    const scale = 1 + riseEased;
+    return {
+      x: flyIn.source.x,
+      y: flyIn.source.y - holdLift * (riseEased + jumpOvershoot) - hover,
+      size: flyIn.sourceSize * scale,
+      alpha: 1,
+      rotationDegrees: flyIn.kind === "multiPlus" ? Math.sin(holdProgress * Math.PI * 2) * 6 : 0
+    };
+  }
+
+  const progress = clamp((elapsed - flyIn.holdDuration) / flyIn.flightDuration, 0, 1);
+  const eased = 1 - Math.pow(1 - progress, 3);
+  const flightStartY = flyIn.source.y - holdLift;
+  const x = flyIn.source.x + (flyIn.target.x - flyIn.source.x) * eased;
+  const y = flightStartY + (flyIn.target.y - flightStartY) * eased;
+  const arcLift = Math.sin(progress * Math.PI) * Math.max(18, state.field.puckRadius * 1.1);
+  const size = flyIn.sourceSize * 2
+    + (flyIn.targetSize - flyIn.sourceSize * 2) * eased;
+  const pop = 1 + Math.sin(progress * Math.PI) * 0.1;
+  return {
+    x,
+    y: y - arcLift,
+    size: size * pop,
+    alpha: progress < 0.9 ? 1 : clamp(1 - (progress - 0.9) / 0.1, 0, 1),
+    rotationDegrees: flyIn.kind === "multiPlus" ? progress * 44 : 0
+  };
+}
+
 function syncCounterFlyInElement(flyIn, now) {
   if (!flyIn.element) return;
-  const progress = clamp((now - flyIn.startedAt) / flyIn.duration, 0, 1);
-  const eased = 1 - Math.pow(1 - progress, 3);
-  const x = flyIn.source.x + (flyIn.target.x - flyIn.source.x) * eased;
-  const y = flyIn.source.y + (flyIn.target.y - flyIn.source.y) * eased;
-  const arcLift = Math.sin(progress * Math.PI) * Math.max(18, state.field.puckRadius * 1.1);
-  const size = flyIn.sourceSize + (flyIn.targetSize - flyIn.sourceSize) * eased;
-  const pop = 1 + Math.sin(progress * Math.PI) * 0.1;
-  const alpha = progress < 0.9 ? 1 : clamp(1 - (progress - 0.9) / 0.1, 0, 1);
-  const diameter = Math.max(8, size * 2 * pop);
-  const rotation = flyIn.kind === "multiPlus" ? progress * 44 : 0;
+  const motion = getCounterFlyInMotion(flyIn, now);
+  const diameter = Math.max(8, motion.size * 2);
   flyIn.element.style.width = `${diameter}px`;
   flyIn.element.style.height = `${diameter}px`;
-  flyIn.element.style.opacity = String(alpha);
-  flyIn.element.style.transform = `translate3d(${x}px, ${y - arcLift}px, 0) translate(-50%, -50%) rotate(${rotation}deg)`;
+  flyIn.element.style.opacity = String(motion.alpha);
+  flyIn.element.style.transform = `translate3d(${motion.x}px, ${motion.y}px, 0) translate(-50%, -50%) rotate(${motion.rotationDegrees}deg)`;
 }
 
 function drawCounterFlyInDiamond(x, y, size, alpha) {
@@ -3182,18 +3599,17 @@ function drawCounterFlyIns() {
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
   state.counterFlyIns.forEach((flyIn) => {
-    const progress = clamp((now - flyIn.startedAt) / flyIn.duration, 0, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    const x = flyIn.source.x + (flyIn.target.x - flyIn.source.x) * eased;
-    const y = flyIn.source.y + (flyIn.target.y - flyIn.source.y) * eased;
-    const arcLift = Math.sin(progress * Math.PI) * Math.max(18, state.field.puckRadius * 1.1);
-    const size = flyIn.sourceSize + (flyIn.targetSize - flyIn.sourceSize) * eased;
-    const pop = 1 + Math.sin(progress * Math.PI) * 0.1;
-    const alpha = progress < 0.9 ? 1 : clamp(1 - (progress - 0.9) / 0.1, 0, 1);
+    const motion = getCounterFlyInMotion(flyIn, now);
     if (flyIn.kind === "diamond") {
-      drawCounterFlyInDiamond(x, y - arcLift, size * pop, alpha);
+      drawCounterFlyInDiamond(motion.x, motion.y, motion.size, motion.alpha);
     } else {
-      drawCounterFlyInStar(x, y - arcLift, size * pop, alpha, progress * Math.PI * 1.2);
+      drawCounterFlyInStar(
+        motion.x,
+        motion.y,
+        motion.size,
+        motion.alpha,
+        motion.rotationDegrees * Math.PI / 180
+      );
     }
   });
   ctx.restore();
@@ -3264,10 +3680,12 @@ function startCollectibleIdleAnimation() {
 function animateResultReveal() {
   state.resultRevealFrame = null;
   const now = performance.now();
+  const bonusFieldRevealActive = state.bonusFieldTransitionStartedAt > 0
+    && now - state.bonusFieldTransitionStartedAt < BONUS_FIELD_CASCADE_DURATION_MS;
   const fieldRevealActive = state.multiPlusActive
     && state.multiPlusActivatedAt > 0
     && now - state.multiPlusActivatedAt < RESULT_BOOST_REVEAL_DURATION_MS;
-  const revealActive = fieldRevealActive || state.pucks.some((puck) => puck.result?.multiplier > 0
+  const revealActive = bonusFieldRevealActive || fieldRevealActive || state.pucks.some((puck) => puck.result?.multiplier > 0
     && (now - (puck.resultRevealStartedAt || 0) < RESULT_BOOST_REVEAL_DURATION_MS
       || now - (puck.result.boostRevealStartedAt || 0) < RESULT_BOOST_REVEAL_DURATION_MS));
   if (!state.running) render();
@@ -4929,13 +5347,18 @@ function createPuck(index, count, outcomePlan = null, trajectory = null) {
   const speed = outcomePlan?.launch_force || getMathConfiguration()?.fixed_launch_force || 1250;
   const target = outcomePlan?.sector || { col: GRID_SIZE - 1, row: GRID_SIZE - 1 };
   const firstFrame = trajectory?.frames?.[0];
+  const initialVx = firstFrame ? firstFrame[3] * half : Math.cos(angle) * speed;
+  const initialVy = firstFrame ? firstFrame[4] * half : Math.sin(angle) * speed;
+  const bonusPulseReferenceSpeed = Math.hypot(initialVx, initialVy)
+    * (firstFrame ? INITIAL_REPLAY_PLAYBACK_RATE : 1);
 
   const puck = {
     x: firstFrame ? firstFrame[1] * half : start,
     y: firstFrame ? firstFrame[2] * half : start,
-    vx: firstFrame ? firstFrame[3] * half : Math.cos(angle) * speed,
-    vy: firstFrame ? firstFrame[4] * half : Math.sin(angle) * speed,
+    vx: initialVx,
+    vy: initialVy,
     speed,
+    bonusPulseReferenceSpeed,
     age: 0,
     bounceCount: 0,
     requiredBounces: outcomePlan?.required_bounces || 3,
@@ -5104,14 +5527,15 @@ function upgradeSettledResultToX10(puck, { animate = true, playSound = true } = 
 
 function activateX10Boost() {
   if (state.x10BoostActivated) return;
+  state.bonusFieldTransitionStartedAt = state.animationsEnabled ? performance.now() : 0;
   state.x10BoostActivated = true;
   state.crownBonusAwarded = true;
   const upgradedResults = state.pucks.filter((puck) => upgradeSettledResultToX10(puck));
   if (upgradedResults.length) {
     updateBank();
     updateRoundWinLabel();
-    startResultRevealAnimation();
   }
+  startResultRevealAnimation();
 }
 
 function collectBonusStar(index, collector = null) {
@@ -5134,6 +5558,7 @@ function collectBonusStar(index, collector = null) {
     getCrownCounterTargetPoint(state.crownsCollected),
     star.radius
   );
+  spawnStarBurst(star, "purple");
   state.bonusStars.splice(index, 1);
   state.crownsCollected = Math.min(getRequiredStars(), state.crownsCollected + 1);
   updateCrownCounter();
@@ -5260,6 +5685,7 @@ function collectMultiPlus(puck = null, allowUnplanned = false) {
     getMultiPlusCounterTargetPoint(),
     token.radius
   );
+  spawnStarBurst(token, "yellow");
   token.collected = true;
   state.multiPlusActive = true;
   state.multiPlusActivatedAt = performance.now();
@@ -5318,6 +5744,7 @@ function resetPucks() {
   state.secretRoomLaunchAt = 0;
   state.crownsCollected = 0;
   state.x10BoostActivated = false;
+  state.bonusFieldTransitionStartedAt = 0;
   state.crownBonusAwarded = false;
   state.running = false;
   state.launchPrepared = false;
@@ -5346,6 +5773,12 @@ function prepareLaunchRound(slot) {
   if (state.launchPrepared) {
     return state.launchPreparedSlot === slot;
   }
+
+  const retainedDiamondProximityGlow = state.bonusStars.reduce(
+    (maximum, star) => Math.max(maximum, Number(star.proximityGlowHeld) || 0),
+    0
+  );
+  const retainedMultiPlusProximityGlow = Number(state.multiPlusToken?.proximityGlowHeld) || 0;
 
   setupCanvas();
   const bet = parseBet(slot);
@@ -5477,6 +5910,7 @@ function prepareLaunchRound(slot) {
   state.wonLines = [];
   state.crownsCollected = 0;
   state.x10BoostActivated = false;
+  state.bonusFieldTransitionStartedAt = 0;
   state.crownBonusAwarded = false;
   state.multiPlusActive = false;
   state.multiPlusPickupLog = null;
@@ -5490,6 +5924,12 @@ function prepareLaunchRound(slot) {
   updateRoundWinLabel();
   state.bonusStars = createBonusStars();
   state.multiPlusToken = multiPlusPlan.valid ? createMultiPlusToken() : null;
+  if (retainedDiamondProximityGlow > 0) {
+    state.bonusStars.forEach((star) => { star.proximityGlowHeld = retainedDiamondProximityGlow; });
+  }
+  if (retainedMultiPlusProximityGlow > 0 && state.multiPlusToken) {
+    state.multiPlusToken.proximityGlowHeld = retainedMultiPlusProximityGlow;
+  }
   updateCrownCounter();
   updateMultiPlusCounter();
   updateBank();
@@ -5511,6 +5951,7 @@ function launchPuck(slot) {
 
   const count = state.roundOutcome?.puck_results?.length || state.puckCount;
   state.running = true;
+  clearBonusProximityGlowHolds();
   state.launchPrepared = false;
   state.launchPreparedSlot = null;
   state.roundId += 1;
@@ -5775,6 +6216,7 @@ function preparePocketReleasePuck(puck, zone, releaseIndex = 0, outcomePlan = nu
   puck.vx = firstFrame[3] * state.field.half;
   puck.vy = firstFrame[4] * state.field.half;
   puck.speed = Math.hypot(puck.vx, puck.vy);
+  puck.bonusPulseReferenceSpeed = puck.speed * INITIAL_REPLAY_PLAYBACK_RATE;
   puck.stopped = false;
   puck.result = null;
 }
@@ -5880,7 +6322,8 @@ function stepReplayPuck(puck) {
   const replayProgress = puck.replayCursor / Math.max(1, frames.length - 1);
   const finishBlend = clamp((replayProgress - 0.75) / 0.25, 0, 1);
   const smoothFinishBlend = finishBlend * finishBlend * (3 - 2 * finishBlend);
-  const playbackRate = 0.64 + (0.82 - 0.64) * smoothFinishBlend;
+  const playbackRate = INITIAL_REPLAY_PLAYBACK_RATE
+    + (0.82 - INITIAL_REPLAY_PLAYBACK_RATE) * smoothFinishBlend;
   puck.replayCursor = Math.min(puck.replayCursor + playbackRate, frames.length - 1);
   puck.replayFrame = Math.floor(puck.replayCursor);
   const frame = frames[puck.replayFrame];
@@ -6601,6 +7044,7 @@ function renderInitialFrame() {
 }
 
 function init() {
+  document.body.classList.toggle("bonus-edge-counter-layout", FIELD_HUD_VISIBILITY_EXPERIMENT.enabled);
   setupCanvas();
   resetPucks();
   const storedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);

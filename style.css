@@ -663,6 +663,57 @@ body.effects-disabled *::after {
   pointer-events: none;
 }
 
+/* Experimental casino-table layout. Without the body class the counters retain
+   their original left-column positioning, which keeps rollback to one switch. */
+.bonus-edge-counter {
+  display: contents;
+}
+
+body.bonus-edge-counter-layout .bonus-edge-counter {
+  --bonus-edge-angle: 0deg;
+  --bonus-edge-scale: 1;
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%) rotate(var(--bonus-edge-angle)) scale(var(--bonus-edge-scale));
+  transform-origin: center;
+  pointer-events: none;
+}
+
+body.bonus-edge-counter-layout .bonus-edge-counter > .crown-bonus-counter,
+body.bonus-edge-counter-layout .bonus-edge-counter > .multi-plus-counter,
+body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter {
+  position: relative;
+  inset: auto;
+  min-height: 42px;
+  margin: 0;
+  border-radius: 6px;
+  opacity: 0.7;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  transition: opacity 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+body.bonus-edge-counter-layout .bonus-edge-counter > .crown-bonus-counter {
+  min-width: 148px;
+  justify-content: center;
+}
+
+body.bonus-edge-counter-layout .bonus-edge-counter > .multi-plus-counter,
+body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter {
+  min-width: 112px;
+  justify-content: center;
+}
+
+body.bonus-edge-counter-layout .bonus-edge-counter > .crown-bonus-counter.is-active,
+body.bonus-edge-counter-layout .bonus-edge-counter > .multi-plus-counter.is-active,
+body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-active {
+  opacity: 1;
+}
+
 .crown-bonus-counter {
   position: absolute;
   z-index: 8;

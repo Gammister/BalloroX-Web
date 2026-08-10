@@ -208,31 +208,37 @@
           <b id="currentLoot">1.00x</b>
         </div>
         <div id="roundWinLabel" class="round-win-label hidden" aria-live="polite"></div>
-        <div class="crown-bonus-counter" aria-label="Diamond boost counter">
-          <div id="crownCounter" class="crown-counter" aria-hidden="true">
-            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
-            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
-            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+        <div id="diamondBonusEdge" class="bonus-edge-counter">
+          <div class="crown-bonus-counter" aria-label="Diamond boost counter">
+            <div id="crownCounter" class="crown-counter" aria-hidden="true">
+              <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+              <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+              <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+            </div>
+            <strong><span>x10</span><span>BOOST</span></strong>
           </div>
-          <strong><span>x10</span><span>BOOST</span></strong>
         </div>
-        <div id="multiPlusCounter" class="multi-plus-counter" aria-label="Extra multipliers bonus">
-          <span class="multi-plus-icon" aria-hidden="true">
-            <svg class="multi-plus-star" viewBox="0 0 100 100">
-              <path class="multi-plus-star-body" d="M47.6 17.58Q50 12 52.4 17.58L59.17 33.29Q60.27 35.86 63.06 36.12L80.09 37.7Q86.14 38.26 81.57 42.27L68.73 53.56Q66.62 55.4 67.24 58.13L71 74.81Q72.34 80.74 67.11 77.64L52.4 68.91Q50 67.48 47.6 68.91L32.89 77.64Q27.66 80.74 29 74.81L32.76 58.13Q33.38 55.4 31.27 53.56L18.43 42.27Q13.86 38.26 19.91 37.7L36.94 36.12Q39.73 35.86 40.83 33.29Z"/>
-            </svg>
-          </span>
-          <strong><span>EX</span><span>MULTI</span></strong>
+        <div id="multiPlusBonusEdge" class="bonus-edge-counter">
+          <div id="multiPlusCounter" class="multi-plus-counter" aria-label="Extra multipliers bonus">
+            <span class="multi-plus-icon" aria-hidden="true">
+              <svg class="multi-plus-star" viewBox="0 0 100 100">
+                <path class="multi-plus-star-body" d="M47.6 17.58Q50 12 52.4 17.58L59.17 33.29Q60.27 35.86 63.06 36.12L80.09 37.7Q86.14 38.26 81.57 42.27L68.73 53.56Q66.62 55.4 67.24 58.13L71 74.81Q72.34 80.74 67.11 77.64L52.4 68.91Q50 67.48 47.6 68.91L32.89 77.64Q27.66 80.74 29 74.81L32.76 58.13Q33.38 55.4 31.27 53.56L18.43 42.27Q13.86 38.26 19.91 37.7L36.94 36.12Q39.73 35.86 40.83 33.29Z"/>
+              </svg>
+            </span>
+            <strong><span>EX</span><span>MULTI</span></strong>
+          </div>
         </div>
-        <div id="pocketBonusCounter" class="pocket-bonus-counter" aria-label="Pocket bonus">
-          <span class="pocket-bonus-icon" aria-hidden="true">
-            <svg class="pocket-bonus-hole" viewBox="0 0 100 100">
-              <circle class="pocket-bonus-hole-shadow" cx="50" cy="50" r="39"/>
-              <circle class="pocket-bonus-hole-rim" cx="50" cy="50" r="31"/>
-              <circle class="pocket-bonus-hole-core" cx="50" cy="50" r="21"/>
-            </svg>
-          </span>
-          <strong><span>X3</span><span>BALLS</span></strong>
+        <div id="pocketBonusEdge" class="bonus-edge-counter">
+          <div id="pocketBonusCounter" class="pocket-bonus-counter" aria-label="Pocket bonus">
+            <span class="pocket-bonus-icon" aria-hidden="true">
+              <svg class="pocket-bonus-hole" viewBox="0 0 100 100">
+                <circle class="pocket-bonus-hole-shadow" cx="50" cy="50" r="39"/>
+                <circle class="pocket-bonus-hole-rim" cx="50" cy="50" r="31"/>
+                <circle class="pocket-bonus-hole-core" cx="50" cy="50" r="21"/>
+              </svg>
+            </span>
+            <strong><span>X3</span><span>BALLS</span></strong>
+          </div>
         </div>
         <aside class="purple-leaderboard" tabindex="0" aria-label="Today top wins" aria-expanded="false">
           <div class="purple-leaderboard-title">
@@ -296,11 +302,11 @@
   <script src="math/field-configuration-3.js?v=20260715-13"></script>
   <script src="math/field-configuration-4.js?v=20260716-17"></script>
   <script src="math/field-configuration-5.js?v=20260716-18"></script>
-  <script src="math/puck-luck-layout-modes.js?v=20260716-19"></script>
+  <script src="math/puck-luck-layout-modes.js?v=20260810-01"></script>
   <script src="math/trajectory-planner.js?v=20260717-2"></script>
   <script src="math/trajectory-library-standard.js"></script>
   <script src="math/secret-room-trajectories.js"></script>
   <script src="math/layout-gameplay-test.js"></script>
-  <script src="script.js?v=20260717-17"></script>
+  <script src="script.js?v=20260810-16"></script>
 </body>
 </html>
