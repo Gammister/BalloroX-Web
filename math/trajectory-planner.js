@@ -445,6 +445,61 @@
     return { ...descriptor, valid: replay.valid, final_sector: replay.finalSector, frames: replay.frames, bounce_points: replay.bouncePoints };
   }
 
+  function simulateTrajectoryFromAngle({
+    lines,
+    puckRadius,
+    startPoint,
+    angleDegrees,
+    launchForce = VISUAL_PHYSICS.visual_launch_force,
+    dampingPerStep = 0.972,
+    duration = 2.5
+  }) {
+    const min = -1 + puckRadius;
+    const max = 1 - puckRadius;
+    const frameCount = Math.max(1, Math.round(duration / FIXED_TIMESTEP));
+    const normalizedForce = launchForce / REFERENCE_HALF_PX;
+    const totalDistance = normalizedForce * FIXED_TIMESTEP * geometricSum(dampingPerStep, frameCount);
+    const angle = angleDegrees * Math.PI / 180;
+    const candidate = {
+      lines,
+      puckRadius,
+      targetSector: { col: 0, row: 0 },
+      targetPoint: { x: 0, y: 0 },
+      min,
+      max,
+      startX: startPoint.x,
+      startY: startPoint.y,
+      dx: Math.cos(angle) * totalDistance,
+      dy: Math.sin(angle) * totalDistance,
+      length: totalDistance,
+      normalizedForce,
+      damping: dampingPerStep,
+      frameCount,
+      finalSpeed: normalizedForce * dampingPerStep ** frameCount
+    };
+    const replay = recordCandidate(candidate);
+    const finalFrame = replay.frames[replay.frames.length - 1];
+    return {
+      valid: true,
+      start_point: { ...startPoint },
+      target_sector: { ...replay.finalSector },
+      landing_point: { x: finalFrame[1], y: finalFrame[2] },
+      final_sector: { ...replay.finalSector },
+      puck_radius: puckRadius,
+      launch_force: launchForce,
+      launch_angle_degrees: round(angleDegrees + 135, 4),
+      damping_per_step: round(dampingPerStep, 10),
+      fixed_timestep: FIXED_TIMESTEP,
+      bounce_count: replay.bounceCount,
+      duration: finalFrame[0],
+      final_speed: round(candidate.finalSpeed * REFERENCE_HALF_PX),
+      final_correction_px: 0,
+      numerical_closure_error_px: 0,
+      bounce_points: replay.bouncePoints,
+      frames: replay.frames
+    };
+  }
+
   function selectTrajectoryDescriptor(variants, seed, recentIds = [], usage = {}, recentHistorySize = 20) {
     if (!variants.length) return null;
     const recent = new Set(recentIds.slice(-recentHistorySize));
@@ -460,7 +515,7 @@
   return { FIXED_TIMESTEP, REFERENCE_HALF_PX, NORMALIZED_FORCE, VISUAL_PHYSICS,
     POCKET_CAPTURE_RADIUS_MULTIPLIER, POCKET_CENTERS, segmentCircleFirstIntersection,
     minimumPocketDistance, trajectoryClearsPockets,
-    planTrajectory, sectorCenter,
+    planTrajectory, simulateTrajectoryFromAngle, sectorCenter,
     sectorFromPoint, findStarCandidates, landingPointForVariant, descriptorFromTrajectory, hydrateTrajectory,
     selectTrajectoryDescriptor };
 });

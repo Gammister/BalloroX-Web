@@ -8,6 +8,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>BalloroX</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="slot-ui.css">
+  <link rel="stylesheet" href="desktop-ui.css">
+  <link rel="stylesheet" href="bonus-ui-v2.css">
 </head>
 <body>
   <main class="game-shell">
@@ -42,16 +45,6 @@
             <input id="menuMusicToggle" type="checkbox" checked>
             <i aria-hidden="true"></i>
           </label>
-          <label class="menu-toggle-row">
-            <span id="menuHapticsLabel" data-i18n="vibration">Vibration</span>
-            <input id="menuHapticsToggle" type="checkbox" checked>
-            <i aria-hidden="true"></i>
-          </label>
-          <label class="menu-toggle-row">
-            <span id="menuAnimationLabel" data-i18n="animations">Animations</span>
-            <input id="menuAnimationToggle" type="checkbox" checked>
-            <i aria-hidden="true"></i>
-          </label>
           <button id="menuLanguageButton" type="button" data-i18n="language">Language</button>
           <button id="menuRulesButton" type="button" data-i18n="rules">Rules</button>
         </div>
@@ -72,7 +65,7 @@
             <article class="rule-card">
               <div class="rule-art puck-rule-art" aria-hidden="true"><i></i></div>
               <h3 data-i18n="ruleLaunchTitle">Launch and physics</h3>
-              <p data-i18n="ruleLaunchText">Choose one to three balls. They launch together and bounce from the boards.</p>
+              <p data-i18n="ruleLaunchText">Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.</p>
             </article>
             <article class="rule-card">
               <div class="rule-art loot-art" aria-hidden="true">5x</div>
@@ -81,8 +74,8 @@
             </article>
             <article class="rule-card">
               <div class="rule-art pocket-rule-art" aria-hidden="true"><i></i></div>
-              <h3 data-i18n="rulePocketTitle">Pocket</h3>
-              <p data-i18n="rulePocketFieldText">One pocket appears in a random empty cell each round. A ball entering it releases three white balls. Released balls can rarely enter the pocket again; the chance decreases with each generation.</p>
+              <h3 data-i18n="rulePocketTitle">X3 BALLS · blue pocket</h3>
+              <p data-i18n="rulePocketFieldText">The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.</p>
             </article>
             <article class="rule-card">
               <div class="rule-art boost-art" aria-hidden="true">
@@ -93,17 +86,21 @@
                 </svg>
               </div>
               <h3 data-i18n="ruleBoostTitle">x10 BOOST</h3>
-              <p data-i18n="ruleBoostText">Collect one purple diamond per selected ball. A full set multiplies main-field wins by x10, including three-ball pocket releases.</p>
+              <p data-i18n="ruleBoostText">Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.</p>
             </article>
             <article class="rule-card">
-              <div class="rule-art multi-rule-art" aria-hidden="true">★</div>
+              <div class="rule-art pocket-rule-art" aria-hidden="true" style="filter: hue-rotate(185deg)"><i></i></div>
               <h3 data-i18n="ruleMultiTitle">EX MULTI</h3>
-              <p data-i18n="ruleMultiText">Collect the yellow star to add extra multiplier cells to the main field.</p>
+              <p data-i18n="ruleMultiText">The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.</p>
             </article>
             <article class="rule-card">
               <div class="rule-art field-rule-art" aria-hidden="true">5–10</div>
-              <h3 data-i18n="ruleFieldTitle">Lines and volatility</h3>
-              <p data-i18n="ruleFieldText">Fewer lines mean larger targets and smaller multipliers; more lines mean rarer hits and larger multipliers.</p>
+              <h3 data-i18n="ruleLuckyTitle">LUCKY SHOT · red pocket</h3>
+              <p data-i18n="ruleLuckyText">The red pocket selects a lower room after the other balls and bonuses finish. Stop on its top multiplier to win. The right room pays ten times the left room; X10 BOOST applies to both.</p>
+            </article>
+            <article class="rule-card">
+              <h3 data-i18n="ruleFieldTitle">Lines</h3>
+              <p data-i18n="ruleFieldText">Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.</p>
             </article>
             <article class="rule-card">
               <div class="rule-art auto-rule-art" aria-hidden="true">AUTO</div>
@@ -113,22 +110,22 @@
           </div>
           <section class="rules-about" aria-labelledby="rulesAboutTitle">
             <h3 id="rulesAboutTitle" data-i18n="rulesAboutTitle">ABOUT THE GAME</h3>
-              <p data-i18n="rulesAboutIntro">BalloroX is an online probability game with a fixed mathematical model. Choose a stake, 1–3 balls and 5–10 lines. Each ball has its own stake and can stop on an empty cell, a multiplier cell or enter a pocket that releases three white balls. A released ball can rarely enter a pocket again; the chance decreases at each generation.</p>
+              <p data-i18n="rulesAboutIntro">Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.</p>
             <div class="rules-about-block">
               <h4 data-i18n="rulesHowToWinTitle">How wins are paid</h4>
-              <p data-i18n="rulesHowToWinText">The round win is the sum of all ball payouts: ball stake × cell multiplier. x10 BOOST multiplies main-field wins. A ball that enters a pocket releases three white balls, and each one resolves on the main field with an ordinary cell multiplier or can rarely enter a pocket again. EX MULTI adds extra multiplier cells to the main field, but it does not guarantee a win.</p>
+              <p data-i18n="rulesHowToWinText">Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.</p>
             </div>
             <div class="rules-about-block rules-about-plain">
-              <p data-i18n="rulesRtpText">The theoretical RTP is 97.45%. RTP is the long-term average return calculated across a very large number of rounds; it does not guarantee the result of a specific bet, session or player. RTP formula: total payouts ÷ total stakes × 100%.</p>
-              <p data-i18n="rulesMaxWinText">The theoretical maximum win is 8100x the total stake. It requires 10 lines, x10 BOOST, the maximum allowed chain of repeated pocket entries and every final released ball landing on a 300x multiplier. This outcome is extremely rare, but non-zero.</p>
+              <p data-i18n="rulesRtpText">RTP has not been established for this version.</p>
+              <p data-i18n="rulesMaxWinText">Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.</p>
             </div>
             <div class="rules-about-block">
-              <h4 data-i18n="rulesVolatilityTitle">Volatility</h4>
-              <p data-i18n="rulesVolatilityText">Fewer lines create larger targets, more frequent hits and lower maximum wins. More lines create rarer hits, higher volatility and larger possible wins.</p>
+              <h4 data-i18n="rulesVolatilityTitle">Bonus order</h4>
+              <p data-i18n="rulesVolatilityText">When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.</p>
             </div>
             <div class="rules-about-block">
               <h4 data-i18n="rulesDisclosureTitle">Player information</h4>
-              <p data-i18n="rulesDisclosureText">Game rules disclose the RTP, maximum win and bonus conditions. BalloroX is intended for adult players. Play responsibly.</p>
+              <p data-i18n="rulesDisclosureText">This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.</p>
             </div>
           </section>
         </div>
@@ -208,37 +205,52 @@
           <b id="currentLoot">1.00x</b>
         </div>
         <div id="roundWinLabel" class="round-win-label hidden" aria-live="polite"></div>
-        <div id="diamondBonusEdge" class="bonus-edge-counter">
-          <div class="crown-bonus-counter" aria-label="Diamond boost counter">
-            <div id="crownCounter" class="crown-counter" aria-hidden="true">
-              <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
-              <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
-              <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
-            </div>
-            <strong><span>x10</span><span>BOOST</span></strong>
+        <div class="crown-bonus-counter" aria-label="Diamond boost counter">
+          <div id="crownCounter" class="crown-counter" aria-hidden="true">
+            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
+            <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
           </div>
+          <strong><span>x10</span><span>BOOST</span></strong>
         </div>
-        <div id="multiPlusBonusEdge" class="bonus-edge-counter">
-          <div id="multiPlusCounter" class="multi-plus-counter" aria-label="Extra multipliers bonus">
-            <span class="multi-plus-icon" aria-hidden="true">
-              <svg class="multi-plus-star" viewBox="0 0 100 100">
-                <path class="multi-plus-star-body" d="M47.6 17.58Q50 12 52.4 17.58L59.17 33.29Q60.27 35.86 63.06 36.12L80.09 37.7Q86.14 38.26 81.57 42.27L68.73 53.56Q66.62 55.4 67.24 58.13L71 74.81Q72.34 80.74 67.11 77.64L52.4 68.91Q50 67.48 47.6 68.91L32.89 77.64Q27.66 80.74 29 74.81L32.76 58.13Q33.38 55.4 31.27 53.56L18.43 42.27Q13.86 38.26 19.91 37.7L36.94 36.12Q39.73 35.86 40.83 33.29Z"/>
-              </svg>
-            </span>
-            <strong><span>EX</span><span>MULTI</span></strong>
-          </div>
+        <div id="multiPlusCounter" class="multi-plus-counter" aria-label="Extra multipliers bonus">
+          <span class="multi-plus-icon" aria-hidden="true">
+            <svg class="multi-plus-hole" viewBox="0 0 100 100">
+              <circle class="multi-plus-hole-shadow" cx="50" cy="50" r="39"/>
+              <circle class="multi-plus-hole-rim" cx="50" cy="50" r="31"/>
+              <circle class="multi-plus-hole-core" cx="50" cy="50" r="21"/>
+            </svg>
+            <span class="v2-lemon-slots"><img class="v2-lemon" src="assets/duckies-star.svg" alt=""><img class="v2-lemon" src="assets/duckies-star.svg" alt=""></span>
+          </span>
+          <strong><span>EX</span><span>MULTI</span></strong>
         </div>
-        <div id="pocketBonusEdge" class="bonus-edge-counter">
-          <div id="pocketBonusCounter" class="pocket-bonus-counter" aria-label="Pocket bonus">
-            <span class="pocket-bonus-icon" aria-hidden="true">
-              <svg class="pocket-bonus-hole" viewBox="0 0 100 100">
-                <circle class="pocket-bonus-hole-shadow" cx="50" cy="50" r="39"/>
-                <circle class="pocket-bonus-hole-rim" cx="50" cy="50" r="31"/>
-                <circle class="pocket-bonus-hole-core" cx="50" cy="50" r="21"/>
-              </svg>
+        <div id="pocketBonusCounter" class="pocket-bonus-counter" aria-label="Pocket bonus">
+          <span class="pocket-bonus-icon" aria-hidden="true">
+            <svg class="pocket-bonus-hole" viewBox="0 0 100 100">
+              <circle class="pocket-bonus-hole-shadow" cx="50" cy="50" r="39"/>
+              <circle class="pocket-bonus-hole-rim" cx="50" cy="50" r="31"/>
+              <circle class="pocket-bonus-hole-core" cx="50" cy="50" r="21"/>
+            </svg>
+            <img class="v2-counter-symbol v2-blue-symbol" src="assets/duckies-cactus.svg" alt="">
+          </span>
+          <strong><span>X3</span><span>BALLS</span></strong>
+        </div>
+        <div id="chanceBonusCounter" class="chance-bonus-counter" aria-label="Lucky Shot bonus">
+          <span class="chance-bonus-icon" aria-hidden="true">
+            <svg class="chance-bonus-hole" viewBox="0 0 100 100">
+              <circle class="chance-bonus-hole-shadow" cx="50" cy="50" r="39"/>
+              <circle class="chance-bonus-hole-rim" cx="50" cy="50" r="31"/>
+              <circle class="chance-bonus-hole-core" cx="50" cy="50" r="21"/>
+            </svg>
+            <span class="v2-crown-slots">
+              <img class="v2-counter-symbol v2-crown" src="assets/duckies-fire.png" alt="">
+              <img class="v2-counter-symbol v2-crown" src="assets/duckies-fire.png" alt="">
+              <img class="v2-counter-symbol v2-crown" src="assets/duckies-fire.png" alt="">
             </span>
-            <strong><span>X3</span><span>BALLS</span></strong>
-          </div>
+          </span>
+          <strong><span>LUCKY</span><span>SHOT</span></strong>
         </div>
         <aside class="purple-leaderboard" tabindex="0" aria-label="Today top wins" aria-expanded="false">
           <div class="purple-leaderboard-title">
@@ -302,11 +314,21 @@
   <script src="math/field-configuration-3.js?v=20260715-13"></script>
   <script src="math/field-configuration-4.js?v=20260716-17"></script>
   <script src="math/field-configuration-5.js?v=20260716-18"></script>
-  <script src="math/puck-luck-layout-modes.js?v=20260810-01"></script>
+  <script>window.BalloroPocketExperiment = new URLSearchParams(location.search).get('pocketExperiment') === '1';</script>
+  <script src="math/puck-luck-layout-modes.js?v=20260716-19"></script>
   <script src="math/trajectory-planner.js?v=20260717-2"></script>
   <script src="math/trajectory-library-standard.js"></script>
   <script src="math/secret-room-trajectories.js"></script>
   <script src="math/layout-gameplay-test.js"></script>
-  <script src="script.js?v=20260810-20"></script>
+  <script src="bonus-ui-v2.js"></script>
+  <script src="slot-ui.js"></script>
+  <script src="bonus-help.js"></script>
+  <script src="desktop-ui.js"></script>
+  <script src="saved-paths.js"></script>
+  <script src="quick-play-timing.js"></script>
+  <script src="quick-motion-trail.js"></script>
+  <script src="script.js?v=20260717-17"></script>
+  <script src="round-tape-codec.js"></script>
+  <script src="round-tape-player.js"></script>
 </body>
 </html>

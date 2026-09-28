@@ -1,0 +1,127 @@
+/* Isolated, removable UI experiment. No field or bonus drawing rules here. */
+@media(max-width:720px){
+ /* Invisible touch padding: keep the art and spacing unchanged. */
+ .slot-ui .slot-circle,.slot-ui .bet-action{overflow:visible}
+ .slot-ui .slot-circle::after,
+ .slot-ui .bet-action::after{
+  content:"";position:absolute;inset:-4px;border-radius:inherit;
+ }
+ .slot-ui .slot-dialog .slot-close,
+ .slot-ui .slot-dialog .slot-choices button,
+ .slot-ui .slot-dialog .puck-count-button,
+ .slot-ui .slot-dialog .lines-control button{position:relative}
+ .slot-ui .slot-dialog .slot-close::after,
+ .slot-ui .slot-dialog .slot-choices button::after,
+ .slot-ui .slot-dialog .puck-count-button::after,
+ .slot-ui .slot-dialog .lines-control button::after{
+  content:"";position:absolute;inset:-2px;border-radius:inherit;
+ }
+ .slot-ui button{touch-action:manipulation}
+}
+.slot-ui .game-shell {grid-template-rows:minmax(0,1fr);gap:0;padding-top:3px;width:min(920px,calc(100vw - 8px))}
+.slot-ui .game-screen,.slot-ui .game-screen.one-slot {grid-template-rows:minmax(0,1fr) auto;gap:3px}
+.slot-ui .mine-stage {border-radius:12px}
+.slot-ui .mine-stage {--top-wins-width:184px;--top-wins-inset:14px}
+.slot-ui .sound-button {position:absolute;right:calc(var(--top-wins-inset) + var(--top-wins-width) + 8px);top:12px;z-index:6;width:36px;height:36px;min-height:0;background:none;border:none;box-shadow:none;color:white}
+.slot-ui .purple-leaderboard {top:12px;right:var(--top-wins-inset);width:var(--top-wins-width)}
+@media(max-width:720px){.slot-ui .mine-stage{--top-wins-width:156px;--top-wins-inset:10px}}
+.slot-ui .bet-panel {position:relative;padding:8px 12px 5px;display:block;border:0;background:linear-gradient(180deg,#14171e,#0b0d12);border-radius:12px;min-height:132px;backdrop-filter:none;overflow:visible;z-index:10}
+.slot-ui .bank,.slot-total {position:absolute;top:10px;display:flex;flex-direction:column;gap:3px;padding:0;min-height:0;background:none;border:none;box-shadow:none;max-width:36%;font-size:12px}
+.slot-ui .bank {left:12px;align-items:flex-start}
+.slot-total {right:12px;align-items:flex-end;text-align:right}
+.slot-ui .bank>span,.slot-total>span {color:#aeb5c2;font-weight:500}
+.slot-ui .bank strong,.slot-total strong {font-size:clamp(12px,3.3vw,18px);color:#f5f6f8;white-space:nowrap;font-weight:650}
+.slot-controls {display:grid;grid-template-columns:1fr 1fr 1.8fr 1fr 1fr;align-items:end;gap:10px;padding-top:25px}
+.slot-circle {width:clamp(40px,10.8vw,58px);height:clamp(40px,10.8vw,58px);border-radius:50%;background:#101a20;border:2px solid #63cee9;color:#79ddf5;display:grid;place-items:center;justify-self:center;position:relative;padding:6px;margin-bottom:3px}
+.slot-circle svg {width:100%;height:100%}
+.slot-circle.active {background:#1a5b43;border-color:#7bf0bd;color:#b9ffe2;box-shadow:0 0 15px #45df6840}
+.slot-circle b:empty {display:none}
+.slot-circle b {position:absolute;right:-7px;top:-8px;border-radius:12px;background:#e1ffe8;color:#124b2e;min-width:24px;padding:2px 5px;font-size:11px}
+.slot-ui .bet-slot {display:block;padding:0;background:none;border:0;box-shadow:none;min-width:0}
+.slot-ui .bet-action {display:flex;align-items:center;justify-content:center;width:clamp(88px,23vw,116px);height:clamp(88px,23vw,116px);min-height:0;border-radius:50%;margin:auto;padding:15px;border:3px solid #8de957;background:linear-gradient(145deg,#38d713,#0f9301);box-shadow:inset 0 2px 8px #e1ffa95c,inset 0 -7px 0 #065e5466,0 0 22px #40ed1530}
+.slot-ui .bet-action>svg {width:80%;height:80%;color:#fff;transform:scaleX(-1);transform-box:fill-box;transform-origin:center}
+.slot-ui .bet-action:not(.waiting):not(.cashout):not(.mining):not(:disabled)>svg {
+ animation:slotActionArrowsRotate 2.4s linear infinite;
+}
+@keyframes slotActionArrowsRotate {
+ from{transform:rotate(0deg) scaleX(-1)}
+ to{transform:rotate(360deg) scaleX(-1)}
+}
+.slot-ui .bet-action>span,.slot-ui .bet-action>small {display:none}
+.slot-ui .bet-action.waiting {background:linear-gradient(145deg,#227743,#124324);border-color:#388358;box-shadow:none}
+.slot-ui .bet-action.waiting svg,.slot-ui .bet-action:disabled svg {opacity:.35;animation:none}
+.slot-ui .bet-action:focus-visible,.slot-circle:focus-visible,.slot-dialog button:focus-visible {outline:3px solid white;outline-offset:3px}
+.slot-dialog {position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.8);backdrop-filter:none;-webkit-backdrop-filter:none;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}
+.slot-dialog-card {width:min(100%,480px);max-height:calc(100dvh - 36px);overflow:auto;padding:22px;border:1px solid #43535c;border-radius:24px;background:linear-gradient(155deg,#1b242c,#10151d);box-shadow:0 24px 90px #0008}
+.slot-dialog header {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px}
+.slot-dialog h2 {font-size:26px;margin:0;color:white;line-height:1.2}
+.slot-close {background:none;font-size:38px;line-height:1;width:44px;height:44px;padding:0;color:white;flex-shrink:0}
+.slot-dialog-content {display:flex;flex-direction:column;gap:18px}
+.slot-caption {margin:0;color:#cbd3dd;font-size:15px;text-align:center}
+.slot-choices {display:grid;gap:10px}
+.stake-choices {grid-template-columns:repeat(3,1fr)}
+.auto-choices {grid-template-columns:repeat(4,1fr)}
+.slot-choices button {background:#303b49;border:2px solid transparent;border-radius:12px;min-height:52px;font-size:20px;color:white;padding:8px}
+.slot-choices button.active {background:#1c593e;border-color:#77edaa;color:#c7ffde}
+.slot-choices button:disabled {opacity:.5}
+.auto-choices button:last-child {grid-column:2/4}
+.slot-hint {color:#a3b0c0;line-height:1.55;font-size:13px;margin:0}
+.slot-start {background:#20a528;color:white;min-height:48px;border-radius:14px;font-weight:700;font-size:16px;padding:10px}
+.slot-volume {display:flex;flex-direction:column;gap:18px;font-size:18px}
+.slot-volume input {width:100%;accent-color:#66dd96;min-height:32px}
+.slot-dialog .menu-toggle-row {min-height:48px;padding:4px 0;font-size:17px;background:none;display:flex;justify-content:space-between}
+.slot-wide {display:block;width:100%;text-align:left;font-size:16px;background:#26303b;border-radius:12px;padding:14px}
+.slot-profile-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.slot-profile-row .slot-wide{min-width:0;white-space:normal;font-size:14px}
+#nicknameForm{display:flex;flex-direction:column;gap:16px}
+#nicknameInput{width:100%;min-height:48px;border:1px solid #627484;border-radius:12px;background:#10151d;color:white;padding:12px;font-size:18px}
+.slot-dialog .bet-box {display:none}
+.slot-dialog .puck-count-control {display:flex;align-items:center;justify-content:space-between;min-height:52px;background:none;border:0;padding:0;gap:10px}
+.slot-dialog .puck-count-control>span,.slot-dialog .field-option>span {font-size:14px;color:#d9dfe7}
+.slot-dialog .puck-count-buttons {display:flex;gap:8px}
+.slot-dialog .puck-count-button {width:45px;height:42px;font-size:18px;border-radius:12px}
+.slot-dialog .field-option {display:flex;flex-direction:column;align-items:stretch;gap:12px}
+.slot-dialog .lines-control {display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.slot-dialog .lines-control button {height:42px;min-height:42px;font-size:16px;border-radius:10px;padding:0}
+.slot-dialog #historyPanel {position:static;width:100%;height:auto;min-height:150px;border:0;background:none;padding:0;overflow:visible}
+.slot-dialog #historyPanel .loot-log-row {display:block;padding:0}
+.slot-dialog .history-title,.slot-dialog .loot-log-label {display:none!important}
+.slot-dialog #rewardHistory {display:flex;flex-wrap:wrap;max-height:none;overflow:visible;gap:8px}
+.slot-dialog #rewardHistory:empty:before {content:'Пока нет завершённых раундов';color:#acb7c5}
+.slot-ui .rules-screen {z-index:120}
+@media(min-width:721px){
+ .slot-ui .bet-panel{min-height:145px;--controls-width:560px;--side-button-size:58px;--controls-gap:10px;
+  /* The five grid tracks total 5.8fr. Align labels with the outer circle edges. */
+  --label-inset:calc(50% - var(--controls-width)/2 + ((var(--controls-width) - 4*var(--controls-gap))/5.8 - var(--side-button-size))/2)}
+ .slot-controls{max-width:var(--controls-width);gap:var(--controls-gap);margin:auto;padding-top:10px}
+ .slot-circle{width:var(--side-button-size);height:var(--side-button-size)}
+ .slot-ui .bank,.slot-total{top:18px}
+ .slot-ui .bank{left:var(--label-inset)}
+ .slot-total{right:var(--label-inset)}
+}
+@media(max-height:600px){.slot-ui .bet-panel{min-height:110px}.slot-ui .bet-action{width:78px;height:78px}.slot-controls{padding-top:20px}.slot-dialog-card{padding:16px}.slot-dialog header{margin-bottom:12px}.slot-dialog-content{gap:12px}}
+
+/* Borderless playing surface continues behind the floating footer. */
+html:has(body.slot-ui),body.slot-ui {background:#000}
+.slot-ui .game-shell {width:min(1100px,100vw);padding:0;background:#000}
+.slot-ui .game-screen,.slot-ui .game-screen.one-slot {position:relative;display:block;background:#000}
+.slot-ui .mine-stage {position:absolute;inset:0;border:0;border-radius:0;box-shadow:none;background:#000}
+.slot-ui .bet-panel {position:absolute;bottom:max(12px,env(safe-area-inset-bottom,0px));left:0;right:0;background:linear-gradient(180deg,rgba(5,7,10,.58),rgba(5,7,10,.72));border:0;box-shadow:none;border-radius:0;min-height:118px;padding-bottom:4px;backdrop-filter:none}
+.slot-ui .slot-controls {padding-top:10px}
+.slot-ui .sound-button {width:56px;height:56px;top:12px;right:10px}
+.slot-ui .sound-button::before {background-size:48px 48px}
+@media(min-width:721px){.slot-ui .sound-button{right:calc(50% - 264px)}}
+.slot-ui .sound-button {display:none}
+@media(max-width:1359px){.slot-ui .purple-leaderboard{top:12px}}
+.slot-ui .purple-leaderboard-title {min-height:32px}
+.slot-ui .purple-leaderboard-toggle {min-width:36px;min-height:36px}
+.slot-ui [data-bonus-help] {pointer-events:auto;cursor:pointer;min-height:50px}
+.slot-ui [data-bonus-help]:focus-visible {outline:2px solid white;outline-offset:3px}
+.slot-ui [data-bonus-help]::before {content:'';position:absolute;inset:-4px;border-radius:inherit}
+.bonus-help-canvas {display:block;width:100%;aspect-ratio:1.25;background:#000;border-radius:16px}
+.bonus-help-copy {font-size:16px;line-height:1.55;margin:0;color:#f0f2f7}
+.bonus-help-note {font-size:12px;color:#97a4b7;margin:0;text-align:center}
+.slot-ui #bonusHelpDialog .slot-dialog-card {width:min(100%,440px)}
+@media(max-width:720px){.slot-ui .purple-leaderboard-title span{font-size:.57rem}.slot-ui .purple-leaderboard li{font-size:.62rem}}
+@media(max-height:600px){.slot-ui .bet-panel{min-height:106px}.bonus-help-canvas{max-height:210px;object-fit:contain}}
+@media(max-width:360px){.slot-ui .mine-stage{--top-wins-width:130px}.slot-ui .purple-leaderboard li{font-size:.56rem}}

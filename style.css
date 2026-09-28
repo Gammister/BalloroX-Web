@@ -225,8 +225,8 @@ h1 {
   justify-content: flex-start;
   gap: 0 !important;
   padding-left: 0;
-  transform: perspective(260px) rotateX(9deg) scaleY(1.04);
-  transform-origin: 48% 58%;
+  transform: perspective(220px) rotateX(28deg) scaleY(1.10);
+  transform-origin: 50% 58%;
 }
 
 .balloro-logo > span {
@@ -663,57 +663,6 @@ body.effects-disabled *::after {
   pointer-events: none;
 }
 
-/* Experimental casino-table layout. Without the body class the counters retain
-   their original left-column positioning, which keeps rollback to one switch. */
-.bonus-edge-counter {
-  display: contents;
-}
-
-body.bonus-edge-counter-layout .bonus-edge-counter {
-  --bonus-edge-angle: 0deg;
-  --bonus-edge-scale: 1;
-  position: absolute;
-  z-index: 8;
-  top: 0;
-  left: 0;
-  display: grid;
-  place-items: center;
-  transform: translate(-50%, -50%) rotate(var(--bonus-edge-angle)) scale(var(--bonus-edge-scale));
-  transform-origin: center;
-  pointer-events: none;
-}
-
-body.bonus-edge-counter-layout .bonus-edge-counter > .crown-bonus-counter,
-body.bonus-edge-counter-layout .bonus-edge-counter > .multi-plus-counter,
-body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter {
-  position: relative;
-  inset: auto;
-  min-height: 42px;
-  margin: 0;
-  border-radius: 6px;
-  opacity: 0.7;
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  transition: opacity 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-
-body.bonus-edge-counter-layout .bonus-edge-counter > .crown-bonus-counter {
-  min-width: 148px;
-  justify-content: center;
-}
-
-body.bonus-edge-counter-layout .bonus-edge-counter > .multi-plus-counter,
-body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter {
-  min-width: 112px;
-  justify-content: center;
-}
-
-body.bonus-edge-counter-layout .bonus-edge-counter > .crown-bonus-counter.is-active,
-body.bonus-edge-counter-layout .bonus-edge-counter > .multi-plus-counter.is-active,
-body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-active {
-  opacity: 1;
-}
-
 .crown-bonus-counter {
   position: absolute;
   z-index: 8;
@@ -832,9 +781,9 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
 }
 
 .crown-bonus-counter.is-active strong {
-  background: rgba(202, 104, 255, 0.23);
+  background: transparent;
   color: #f3d4ff;
-  box-shadow: inset 0 0 0 1px rgba(237, 196, 255, 0.24), 0 0 16px rgba(202, 104, 255, 0.26);
+  box-shadow: none;
   text-shadow: 0 0 10px rgba(237, 196, 255, 0.62), 0 0 22px rgba(202, 104, 255, 0.42);
 }
 
@@ -845,7 +794,7 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
 .multi-plus-counter {
   position: absolute;
   z-index: 8;
-  top: 66px;
+  top: 120px;
   left: 14px;
   display: flex;
   align-items: center;
@@ -859,6 +808,12 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
+/* The mirrored right-hand counters read from the field outward: label, then ball. */
+.multi-plus-counter,
+.pocket-bonus-counter {
+  flex-direction: row-reverse;
+}
+
 .multi-plus-icon {
   width: 24px;
   height: 24px;
@@ -867,19 +822,50 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
   filter: drop-shadow(0 0 5px rgba(255, 213, 61, 0.2));
 }
 
-.multi-plus-star {
+.multi-plus-icon,
+.pocket-bonus-icon,
+.chance-bonus-icon {
+  position: relative;
+}
+
+.multi-plus-counter.is-active .multi-plus-icon::after,
+.pocket-bonus-counter.is-active .pocket-bonus-icon::after,
+.chance-bonus-counter.is-active .chance-bonus-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 42%;
+  height: 42%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0%, #fafaf6 30%, #dfe4de 68%, #929b94 100%);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.65);
+  pointer-events: none;
+}
+
+.multi-plus-hole {
   width: 100%;
   height: 100%;
   overflow: visible;
 }
 
-.multi-plus-star-body {
-  fill: transparent;
-  stroke: rgba(255, 213, 61, 0.92);
-  stroke-width: 11;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: stroke 0.18s ease, filter 0.18s ease;
+.multi-plus-hole-shadow {
+  fill: rgba(0, 0, 0, 0.92);
+  stroke: rgba(255, 213, 61, 0.22);
+  stroke-width: 8;
+}
+
+.multi-plus-hole-rim {
+  fill: rgba(255, 213, 61, 0.14);
+  stroke: rgba(255, 213, 61, 0.94);
+  stroke-width: 10;
+  transition: fill 0.18s ease, stroke 0.18s ease, filter 0.18s ease;
+}
+
+.multi-plus-hole-core {
+  fill: rgba(4, 6, 8, 0.98);
+  transition: fill 0.18s ease, filter 0.18s ease;
 }
 
 .multi-plus-counter strong {
@@ -911,16 +897,21 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
   filter: drop-shadow(0 0 7px rgba(255, 213, 61, 0.72));
 }
 
-.multi-plus-counter.is-active .multi-plus-star-body {
-  fill: rgba(255, 235, 128, 0.98);
-  stroke: rgba(255, 213, 61, 0.98);
-  filter: drop-shadow(0 0 3px rgba(255, 213, 61, 0.42));
+.multi-plus-counter.is-active .multi-plus-hole-rim {
+  fill: rgba(255, 213, 61, 0.28);
+  stroke: rgba(255, 235, 128, 1);
+  filter: drop-shadow(0 0 5px rgba(255, 213, 61, 0.78));
+}
+
+.multi-plus-counter.is-active .multi-plus-hole-core {
+  fill: rgba(35, 27, 2, 0.98);
+  filter: drop-shadow(0 0 4px rgba(255, 213, 61, 0.54));
 }
 
 .multi-plus-counter.is-active strong {
-  background: rgba(255, 213, 61, 0.2);
+  background: transparent;
   color: #fff0a6;
-  box-shadow: inset 0 0 0 1px rgba(255, 240, 166, 0.24), 0 0 16px rgba(255, 213, 61, 0.24);
+  box-shadow: none;
   text-shadow: 0 0 10px rgba(255, 240, 166, 0.62), 0 0 22px rgba(255, 213, 61, 0.42);
 }
 
@@ -931,7 +922,7 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
 .pocket-bonus-counter {
   position: absolute;
   z-index: 8;
-  top: 120px;
+  top: 174px;
   left: 14px;
   display: flex;
   align-items: center;
@@ -1005,29 +996,138 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
 }
 
 .pocket-bonus-counter.is-active .pocket-bonus-icon {
-  filter: drop-shadow(0 0 8px rgba(117, 217, 255, 0.76));
+  filter: drop-shadow(0 0 7px rgba(117, 217, 255, 0.72));
+}
+
+.pocket-bonus-counter.is-active .pocket-bonus-hole-shadow {
+  fill: transparent;
+  stroke: transparent;
 }
 
 .pocket-bonus-counter.is-active .pocket-bonus-hole-rim {
-  fill: rgba(117, 217, 255, 0.3);
+  fill: rgba(117, 217, 255, 0.28);
   stroke: rgba(190, 240, 255, 0.98);
-  filter: drop-shadow(0 0 3px rgba(117, 217, 255, 0.55));
+  filter: drop-shadow(0 0 5px rgba(117, 217, 255, 0.78));
 }
 
 .pocket-bonus-counter.is-active .pocket-bonus-hole-core {
-  stroke: rgba(190, 240, 255, 0.74);
-  filter: drop-shadow(0 0 4px rgba(117, 217, 255, 0.44));
+  fill: rgba(2, 27, 35, 0.98);
+  stroke: rgba(117, 217, 255, 0.32);
+  filter: drop-shadow(0 0 4px rgba(117, 217, 255, 0.54));
 }
 
 .pocket-bonus-counter.is-active strong {
-  background: rgba(117, 217, 255, 0.2);
+  background: transparent;
   color: #d5f6ff;
-  box-shadow: inset 0 0 0 1px rgba(213, 246, 255, 0.25), 0 0 16px rgba(117, 217, 255, 0.24);
+  box-shadow: none;
   text-shadow: 0 0 10px rgba(213, 246, 255, 0.66), 0 0 22px rgba(117, 217, 255, 0.46);
 }
 
 .pocket-bonus-counter.bonus-bubble {
   animation: bonusBubble 560ms cubic-bezier(0.22, 0.9, 0.3, 1.25) both;
+}
+
+.chance-bonus-counter {
+  position: absolute;
+  z-index: 8;
+  top: 66px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 105px;
+  height: 44px;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(12, 3, 5, 0.7);
+  border: 1px solid rgba(255, 72, 72, 0.18);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+  pointer-events: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.chance-bonus-counter.is-active {
+  background: radial-gradient(circle at 72% 50%, rgba(255, 48, 48, 0.26), rgba(12, 3, 5, 0.82) 60%);
+  border-color: rgba(255, 75, 75, 0.78);
+  box-shadow: 0 0 22px rgba(255, 42, 42, 0.28), 0 10px 24px rgba(0, 0, 0, 0.38);
+}
+
+.chance-bonus-counter.bonus-bubble {
+  animation: bonusBubble 560ms cubic-bezier(0.22, 0.9, 0.3, 1.25) both;
+}
+
+.chance-bonus-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 0 5px rgba(255, 74, 82, 0.2));
+}
+
+.chance-bonus-hole {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.chance-bonus-hole-shadow {
+  fill: #080506;
+  stroke: rgba(0, 0, 0, 0.94);
+  stroke-width: 14;
+}
+
+.chance-bonus-hole-rim {
+  fill: #100709;
+  stroke: rgba(255, 74, 82, 0.92);
+  stroke-width: 10;
+  transition: fill 0.18s ease, stroke 0.18s ease, filter 0.18s ease;
+}
+
+.chance-bonus-hole-core {
+  fill: #050102;
+  stroke: rgba(255, 74, 82, 0.32);
+  stroke-width: 3;
+  transition: stroke 0.18s ease, filter 0.18s ease;
+}
+
+.chance-bonus-counter.is-active .chance-bonus-icon {
+  filter: drop-shadow(0 0 7px rgba(255, 74, 82, 0.72));
+}
+
+.chance-bonus-counter.is-active .chance-bonus-hole-shadow {
+  fill: transparent;
+  stroke: transparent;
+}
+
+.chance-bonus-counter.is-active .chance-bonus-hole-rim {
+  fill: rgba(255, 74, 82, 0.28);
+  stroke: rgba(255, 190, 194, 0.98);
+  filter: drop-shadow(0 0 5px rgba(255, 74, 82, 0.78));
+}
+
+.chance-bonus-counter.is-active .chance-bonus-hole-core {
+  fill: rgba(35, 2, 5, 0.98);
+  stroke: rgba(255, 74, 82, 0.32);
+  filter: drop-shadow(0 0 4px rgba(255, 74, 82, 0.54));
+}
+
+.chance-bonus-counter strong {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  gap: 0;
+  line-height: 0.92;
+  text-align: center;
+  color: #ff5c5c;
+  font-size: 0.74rem;
+  font-weight: 1000;
+  text-shadow: 0 0 10px rgba(255, 47, 47, 0.44);
+}
+
+.chance-bonus-counter strong span:first-child {
+  font-size: 0.86rem;
 }
 
 .purple-leaderboard {
@@ -1164,7 +1264,7 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
   min-width: 0;
   min-height: 22px;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 18px 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 5px;
   padding: 2px 4px;
@@ -1178,9 +1278,29 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
   background: rgba(255, 255, 255, 0.035);
 }
 
+.leaderboard-avatar{
+ display:block;width:22px;height:22px;border-radius:50%;
+ background-color:#252936;background-image:var(--avatar-image);
+ background-size:1000% 500%;background-position:var(--avatar-x) var(--avatar-y);
+ background-repeat:no-repeat;border:1px solid #b97edc66;
+ box-shadow:0 0 8px #ac59d522;
+}
+
 .purple-leaderboard li.is-real {
-  background: rgba(202, 104, 255, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(237, 196, 255, 0.12);
+  border-radius: 10px;
+  background: radial-gradient(ellipse at 72% 50%, rgba(202, 104, 255, 0.3), rgba(17, 8, 25, 0.88) 85%);
+  box-shadow: inset 0 0 0 1px rgba(202, 104, 255, 0.72),
+    inset 0 0 14px rgba(202, 104, 255, 0.2),
+    0 0 12px rgba(202, 104, 255, 0.28);
+}
+
+.purple-leaderboard li.is-real .purple-rank {
+  color: #dbb7ed;
+}
+
+.purple-leaderboard li.is-real .purple-player-value {
+  color: #efcfff;
+  text-shadow: 0 0 8px rgba(202, 104, 255, 0.65);
 }
 
 .purple-leaderboard li.is-new {
@@ -1221,6 +1341,10 @@ body.bonus-edge-counter-layout .bonus-edge-counter > .pocket-bonus-counter.is-ac
   .crown-bonus-counter,
   .multi-plus-counter,
   .pocket-bonus-counter {
+    left: 10px;
+  }
+
+  .chance-bonus-counter {
     left: 10px;
   }
 
@@ -2124,7 +2248,9 @@ canvas {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .rules-card,
@@ -2259,7 +2385,7 @@ canvas {
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
-  transform: perspective(260px) rotateX(9deg) scaleY(1.04);
+  transform: perspective(220px) rotateX(28deg) scaleY(1.10);
   transform-origin: 50% 58%;
   -webkit-text-stroke: 1.5px #050709;
   paint-order: stroke fill;

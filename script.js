@@ -4,21 +4,18 @@ const avatars = Array.from({ length: 50 }, (_, index) => ({
 }));
 
 let GRID_SIZE = 5;
-const BET_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100];
+const BET_STEPS = [0.75, 1, 2, 5, 10, 25, 50, 100, 250, 500, 750, 1000];
 const FIXED_PHYSICS_STEP = window.PuckLuckMath?.FIXED_TIMESTEP || 1 / 120;
-const INITIAL_REPLAY_PLAYBACK_RATE = 0.64;
-const AUTO_PLAY_ROUND_GAP_MS = 350;
+const AUTO_PLAY_ROUND_GAP_MS = 300;
 const TODAY_WINS_STORAGE_PREFIX = "puckLuckTodayWinsV1";
 const LANGUAGE_STORAGE_KEY = "puckLuckLanguageV1";
 const SOUND_EFFECTS_STORAGE_KEY = "puckLuckSoundEffectsV1";
-const ANIMATIONS_STORAGE_KEY = "puckLuckAnimationsV1";
 const MUSIC_STORAGE_KEY = "puckLuckMusicV1";
 const BACKGROUND_MUSIC_SRC = "assets/background-casino-jazz-loop.ogg";
-const HAPTICS_STORAGE_KEY = "puckLuckHapticsV1";
 const SECRET_ZONE_IDS = ["top", "right", "bottom", "left"];
 const FIELD_POCKET_ZONE_ID = "field";
-// Keep the music clearly behind impacts, pickups, and win cues on phone speakers.
-const BACKGROUND_MUSIC_VOLUME = 0.025;
+const BLUE_FIELD_POCKET_ZONE_ID = "blue-field";
+const BACKGROUND_MUSIC_VOLUME = 0.023;
 const GAME_MECHANICS_VARIANT = document.location.pathname.endsWith("/billiard.html")
   || new URLSearchParams(window.location.search).get("mode") === "billiard"
   ? "billiard"
@@ -33,52 +30,54 @@ const COLLECTIBLE_IDLE_FRAME_INTERVAL_MS = 50;
 const COUNTER_PICKUP_HOLD_DURATION_MS = 500;
 const COUNTER_FLY_IN_DURATION_MS = 562;
 const RESULT_BOOST_REVEAL_DURATION_MS = 240;
-const BONUS_FIELD_CASCADE_DURATION_MS = 1000;
-const BONUS_FIELD_CELL_REVEAL_DURATION_MS = 180;
-const BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS = 300;
 const BLUE_POCKET_WAVE_TIME_SCALE_MS = 72.5;
+const V2_CACTUS_POST_ACTIVATION_HOLD_MS = 350;
+const CHANCE_ROOM_IDS = ["bottom-right", "bottom-left"];
+const CHANCE_SPIN_DURATION_MS = 2450;
+const CHANCE_SINK_DURATION_MS = 260;
+const CHANCE_READY_WAVE_DURATION_MS = 500;
+const CHANCE_FINAL_CUE_DURATION_MS = 280;
+const CHANCE_MIN_SETTLE_AGE_SECONDS = 0.35;
+const CHANCE_POCKET_CAPTURE_RADIUS_MULTIPLIER = 1.55;
+const CHANCE_ROOM_GAP_PX = 10;
+// In Bonus UI V2 the room wall sits immediately outside the 9 px main-field
+// border instead of being painted underneath it.
+const CHANCE_ROOM_V2_WALL_OFFSET_PX = 9;
+const CHANCE_ROOM_CORNER_X_SHARE = 0.42;
+const CHANCE_ROOM_CORNER_Y_SHARE = 0.58;
+const CHANCE_ROOM_VIEWPORT_MARGIN_PX = 10;
+const MULTI_PLUS_NEON_DURATION_MS = 2000;
+const MULTI_PLUS_NEON_STEP_MS = 250;
+const MULTI_PLUS_NEON_STOP_FLASH_MS = 320;
+const FIELD_POCKET_PULL_MAX_DURATION_SECONDS = 0.32;
+const MULTI_PLUS_REVEAL_DURATION_MS = MULTI_PLUS_NEON_DURATION_MS + MULTI_PLUS_NEON_STOP_FLASH_MS;
 const MAX_RESULT_SOUND_LEVELS = 9;
 const WIN_SOUND_PITCH_RATIOS = [1, 1.12, 1.26, 1.42, 1.6, 1.81, 2.04, 2.28, 2.55];
 const PURPLE_WIN_SOUND_PITCH_RATIOS = [1, 1.08, 1.16, 1.27, 1.4, 1.54, 1.7, 1.88, 2.08];
-// Visual-only collectible proximity experiment. Set enabled to false for a one-line rollback.
-// It never changes collection radii, trajectories, results, payouts, or game math.
-const BONUS_PROXIMITY_VISUAL_EXPERIMENT = Object.freeze({
-  enabled: true,
-  glowSurfaceGapInBallDiameters: 1,
-  maximumSpeedFraction: 0.5,
-  maximumPulseAmplitudeMultiplier: 2,
-  pulseTimeScaleMs: 260
-});
-// Visual-only field HUD experiment. Set enabled to false to restore the original
-// left-column counters and 50% idle multiplier labels in one place.
-const FIELD_HUD_VISIBILITY_EXPERIMENT = Object.freeze({
-  enabled: false,
-  idleOpacity: 0.7,
-  fallbackIdleMultiplierOpacity: 0.5
-});
 const LOCALES = { en: "en-US", ru: "ru-RU", es: "es-419", pt: "pt-BR", de: "de-DE", fr: "fr-FR" };
 const TRANSLATIONS = {
   en: {
-    balance: "Balance", changeAvatar: "Change Avatar", sound: "Game SFX", music: "Music", vibration: "Vibration", animations: "Animations", language: "Language", rules: "Rules", gameRules: "Game Rules",
-    ruleLaunchTitle: "Launch and physics", ruleLaunchText: "Choose one to three balls. They launch together and bounce from the boards.",
+    balance: "Balance", changeAvatar: "Change Avatar", sound: "Game SFX", music: "Music", animations: "Animations", language: "Language", rules: "Rules", gameRules: "Game Rules",
+    ruleLaunchTitle: "Launch and physics", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
     ruleWinsTitle: "Winning cells", ruleWinsText: "A ball wins when it stops in a multiplier cell. The value applies to that ball's stake.",
-    rulePocketTitle: "Pocket", rulePocketFieldText: "One pocket appears in a random empty cell each round. A ball entering it releases three white balls. Released balls can rarely enter the pocket again; the chance decreases with each generation.", rulePocketBilliardText: "A ball entering a corner pocket releases three white balls. Released balls can rarely enter a pocket again; the chance decreases with each generation.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Collect one purple diamond per selected ball. A full set multiplies main-field wins by x10, including three-ball pocket releases.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "Collect the yellow star to add extra multiplier cells to the main field.",
-    ruleFieldTitle: "Lines and volatility", ruleFieldText: "Lines control volatility: fewer lines mean larger targets and smaller multipliers; more lines mean rarer hits and larger multipliers.",
+    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "A ball entering a corner pocket releases three white balls. Released balls can rarely enter a pocket again; the chance decreases with each generation.",
+    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
+    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
+    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
+    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
     ruleAutoTitle: "Autoplay", ruleAutoText: "Autoplay repeats the current stake and ball count after each round until switched off.",
     rulesAboutTitle: "ABOUT THE GAME",
-    rulesAboutIntro: "BalloroX is an online probability game with a fixed mathematical model. Choose a stake, 1–3 balls and 5–10 lines. Each ball has its own stake and can stop on an empty cell, a multiplier cell or enter a pocket that releases three white balls. A released ball can rarely enter a pocket again; the chance decreases at each generation.",
+    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
     rulesHowToWinTitle: "How wins are paid",
-    rulesHowToWinText: "The round win is the sum of all ball payouts: ball stake × cell multiplier. x10 BOOST multiplies main-field wins. A ball that enters a pocket releases three white balls, and each one resolves on the main field with an ordinary cell multiplier or can rarely enter a pocket again. EX MULTI adds extra multiplier cells to the main field, but it does not guarantee a win.",
+    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
     rulesRtpTitle: "RTP",
-    rulesRtpText: "The theoretical RTP is 97.45%. RTP is the long-term average return calculated across a very large number of rounds; it does not guarantee the result of a specific bet, session or player. RTP formula: total payouts ÷ total stakes × 100%.",
+    rulesRtpText: "RTP has not been established for this version.",
     rulesMaxWinTitle: "Maximum win",
-    rulesMaxWinText: "The theoretical maximum win is 8100x the total stake. It requires 10 lines, x10 BOOST, the maximum allowed chain of repeated pocket entries and every final released ball landing on a 300x multiplier. This outcome is extremely rare, but non-zero.",
-    rulesVolatilityTitle: "Volatility",
-    rulesVolatilityText: "More lines widen the X field and increase the available multiplier values. Premium center multipliers become larger and rarer, producing higher volatility.",
+    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
+    rulesVolatilityTitle: "Bonus order",
+    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
     rulesDisclosureTitle: "Player information",
-    rulesDisclosureText: "Game rules disclose the RTP, maximum win and bonus conditions. BalloroX is intended for adult players. Play responsibly.",
+    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
     topUpTitle: "Top Up Balance", topUpText: "Add any amount to continue playing.", amount: "Amount", topUp: "TOP UP", cancel: "CANCEL",
     totalHistory: "HISTORY:", roundHistory: "Round History", todayTopWins: "TODAY TOP WINS", riskLevel: "RISK", lines: "LINES", low: "Low", normal: "Normal", high: "High",
     pucks: "BALLS", auto: "AUTO", bet: "BET", wait: "WAIT", round: "ROUND", livePlayers: "LIVE PROTOTYPE PLAYERS", liveSubtitle: "LOCAL SIMULATION · SHARED GAME MATH",
@@ -86,26 +85,27 @@ const TRANSLATIONS = {
     showFullWinners: "Show full today top wins", showTopWinner: "Show only today's top win"
   },
   ru: {
-    balance: "Баланс", changeAvatar: "Сменить аватар", sound: "Звуки игры", music: "Музыка", vibration: "Вибрация", animations: "Анимации", language: "Язык", rules: "Правила", gameRules: "Правила игры",
-    ruleLaunchTitle: "Запуск и физика", ruleLaunchText: "Выберите от одного до трёх шаров. Они вылетают вместе и отскакивают от бортов.",
+    balance: "Баланс", changeAvatar: "Сменить аватар", sound: "Звуки игры", music: "Музыка", animations: "Анимации", language: "Язык", rules: "Правила", gameRules: "Правила игры",
+    ruleLaunchTitle: "Запуск и физика", ruleLaunchText: "Выберите ставку, 1–3 шара и 5–10 линий. Шары запускаются под случайными углами и отскакивают от стенок. В тестовой версии используются реальные столкновения, а не пути, подобранные под RTP.",
     ruleWinsTitle: "Выигрышные ячейки", ruleWinsText: "Шар выигрывает, остановившись в ячейке с множителем. Значение применяется к ставке этого шара.",
-    rulePocketTitle: "Луза", rulePocketFieldText: "Каждый раунд одна луза появляется в случайной пустой ячейке. Попавший в неё шар выпускает три белых шара. Выпущенные шары могут редко снова попасть в лузу; шанс снижается с каждым поколением.", rulePocketBilliardText: "Попавший в угловую лузу шар выпускает три белых шара. Выпущенные шары могут редко снова попасть в лузу; шанс снижается с каждым поколением.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Соберите по одному фиолетовому алмазу на выбранный шар. Полный набор умножает выигрыши основного поля на x10, включая выпуск трёх шаров из лузы.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "Соберите жёлтую звезду, чтобы добавить клетки с множителями на основное поле.",
-    ruleFieldTitle: "Линии и волатильность", ruleFieldText: "Линии управляют волатильностью: меньше линий — крупнее цели и ниже множители; больше линий — реже попадания и выше множители.",
+    rulePocketTitle: "X3 BALLS · голубая луза", rulePocketFieldText: "Голубая луза захватывает один шар и выпускает три шара в основной ромб. Каждая луза срабатывает один раз за раунд. Занятая луза не захватывает второй шар. Голубая и жёлтая исчезают после выстрела, красная — когда шар полностью провалился внутрь.", rulePocketBilliardText: "Попавший в угловую лузу шар выпускает три белых шара. Выпущенные шары могут редко снова попасть в лузу; шанс снижается с каждым поколением.",
+    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Всегда соберите три фиолетовых алмаза — независимо от количества шаров и линий. X10 BOOST умножает на десять выигрыши основного ромба и обеих СК, включая уже полученные выигрыши этого раунда. Стенки и множители становятся фиолетовыми.",
+    ruleMultiTitle: "EX MULTI", ruleMultiText: "Жёлтая луза удерживает шар, пока по полю мигают дополнительные множители, затем выпускает этот шар. Число дополнительных ячеек равно числу линий. Ячейки остаются там, где закончилось мигание. Значения EX MULTI для 5–10 линий: 1,5x, 1,8x, 2,2x, 2,7x, 3,2x, 3,6x. Для выигрыша шар должен остановиться в такой ячейке.",
+    ruleLuckyTitle: "LUCKY SHOT · красная луза", ruleLuckyText: "Красная луза удерживает шар до завершения движения остальных шаров и бонусов. Затем выбирается одна из двух нижних секретных комнат (СК), и шар выстреливает из её нижнего угла. Выигрыш даёт остановка на множителе в верхней ячейке. В левой СК стоит максимальный множитель основного поля, в правой — в десять раз больше. X10 BOOST дополнительно умножает оба значения.",
+    ruleFieldTitle: "Линии", ruleFieldText: "Выбор 5–10 линий меняет размер ячеек и множители поля. Ориентируйтесь на значения, отображаемые в текущем ромбе.",
     ruleAutoTitle: "Автоигра", ruleAutoText: "Автоигра повторяет ставку и число шаров после каждого раунда, пока её не отключат.",
     rulesAboutTitle: "ОБ ИГРЕ",
-    rulesAboutIntro: "BalloroX — онлайн-игра с фиксированной вероятностной математикой. Игрок выбирает ставку, от 1 до 3 шаров и 5–10 линий. Каждый шар имеет отдельную ставку и может остановиться на пустой ячейке, ячейке множителя или попасть в лузу, которая выпускает три белых шара. Выпущенный шар может редко снова попасть в лузу; вероятность снижается с каждым поколением.",
+    rulesAboutIntro: "Запускайте шары, собирайте бонусы и останавливайтесь на ячейках с множителями. Результат зависит от столкновений и ячейки остановки каждого шара.",
     rulesHowToWinTitle: "Как выплачиваются выигрыши",
-    rulesHowToWinText: "Выигрыш раунда равен сумме выплат по всем шарам: ставка шара × множитель ячейки. x10 BOOST умножает выигрыши основного поля. Шар, попавший в лузу, выпускает три белых шара; каждый из них получает обычный множитель ячейки основного поля или может редко снова попасть в лузу. EX MULTI добавляет дополнительные множители на основное поле, но не гарантирует выигрыш.",
+    rulesHowToWinText: "Каждый выигравший шар приносит ставку на один шар × множитель ячейки остановки, с учётом активного X10 BOOST. Выигрыш раунда — сумма выплат всех шаров, включая бонусные шары и СК. Пустая ячейка не даёт выигрыша. Крупный выигрыш в центре или в СК запускает победный эффект; следующие крупные выигрыши перезапускают его, повышая тон звука до третьего уровня.",
     rulesRtpTitle: "RTP",
-    rulesRtpText: "Теоретический RTP игры — 97,45%. RTP — долгосрочная средняя доля возврата игрокам, рассчитанная на очень большой дистанции; он не гарантирует результат конкретной ставки, сессии или игрока. Формула RTP: общая сумма выплат ÷ общая сумма ставок × 100%.",
+    rulesRtpText: "RTP для текущей версии не установлен.",
     rulesMaxWinTitle: "Максимальный выигрыш",
-    rulesMaxWinText: "Теоретический максимальный выигрыш — 8100x от общей ставки. Для него нужны 10 линий, x10 BOOST, максимально допустимая цепочка повторных попаданий в лузы и попадание всех финальных бонусных шаров на множитель 300x. Это крайне редкое, но ненулевое событие.",
-    rulesVolatilityTitle: "Волатильность",
-    rulesVolatilityText: "С увеличением линий X-поле расширяется, а доступные множители растут. Премиальные центральные множители становятся крупнее и реже, повышая волатильность.",
+    rulesMaxWinText: "Выплата зависит от множителей и активных бонусов. Подтверждённый максимальный выигрыш пока не установлен.",
+    rulesVolatilityTitle: "Порядок бонусов",
+    rulesVolatilityText: "Если шары находятся в нескольких лузах, первой отрабатывает жёлтая EX MULTI, затем голубая X3 BALLS, затем красная LUCKY SHOT. Красная ждёт завершения всей остальной активности. Каунтеры сработавших бонусов остаются включёнными до следующего раунда.",
     rulesDisclosureTitle: "Информация для игрока",
-    rulesDisclosureText: "В правилах раскрыты RTP, максимальный выигрыш и условия бонусов. BalloroX предназначена для совершеннолетних игроков. Играйте ответственно.",
+    rulesDisclosureText: "Это экспериментальная тестовая сборка. Анимации бонусов показывают текущий результат, но не задают и не гарантируют RTP. Автоигра повторяет выбранную ставку и число шаров до отключения.",
     topUpTitle: "Пополнить баланс", topUpText: "Добавьте любую сумму, чтобы продолжить игру.", amount: "Сумма", topUp: "ПОПОЛНИТЬ", cancel: "ОТМЕНА",
     totalHistory: "ИСТОРИЯ:", roundHistory: "История раундов", todayTopWins: "ТОП ДНЯ", riskLevel: "РИСК", lines: "ЛИНИИ", low: "Низкий", normal: "Средний", high: "Высокий",
     pucks: "ШАРЫ", auto: "АВТО", bet: "СТАВКА", wait: "ЖДАТЬ", round: "РАУНД", livePlayers: "ИГРОКИ ПРОТОТИПА", liveSubtitle: "ЛОКАЛЬНАЯ СИМУЛЯЦИЯ · ОБЩАЯ МАТЕМАТИКА",
@@ -113,26 +113,27 @@ const TRANSLATIONS = {
     showFullWinners: "Показать 10 лучших выигрышей сегодня", showTopWinner: "Показать только лучший выигрыш сегодня"
   },
   es: {
-    balance: "Saldo", changeAvatar: "Cambiar avatar", sound: "Efectos", music: "Música", vibration: "Vibración", animations: "Animaciones", language: "Idioma", rules: "Reglas", gameRules: "Reglas del juego",
-    ruleLaunchTitle: "Lanzamiento y física", ruleLaunchText: "Elige de una a tres bolas. Salen juntas y rebotan en los bordes.",
+    balance: "Saldo", changeAvatar: "Cambiar avatar", sound: "Efectos", music: "Música", animations: "Animaciones", language: "Idioma", rules: "Reglas", gameRules: "Reglas del juego",
+    ruleLaunchTitle: "Lanzamiento y física", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
     ruleWinsTitle: "Casillas ganadoras", ruleWinsText: "La bola gana al parar en un multiplicador. El valor se aplica a su apuesta.",
-    rulePocketTitle: "Tronera", rulePocketFieldText: "En cada ronda aparece una tronera en una casilla vacía al azar. Una bola que entra libera tres bolas blancas. Estas pueden volver a entrar raramente; la probabilidad disminuye con cada generación.", rulePocketBilliardText: "Una bola que entra en una tronera de esquina libera tres bolas blancas. Estas pueden volver a entrar raramente; la probabilidad disminuye con cada generación.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Recoge un diamante morado por bola elegida. El conjunto completo multiplica los premios del campo principal por x10, incluidos los lanzamientos de tres bolas desde una tronera.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "Recoge la estrella amarilla para añadir casillas multiplicadoras al campo principal.",
-    ruleFieldTitle: "Líneas y volatilidad", ruleFieldText: "Las líneas controlan la volatilidad: menos líneas dan objetivos más grandes y multiplicadores menores; más líneas dan aciertos más raros y multiplicadores mayores.",
+    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Una bola que entra en una tronera de esquina libera tres bolas blancas. Estas pueden volver a entrar raramente; la probabilidad disminuye con cada generación.",
+    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
+    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
+    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
+    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
     ruleAutoTitle: "Juego automático", ruleAutoText: "Repite la apuesta y cantidad de bolas tras cada ronda hasta desactivarlo.",
     rulesAboutTitle: "SOBRE EL JUEGO",
-    rulesAboutIntro: "BalloroX es un juego online de probabilidad con un modelo matemático fijo. Elige apuesta, 1–3 bolas y 5–10 líneas. Cada bola tiene su propia apuesta y puede detenerse en una casilla vacía, una casilla multiplicadora o entrar en una tronera que libera tres bolas blancas. Una bola liberada puede volver a entrar raramente; la probabilidad disminuye con cada generación.",
+    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
     rulesHowToWinTitle: "Cómo se pagan los premios",
-    rulesHowToWinText: "El premio de la ronda es la suma de los pagos de todas las bolas: apuesta de la bola × multiplicador de la casilla. x10 BOOST multiplica los premios del campo principal. Una bola que entra en una tronera libera tres bolas blancas; cada una usa el multiplicador normal o puede volver a entrar raramente. EX MULTI añade multiplicadores extra, pero no garantiza un premio.",
+    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
     rulesRtpTitle: "RTP",
-    rulesRtpText: "El RTP teórico es 97,45%. El RTP es el retorno medio a largo plazo calculado sobre un número muy grande de rondas; no garantiza el resultado de una apuesta, sesión o jugador concreto. Fórmula RTP: pagos totales ÷ apuestas totales × 100%.",
+    rulesRtpText: "RTP has not been established for this version.",
     rulesMaxWinTitle: "Premio máximo",
-    rulesMaxWinText: "El premio máximo teórico es 8100x la apuesta total. Requiere 10 líneas, x10 BOOST, la cadena máxima permitida de reentradas en troneras y que todas las bolas finales caigan en un multiplicador de 300x. Es extremadamente raro, pero posible.",
-    rulesVolatilityTitle: "Volatilidad",
-    rulesVolatilityText: "Más líneas amplían el campo X y aumentan los multiplicadores disponibles. Los multiplicadores centrales premium se vuelven mayores y más raros, elevando la volatilidad.",
+    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
+    rulesVolatilityTitle: "Bonus order",
+    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
     rulesDisclosureTitle: "Información para el jugador",
-    rulesDisclosureText: "Las reglas muestran el RTP, el premio máximo y las condiciones de los bonos. BalloroX es para jugadores adultos. Juega con responsabilidad.",
+    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
     topUpTitle: "Recargar saldo", topUpText: "Añade cualquier importe para seguir jugando.", amount: "Importe", topUp: "RECARGAR", cancel: "CANCELAR",
     totalHistory: "HISTORIAL:", roundHistory: "Historial de rondas", todayTopWins: "TOP DE HOY", riskLevel: "RIESGO", lines: "LÍNEAS", low: "Bajo", normal: "Normal", high: "Alto",
     pucks: "BOLAS", auto: "AUTO", bet: "APOSTAR", wait: "ESPERA", round: "RONDA", livePlayers: "JUGADORES DEL PROTOTIPO", liveSubtitle: "SIMULACIÓN LOCAL · MISMA MATEMÁTICA",
@@ -140,26 +141,27 @@ const TRANSLATIONS = {
     showFullWinners: "Mostrar los 10 mejores premios de hoy", showTopWinner: "Mostrar solo el mejor premio de hoy"
   },
   pt: {
-    balance: "Saldo", changeAvatar: "Trocar avatar", sound: "Efeitos", music: "Música", vibration: "Vibração", animations: "Animações", language: "Idioma", rules: "Regras", gameRules: "Regras do jogo",
-    ruleLaunchTitle: "Lançamento e física", ruleLaunchText: "Escolha de uma a três bolas. Elas saem juntas e ricocheteiam nas bordas.",
+    balance: "Saldo", changeAvatar: "Trocar avatar", sound: "Efeitos", music: "Música", animations: "Animações", language: "Idioma", rules: "Regras", gameRules: "Regras do jogo",
+    ruleLaunchTitle: "Lançamento e física", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
     ruleWinsTitle: "Células premiadas", ruleWinsText: "A bola ganha ao parar em um multiplicador. O valor é aplicado à aposta dela.",
-    rulePocketTitle: "Caçapa", rulePocketFieldText: "A cada rodada, uma caçapa aparece em uma célula vazia aleatória. Uma bola que entra libera três bolas brancas. Elas podem raramente entrar de novo; a chance diminui a cada geração.", rulePocketBilliardText: "Uma bola que entra em uma caçapa de canto libera três bolas brancas. Elas podem raramente entrar de novo; a chance diminui a cada geração.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Colete um diamante roxo por bola escolhida. O conjunto completo multiplica os ganhos do campo principal por x10, incluindo lançamentos de três bolas pela caçapa.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "Colete a estrela amarela para adicionar células multiplicadoras ao campo principal.",
-    ruleFieldTitle: "Linhas e volatilidade", ruleFieldText: "As linhas controlam a volatilidade: menos linhas significam alvos maiores e multiplicadores menores; mais linhas significam acertos mais raros e multiplicadores maiores.",
+    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Uma bola que entra em uma caçapa de canto libera três bolas brancas. Elas podem raramente entrar de novo; a chance diminui a cada geração.",
+    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
+    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
+    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
+    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
     ruleAutoTitle: "Jogo automático", ruleAutoText: "Repete a aposta e a quantidade de bolas após cada rodada até ser desligado.",
     rulesAboutTitle: "SOBRE O JOGO",
-    rulesAboutIntro: "BalloroX é um jogo online de probabilidade com modelo matemático fixo. Escolha a aposta, 1–3 bolas e 5–10 linhas. Cada bola tem sua própria aposta e pode parar em uma célula vazia, em uma célula multiplicadora ou entrar em uma caçapa que libera três bolas brancas. Uma bola liberada pode raramente entrar de novo; a chance diminui a cada geração.",
+    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
     rulesHowToWinTitle: "Como os ganhos são pagos",
-    rulesHowToWinText: "O ganho da rodada é a soma dos pagamentos de todas as bolas: aposta da bola × multiplicador da célula. x10 BOOST multiplica os ganhos do campo principal. Uma bola que entra em uma caçapa libera três bolas brancas; cada uma usa o multiplicador normal ou pode raramente entrar de novo. EX MULTI adiciona multiplicadores extras, mas não garante ganho.",
+    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
     rulesRtpTitle: "RTP",
-    rulesRtpText: "O RTP teórico é 97,45%. RTP é o retorno médio de longo prazo calculado em um número muito grande de rodadas; ele não garante o resultado de uma aposta, sessão ou jogador específico. Fórmula do RTP: pagamentos totais ÷ apostas totais × 100%.",
+    rulesRtpText: "RTP has not been established for this version.",
     rulesMaxWinTitle: "Ganho máximo",
-    rulesMaxWinText: "O ganho máximo teórico é 8100x a aposta total. Requer 10 linhas, x10 BOOST, a cadeia máxima permitida de reentradas nas caçapas e todas as bolas finais em um multiplicador de 300x. É extremamente raro, mas possível.",
-    rulesVolatilityTitle: "Volatilidade",
-    rulesVolatilityText: "Mais linhas ampliam o campo X e aumentam os multiplicadores disponíveis. Os multiplicadores centrais premium ficam maiores e mais raros, elevando a volatilidade.",
+    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
+    rulesVolatilityTitle: "Bonus order",
+    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
     rulesDisclosureTitle: "Informação ao jogador",
-    rulesDisclosureText: "As regras informam o RTP, o ganho máximo e as condições dos bônus. BalloroX é destinado a jogadores adultos. Jogue com responsabilidade.",
+    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
     topUpTitle: "Adicionar saldo", topUpText: "Adicione qualquer valor para continuar jogando.", amount: "Valor", topUp: "ADICIONAR", cancel: "CANCELAR",
     totalHistory: "HISTÓRICO:", roundHistory: "Histórico de rodadas", todayTopWins: "TOP DE HOJE", riskLevel: "RISCO", lines: "LINHAS", low: "Baixo", normal: "Normal", high: "Alto",
     pucks: "BOLAS", auto: "AUTO", bet: "APOSTAR", wait: "AGUARDE", round: "RODADA", livePlayers: "JOGADORES DO PROTÓTIPO", liveSubtitle: "SIMULAÇÃO LOCAL · MESMA MATEMÁTICA",
@@ -167,26 +169,27 @@ const TRANSLATIONS = {
     showFullWinners: "Mostrar os 10 maiores ganhos de hoje", showTopWinner: "Mostrar apenas o maior ganho de hoje"
   },
   de: {
-    balance: "Guthaben", changeAvatar: "Avatar ändern", sound: "Soundeffekte", music: "Musik", vibration: "Vibration", animations: "Animationen", language: "Sprache", rules: "Regeln", gameRules: "Spielregeln",
-    ruleLaunchTitle: "Start und Physik", ruleLaunchText: "Wähle ein bis drei Bälle. Sie starten zusammen und prallen von den Banden ab.",
+    balance: "Guthaben", changeAvatar: "Avatar ändern", sound: "Soundeffekte", music: "Musik", animations: "Animationen", language: "Sprache", rules: "Regeln", gameRules: "Spielregeln",
+    ruleLaunchTitle: "Start und Physik", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
     ruleWinsTitle: "Gewinnfelder", ruleWinsText: "Ein Ball gewinnt auf einem Multiplikatorfeld. Der Wert gilt für seinen Einsatz.",
-    rulePocketTitle: "Tasche", rulePocketFieldText: "In jeder Runde erscheint eine Tasche auf einem zufälligen leeren Feld. Ein Ball darin gibt drei weiße Bälle frei. Diese können selten erneut hineinfallen; die Chance sinkt mit jeder Generation.", rulePocketBilliardText: "Ein Ball in einer Ecktasche gibt drei weiße Bälle frei. Diese können selten erneut in eine Tasche fallen; die Chance sinkt mit jeder Generation.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Sammle einen violetten Diamanten pro Ball. Das volle Set multipliziert Hauptfeldgewinne mit x10, auch bei Freigaben von drei Bällen aus einer Tasche.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "Sammle den gelben Stern, um zusätzliche Multiplikatorfelder im Hauptfeld hinzuzufügen.",
-    ruleFieldTitle: "Linien und Volatilität", ruleFieldText: "Linien steuern die Volatilität: weniger Linien bedeuten größere Ziele und kleinere Multiplikatoren; mehr Linien bedeuten seltenere Treffer und größere Multiplikatoren.",
+    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Ein Ball in einer Ecktasche gibt drei weiße Bälle frei. Diese können selten erneut in eine Tasche fallen; die Chance sinkt mit jeder Generation.",
+    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
+    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
+    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
+    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
     ruleAutoTitle: "Autoplay", ruleAutoText: "Wiederholt Einsatz und Ballanzahl nach jeder Runde, bis es ausgeschaltet wird.",
     rulesAboutTitle: "ÜBER DAS SPIEL",
-    rulesAboutIntro: "BalloroX ist ein Online-Wahrscheinlichkeitsspiel mit festem mathematischem Modell. Wähle Einsatz, 1–3 Bälle und 5–10 Linien. Jeder Ball hat einen eigenen Einsatz und kann auf einem leeren Feld, einem Multiplikatorfeld oder in einer Tasche landen, die drei weiße Bälle freigibt. Ein freigegebener Ball kann selten erneut in eine Tasche fallen; die Chance sinkt mit jeder Generation.",
+    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
     rulesHowToWinTitle: "Auszahlung von Gewinnen",
-    rulesHowToWinText: "Der Rundengewinn ist die Summe aller Ballauszahlungen: Balleinsatz × Feldmultiplikator. x10 BOOST multipliziert Gewinne im Hauptfeld. Ein Ball in einer Tasche gibt drei weiße Bälle frei; jeder nutzt den normalen Multiplikator oder kann selten erneut in eine Tasche fallen. EX MULTI fügt zusätzliche Multiplikatoren hinzu, garantiert aber keinen Gewinn.",
+    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
     rulesRtpTitle: "RTP",
-    rulesRtpText: "Der theoretische RTP beträgt 97,45%. RTP ist die langfristige durchschnittliche Rückzahlung über sehr viele Runden; er garantiert kein Ergebnis für einen bestimmten Einsatz, eine Sitzung oder einen Spieler. RTP-Formel: Gesamtauszahlungen ÷ Gesamteinsätze × 100%.",
+    rulesRtpText: "RTP has not been established for this version.",
     rulesMaxWinTitle: "Maximalgewinn",
-    rulesMaxWinText: "Der theoretische Maximalgewinn beträgt 8100x des Gesamteinsatzes. Er erfordert 10 Linien, x10 BOOST, die maximal erlaubte Kette erneuter Taschentreffer und alle finalen Bälle auf einem 300x-Multiplikator. Dies ist extrem selten, aber möglich.",
-    rulesVolatilityTitle: "Volatilität",
-    rulesVolatilityText: "Mehr Linien verbreitern das X-Feld und erhöhen die verfügbaren Multiplikatoren. Premium-Multiplikatoren im Zentrum werden größer und seltener, wodurch die Volatilität steigt.",
+    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
+    rulesVolatilityTitle: "Bonus order",
+    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
     rulesDisclosureTitle: "Spielerinformation",
-    rulesDisclosureText: "Die Regeln zeigen RTP, Maximalgewinn und Bonusbedingungen. BalloroX ist für erwachsene Spieler bestimmt. Spiele verantwortungsvoll.",
+    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
     topUpTitle: "Guthaben aufladen", topUpText: "Füge einen beliebigen Betrag hinzu, um weiterzuspielen.", amount: "Betrag", topUp: "AUFLADEN", cancel: "ABBRECHEN",
     totalHistory: "VERLAUF:", roundHistory: "Rundenverlauf", todayTopWins: "TOP HEUTE", riskLevel: "RISIKO", lines: "LINIEN", low: "Niedrig", normal: "Normal", high: "Hoch",
     pucks: "BÄLLE", auto: "AUTO", bet: "SETZEN", wait: "WARTEN", round: "RUNDE", livePlayers: "LIVE-PROTOTYP-SPIELER", liveSubtitle: "LOKALE SIMULATION · GEMEINSAME MATHEMATIK",
@@ -194,26 +197,27 @@ const TRANSLATIONS = {
     showFullWinners: "Heutige Top 10 anzeigen", showTopWinner: "Nur heutigen Top-Gewinn anzeigen"
   },
   fr: {
-    balance: "Solde", changeAvatar: "Changer d’avatar", sound: "Effets sonores", music: "Musique", vibration: "Vibration", animations: "Animations", language: "Langue", rules: "Règles", gameRules: "Règles du jeu",
-    ruleLaunchTitle: "Lancement et physique", ruleLaunchText: "Choisissez une à trois boules. Elles partent ensemble et rebondissent sur les bandes.",
+    balance: "Solde", changeAvatar: "Changer d’avatar", sound: "Effets sonores", music: "Musique", animations: "Animations", language: "Langue", rules: "Règles", gameRules: "Règles du jeu",
+    ruleLaunchTitle: "Lancement et physique", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
     ruleWinsTitle: "Cases gagnantes", ruleWinsText: "La boule gagne sur une case multiplicateur. La valeur s’applique à sa mise.",
-    rulePocketTitle: "Poche", rulePocketFieldText: "À chaque manche, une poche apparaît sur une case vide aléatoire. Une boule qui y entre libère trois boules blanches. Elles peuvent rarement y entrer de nouveau ; la probabilité diminue à chaque génération.", rulePocketBilliardText: "Une boule qui entre dans une poche d’angle libère trois boules blanches. Elles peuvent rarement entrer de nouveau dans une poche ; la probabilité diminue à chaque génération.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Collectez un diamant violet par boule. La série complète multiplie les gains du terrain principal par x10, y compris les sorties de trois boules depuis une poche.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "Collectez l’étoile jaune pour ajouter des cases multiplicatrices sur le terrain principal.",
-    ruleFieldTitle: "Lignes et volatilité", ruleFieldText: "Les lignes contrôlent la volatilité : moins de lignes donnent des cibles plus grandes et des multiplicateurs plus bas ; plus de lignes donnent des touches plus rares et des multiplicateurs plus élevés.",
+    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Une boule qui entre dans une poche d’angle libère trois boules blanches. Elles peuvent rarement entrer de nouveau dans une poche ; la probabilité diminue à chaque génération.",
+    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
+    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
+    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
+    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
     ruleAutoTitle: "Jeu automatique", ruleAutoText: "Répète la mise et le nombre de boules après chaque manche jusqu’à sa désactivation.",
     rulesAboutTitle: "À PROPOS DU JEU",
-    rulesAboutIntro: "BalloroX est un jeu en ligne de probabilité avec un modèle mathématique fixe. Choisissez la mise, 1–3 boules et 5–10 lignes. Chaque boule a sa propre mise et peut s’arrêter sur une case vide, une case multiplicatrice ou entrer dans une poche qui libère trois boules blanches. Une boule libérée peut rarement entrer de nouveau dans une poche ; la probabilité diminue à chaque génération.",
+    rulesAboutIntro: "Balloro X test is a local prototype for testing pocket mechanics. Shots use random angles and outcomes follow actual collisions and stopping cells. This build does not use a calibrated RTP path table.",
     rulesHowToWinTitle: "Paiement des gains",
-    rulesHowToWinText: "Le gain de la manche est la somme des paiements de toutes les boules : mise de la boule × multiplicateur de la case. x10 BOOST multiplie les gains du terrain principal. Une boule qui entre dans une poche libère trois boules blanches ; chacune utilise le multiplicateur normal ou peut rarement entrer de nouveau dans une poche. EX MULTI ajoute des multiplicateurs, mais ne garantit pas de gain.",
+    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
     rulesRtpTitle: "RTP",
-    rulesRtpText: "Le RTP théorique est de 97,45 %. Le RTP est le retour moyen à long terme calculé sur un très grand nombre de manches ; il ne garantit pas le résultat d’une mise, session ou joueur précis. Formule RTP : paiements totaux ÷ mises totales × 100 %.",
+    rulesRtpText: "Test mode: RTP has not been established for the current random-physics prototype. The former 97.45% figure does not describe this build.",
     rulesMaxWinTitle: "Gain maximal",
-    rulesMaxWinText: "Le gain maximal théorique est de 8100x la mise totale. Il exige 10 lignes, x10 BOOST, la chaîne maximale autorisée de nouvelles entrées en poche et toutes les boules finales sur un multiplicateur de 300x. Cet événement est extrêmement rare, mais possible.",
-    rulesVolatilityTitle: "Volatilité",
-    rulesVolatilityText: "Plus de lignes élargissent le champ en X et augmentent les multiplicateurs disponibles. Les multiplicateurs centraux premium deviennent plus élevés et plus rares, ce qui accroît la volatilité.",
+    rulesMaxWinText: "A verified maximum round win has not been established for this prototype. The former 8100x limit does not apply. Current cell values and active bonuses determine payouts.",
+    rulesVolatilityTitle: "Bonus order",
+    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
     rulesDisclosureTitle: "Information joueur",
-    rulesDisclosureText: "Les règles indiquent le RTP, le gain maximal et les conditions des bonus. BalloroX est destiné aux joueurs adultes. Jouez de manière responsable.",
+    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
     topUpTitle: "Recharger le solde", topUpText: "Ajoutez le montant de votre choix pour continuer.", amount: "Montant", topUp: "RECHARGER", cancel: "ANNULER",
     totalHistory: "HISTORIQUE :", roundHistory: "Historique des manches", todayTopWins: "TOP DU JOUR", riskLevel: "RISQUE", lines: "LIGNES", low: "Faible", normal: "Normal", high: "Élevé",
     pucks: "BOULES", auto: "AUTO", bet: "MISER", wait: "ATTENDRE", round: "MANCHE", livePlayers: "JOUEURS DU PROTOTYPE", liveSubtitle: "SIMULATION LOCALE · MÊMES MATHÉMATIQUES",
@@ -223,6 +227,7 @@ const TRANSLATIONS = {
 };
 // Keep the legacy random symbol planners below intact for one-line rollback.
 const FIXED_BONUS_SYMBOL_LAYOUT = false;
+const POCKET_TEST_RANDOM_PHYSICS = true;
 const fixedBonusTrajectoryMetrics = new Map();
 
 const state = {
@@ -233,23 +238,26 @@ const state = {
   historyExpanded: false,
   soundEffectsMuted: false,
   musicEnabled: true,
-  hapticsEnabled: true,
   audioContext: null,
   backgroundMusic: null,
+  backgroundMusicGain: null,
+  backgroundMusicSource: null,
+  backgroundMusicDuckTimer: null,
   lastWallHitSoundAt: 0,
-  lastWallHapticAt: 0,
-  lastWinHapticAt: 0,
   lastMultiplierSoundAt: 0,
   resultSoundStep: 0,
   nextMultiplierSoundAt: 0,
   nextPocketReleaseIndex: 0,
   autoPlay: false,
   autoPlayTimer: null,
+  roundSettledAt: 0,
+  winSoundEndsAt: 0,
   running: false,
   launchPrepared: false,
   launchPreparedSlot: null,
   launchButtonPrimed: false,
   launchPrimeFrame: null,
+  winPresentationUnlockTimer: null,
   activeSlot: null,
   activeBetPerPuck: 0,
   roundWinAmount: 0,
@@ -258,18 +266,41 @@ const state = {
   layoutMode: "configurator_5",
   gameplayTestRows: [],
   crownsCollected: 0,
+  v2BonusProgress: { diamond: 0, crown: 0, lemon: 0, blue: 0 },
+  v2BonusArrivedActive: { diamond: false, crown: false, lemon: false, blue: false },
   x10BoostActivated: false,
-  bonusFieldTransitionStartedAt: 0,
   crownBonusAwarded: false,
   multiPlusActive: false,
+  multiPlusFinalCells: null,
   multiPlusToken: null,
   multiPlusPickupLog: null,
   multiPlusActivatedAt: 0,
+  multiPlusCapturedPuck: null,
+  multiPlusPhase: "idle",
+  multiPlusRevealStartedAt: 0,
+  multiPlusNeonCells: [],
+  multiPlusNeonLastStepAt: 0,
+  multiPlusNeonFlashUntil: 0,
   lastStarBoostSoundAt: 0,
   lastFrameAt: 0,
   roundId: 0,
   roundOutcome: null,
   fieldPocket: null,
+  bluePocket: null,
+  chancePocket: null,
+  chanceCapturedPuck: null,
+  chancePhase: "idle",
+  chanceSpinStartedAt: 0,
+  chanceSpinRoomIndex: -1,
+  chanceSpinTotalSteps: 20,
+  chanceLastSoundStep: -1,
+  chanceSelectedRoomId: null,
+  chanceFinalCueStartedAt: 0,
+  chanceFinalCueUntil: 0,
+  chanceFinalCueRoomId: null,
+  chanceRoomMultipliers: {},
+  chanceRoomOutcome: null,
+  chanceCompletedRoomIds: new Set(),
   trajectoryPlans: [],
   trajectoryDiagnostics: [],
   recentTrajectoryIds: [],
@@ -327,8 +358,6 @@ const els = {
   menuAvatarPreview: document.getElementById("menuAvatarPreview"),
   menuSoundToggle: document.getElementById("menuSoundToggle"),
   menuMusicToggle: document.getElementById("menuMusicToggle"),
-  menuHapticsToggle: document.getElementById("menuHapticsToggle"),
-  menuAnimationToggle: document.getElementById("menuAnimationToggle"),
   menuLanguageButton: document.getElementById("menuLanguageButton"),
   menuRulesButton: document.getElementById("menuRulesButton"),
   rulesScreen: document.getElementById("rulesScreen"),
@@ -361,9 +390,7 @@ const els = {
   crownCounter: document.getElementById("crownCounter"),
   multiPlusCounter: document.getElementById("multiPlusCounter"),
   pocketBonusCounter: document.getElementById("pocketBonusCounter"),
-  diamondBonusEdge: document.getElementById("diamondBonusEdge"),
-  multiPlusBonusEdge: document.getElementById("multiPlusBonusEdge"),
-  pocketBonusEdge: document.getElementById("pocketBonusEdge"),
+  chanceBonusCounter: document.getElementById("chanceBonusCounter"),
   purpleLeaderboard: document.getElementById("purpleLeaderboard"),
   purpleLeaderboardPanel: document.querySelector(".purple-leaderboard"),
   purpleLeaderboardToggle: document.getElementById("purpleLeaderboardToggle"),
@@ -409,40 +436,6 @@ function applyLocalization(language, persist = true) {
   fitLocalizedUiText();
 }
 
-function setAnimationsEnabled(enabled, persist = true) {
-  state.animationsEnabled = Boolean(enabled);
-  document.body.classList.toggle("effects-disabled", !state.animationsEnabled);
-  els.menuAnimationToggle.checked = state.animationsEnabled;
-  if (!state.animationsEnabled) {
-    if (state.starEffectFrame !== null) cancelAnimationFrame(state.starEffectFrame);
-    if (state.counterFlyInFrame !== null) cancelAnimationFrame(state.counterFlyInFrame);
-    if (state.collectibleIdleFrame !== null) cancelAnimationFrame(state.collectibleIdleFrame);
-    if (state.resultRevealFrame !== null) cancelAnimationFrame(state.resultRevealFrame);
-    state.starEffectFrame = null;
-    state.counterFlyInFrame = null;
-    state.collectibleIdleFrame = null;
-    state.lastCollectibleIdleRenderAt = 0;
-    state.resultRevealFrame = null;
-    state.starBursts = [];
-    clearCounterFlyIns();
-    state.multiPlusActivatedAt = 0;
-    updateCrownCounter();
-    updateMultiPlusCounter();
-    document.querySelectorAll(".bonus-bubble, .multi-plus-bubble, .is-new, .shake, .collapse-shake")
-      .forEach((element) => element.classList.remove("bonus-bubble", "multi-plus-bubble", "is-new", "shake", "collapse-shake"));
-    state.pucks.forEach((puck) => {
-      if (puck.resultRevealStartedAt) puck.resultRevealStartedAt = performance.now() - 300;
-      if (puck.result?.boostRevealStartedAt) {
-        puck.result.boostRevealStartedAt = performance.now() - RESULT_BOOST_REVEAL_DURATION_MS - 1;
-      }
-    });
-    render();
-  } else {
-    state.lastCollectibleIdleRenderAt = 0;
-    startCollectibleIdleAnimation();
-  }
-  if (persist) window.localStorage.setItem(ANIMATIONS_STORAGE_KEY, state.animationsEnabled ? "1" : "0");
-}
 
 function randomBetween(min, max) {
   return min + uiRng.next() * (max - min);
@@ -466,11 +459,13 @@ function isMultiPlusVisualActive() {
 }
 
 function isX10BoostActive() {
+  if (window.BalloroBonusUI?.isV2) return Boolean(state.x10BoostActivated);
   return Boolean(state.x10BoostActivated)
     || (Boolean(state.roundOutcome?.bonus_triggered) && state.crownsCollected >= getRequiredStars());
 }
 
 function isX10VisualActive() {
+  if (window.BalloroBonusUI?.isV2) return Boolean(state.x10BoostActivated);
   return isX10BoostActive()
     || (Boolean(state.roundOutcome?.bonus_triggered) && state.crownsCollected >= getRequiredStars());
 }
@@ -501,13 +496,33 @@ function getAudioContext() {
   return state.audioContext;
 }
 
+// One output control preserves the existing music / SFX balance on mobile too.
+function getAudioOutput(audio) {
+  if (!state.masterAudioGain) {
+    state.masterAudioGain = audio.createGain();
+    state.masterAudioGain.gain.value = state.masterVolume ?? 1;
+    state.masterAudioGain.connect(audio.destination);
+  }
+  return state.masterAudioGain;
+}
+
 function createBackgroundMusicElement() {
   if (state.backgroundMusic) return state.backgroundMusic;
+  const audio = getAudioContext();
+  if (!audio) return null;
   const music = new Audio(BACKGROUND_MUSIC_SRC);
   music.loop = true;
   music.preload = "auto";
-  music.volume = BACKGROUND_MUSIC_VOLUME;
+  music.volume = 1;
   music.playsInline = true;
+  // iOS can ignore HTMLMediaElement.volume. Attenuate the actual signal instead.
+  const gain = audio.createGain();
+  gain.gain.value = BACKGROUND_MUSIC_VOLUME;
+  const source = audio.createMediaElementSource(music);
+  source.connect(gain);
+  gain.connect(getAudioOutput(audio));
+  state.backgroundMusicGain = gain;
+  state.backgroundMusicSource = source;
   state.backgroundMusic = music;
   return music;
 }
@@ -521,15 +536,41 @@ function stopBackgroundMusic() {
 function startBackgroundMusic() {
   if (!state.musicEnabled) return;
   const music = createBackgroundMusicElement();
+  if (!music) return;
+  const audio = getAudioContext();
+  if (audio.state === "suspended") audio.resume().catch(() => {});
   music.muted = false;
   music.loop = true;
-  music.volume = BACKGROUND_MUSIC_VOLUME;
+  if (state.backgroundMusicDuckTimer === null) setBackgroundMusicLevel(BACKGROUND_MUSIC_VOLUME);
   const playback = music.play();
   if (playback?.catch) {
     playback.catch(() => {
       // Browsers may require a user gesture before starting background music.
     });
   }
+}
+
+function setBackgroundMusicLevel(level) {
+  const gain = state.backgroundMusicGain?.gain;
+  const audio = state.audioContext;
+  if (!gain || !audio) return;
+  gain.cancelScheduledValues(audio.currentTime);
+  gain.setTargetAtTime(level, audio.currentTime, 0.035);
+}
+
+function duckBackgroundMusic(durationMs = 600) {
+  const music = state.backgroundMusic;
+  if (!music || music.paused || !state.musicEnabled) return;
+  if (state.backgroundMusicDuckTimer !== null) {
+    window.clearTimeout(state.backgroundMusicDuckTimer);
+  }
+  setBackgroundMusicLevel(BACKGROUND_MUSIC_VOLUME * 0.15);
+  state.backgroundMusicDuckTimer = window.setTimeout(() => {
+    state.backgroundMusicDuckTimer = null;
+    if (state.musicEnabled && state.backgroundMusic) {
+      setBackgroundMusicLevel(BACKGROUND_MUSIC_VOLUME);
+    }
+  }, durationMs);
 }
 
 function setMusicEnabled(enabled, persist = true, allowStart = true) {
@@ -573,54 +614,8 @@ function setAllAudioEnabled(enabled) {
   setMusicEnabled(enabled);
 }
 
-function canUseHaptics() {
-  return state.hapticsEnabled
-    && typeof navigator !== "undefined"
-    && typeof navigator.vibrate === "function"
-    && !document.hidden;
-}
-
-function triggerHaptic(pattern, key = "default", cooldownMs = 0) {
-  if (!canUseHaptics()) return;
-  const now = performance.now();
-  if (key === "wall") {
-    if (now - state.lastWallHapticAt < cooldownMs) return;
-    state.lastWallHapticAt = now;
-  } else if (key === "win") {
-    if (now - state.lastWinHapticAt < cooldownMs) return;
-    state.lastWinHapticAt = now;
-  }
-  try {
-    navigator.vibrate(pattern);
-  } catch (error) {
-    // Some browsers expose the API but reject vibration in embedded contexts.
-  }
-}
-
-function playWallHaptic(speed = 0) {
-  const speedFactor = clamp(speed / 1400, 0, 1);
-  const duration = speedFactor > 0.78 ? 4 : 3;
-  triggerHaptic(duration, "wall", 135);
-}
-
-function playMultiplierResultHaptic(bonusActive = false, delayMs = 0) {
-  const pattern = bonusActive
-    ? [28, 34, 46]
-    : [16, 24, 22];
-  window.setTimeout(() => triggerHaptic(pattern, "win", 90), Math.max(0, delayMs));
-}
-
-function setHapticsEnabled(enabled, persist = true) {
-  state.hapticsEnabled = Boolean(enabled);
-  if (els.menuHapticsToggle) els.menuHapticsToggle.checked = state.hapticsEnabled;
-  if (!state.hapticsEnabled && typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
-    navigator.vibrate(0);
-  }
-  if (persist) window.localStorage.setItem(HAPTICS_STORAGE_KEY, state.hapticsEnabled ? "1" : "0");
-}
 
 function playWallHitSound(speed = 0) {
-  playWallHaptic(speed);
 
   if (state.soundEffectsMuted) {
     return;
@@ -658,7 +653,7 @@ function playWallHitSound(speed = 0) {
 
   oscillator.connect(filter);
   filter.connect(gain);
-  gain.connect(audio.destination);
+  gain.connect(getAudioOutput(audio));
   oscillator.start(now);
   oscillator.stop(now + 0.1);
 }
@@ -679,7 +674,7 @@ function playPocketDropSound() {
   master.gain.exponentialRampToValueAtTime(0.42, now + 0.006);
   master.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
   master.connect(filter);
-  filter.connect(audio.destination);
+  filter.connect(getAudioOutput(audio));
 
   const impact = audio.createOscillator();
   const impactGain = audio.createGain();
@@ -721,6 +716,32 @@ function playPocketDropSound() {
   rim.stop(now + 0.08);
 }
 
+function playChanceSpinTick(step, finalTick = false) {
+  if (state.soundEffectsMuted) return;
+  const audio = getAudioContext();
+  if (!audio) return;
+  if (audio.state === "suspended") audio.resume();
+
+  const now = audio.currentTime;
+  const oscillator = audio.createOscillator();
+  const gain = audio.createGain();
+  const filter = audio.createBiquadFilter();
+  oscillator.type = "square";
+  oscillator.frequency.setValueAtTime(finalTick ? 1046.5 : 470 + (step % 4) * 54, now);
+  oscillator.frequency.exponentialRampToValueAtTime(finalTick ? 1318.5 : 390 + (step % 4) * 42, now + 0.045);
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(finalTick ? 1500 : 980, now);
+  filter.Q.setValueAtTime(3.2, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(finalTick ? 0.12 : 0.075, now + 0.003);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + (finalTick ? 0.1 : 0.065));
+  oscillator.connect(filter);
+  filter.connect(gain);
+  gain.connect(getAudioOutput(audio));
+  oscillator.start(now);
+  oscillator.stop(now + (finalTick ? 0.11 : 0.075));
+}
+
 function playWinSound(intensity = 1, pitchStep = 0, startDelay = 0) {
   if (state.soundEffectsMuted) {
     return;
@@ -751,7 +772,7 @@ function playWinSound(intensity = 1, pitchStep = 0, startDelay = 0) {
   master.gain.setValueAtTime(volume * 0.46, now + 0.32);
   master.gain.exponentialRampToValueAtTime(0.0001, now + 0.68);
   master.connect(toneFilter);
-  toneFilter.connect(audio.destination);
+  toneFilter.connect(getAudioOutput(audio));
 
   [261.63].forEach((frequency, index) => {
     const oscillator = audio.createOscillator();
@@ -829,7 +850,7 @@ function playPurpleMultiplierWinSound(multiplier, pitchStep = 0, startDelay = 0)
   master.gain.exponentialRampToValueAtTime(0.0001, now + 1.48);
   master.connect(filter);
   filter.connect(compressor);
-  compressor.connect(audio.destination);
+  compressor.connect(getAudioOutput(audio));
 
   // The purple win shares the regular C-major win motif, then climbs an
   // octave higher with a weighty impact so it is unmistakable on autoplay.
@@ -894,6 +915,7 @@ function playPurpleMultiplierWinSound(multiplier, pitchStep = 0, startDelay = 0)
 
 function playMultiplierResultSound(multiplier, bonusActive = false) {
   if (multiplier <= 0) return;
+  if (!state.soundEffectsMuted) duckBackgroundMusic(bonusActive ? 1500 : 800);
   const now = performance.now();
   const soundCount = Math.max(1, Math.min(
     MAX_RESULT_SOUND_LEVELS,
@@ -905,7 +927,9 @@ function playMultiplierResultSound(multiplier, bonusActive = false) {
   const delayMs = Math.max(0, state.nextMultiplierSoundAt - now);
   state.nextMultiplierSoundAt = now + delayMs + 105;
   state.lastMultiplierSoundAt = now + delayMs;
-  playMultiplierResultHaptic(bonusActive, delayMs);
+  if (!state.soundEffectsMuted) {
+    state.winSoundEndsAt = Math.max(state.winSoundEndsAt, now + delayMs + (bonusActive ? 1380 : 680));
+  }
   if (bonusActive) playPurpleMultiplierWinSound(multiplier * 10, pitchStep, delayMs / 1000);
   else playWinSound(multiplier, pitchStep, delayMs / 1000);
 }
@@ -941,7 +965,7 @@ function playBonusStarSound(starStep = 1) {
   master.gain.exponentialRampToValueAtTime(0.15 + progress * 0.06, now + 0.018);
   master.gain.exponentialRampToValueAtTime(0.0001, now + 0.62 + progress * 0.18);
   master.connect(filter);
-  filter.connect(audio.destination);
+  filter.connect(getAudioOutput(audio));
 
   chords[step].forEach((frequency, index) => {
     const oscillator = audio.createOscillator();
@@ -998,7 +1022,7 @@ function playBonusCompleteSound() {
   master.gain.exponentialRampToValueAtTime(0.0001, now + 1.34);
   master.connect(filter);
   filter.connect(compressor);
-  compressor.connect(audio.destination);
+  compressor.connect(getAudioOutput(audio));
 
   // Bonus activation is a celebratory unlock stinger, deliberately without
   // the bass impact and cashout resolution used by multiplier win sounds.
@@ -1053,6 +1077,7 @@ function playMultiPlusSound() {
   const audio = getAudioContext();
   if (!audio) return;
   if (audio.state === "suspended") audio.resume();
+  duckBackgroundMusic(760);
   const now = audio.currentTime;
   const master = audio.createGain();
   const filter = audio.createBiquadFilter();
@@ -1071,7 +1096,7 @@ function playMultiPlusSound() {
   master.gain.exponentialRampToValueAtTime(0.0001, now + 0.64);
   master.connect(filter);
   filter.connect(compressor);
-  compressor.connect(audio.destination);
+  compressor.connect(getAudioOutput(audio));
 
   [392, 523.25, 783.99, 1046.5].forEach((frequency, index) => {
     const oscillator = audio.createOscillator();
@@ -1103,6 +1128,31 @@ function playMultiPlusSound() {
   ping.stop(now + 0.58);
 }
 
+function playMultiPlusNeonCue(kind = "step") {
+  if (state.soundEffectsMuted) return;
+  const audio = getAudioContext();
+  if (!audio) return;
+  if (audio.state === "suspended") audio.resume();
+  const now = audio.currentTime;
+  const oscillator = audio.createOscillator();
+  const gain = audio.createGain();
+  oscillator.type = kind === "stop" ? "sine" : kind === "start" ? "triangle" : "square";
+  const frequency = kind === "stop" ? 1046.5 : kind === "start" ? 330 : 520 + (Date.now() % 5) * 55;
+  oscillator.frequency.setValueAtTime(frequency, now);
+  if (kind === "stop") oscillator.frequency.exponentialRampToValueAtTime(1567.98, now + 0.22);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(kind === "step" ? 0.025 : 0.09, now + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === "step" ? 0.055 : 0.32));
+  oscillator.connect(gain);
+  gain.connect(getAudioOutput(audio));
+  oscillator.start(now);
+  oscillator.stop(now + (kind === "step" ? 0.065 : 0.36));
+}
+
+// Semantic recording hook. The live game already draws this effect directly;
+// the offline tape recorder replaces this no-op so playback can recreate it.
+function recordDiamondPickupEffect() {}
+
 function playLaunchSound() {
   if (state.soundEffectsMuted) {
     return;
@@ -1122,7 +1172,7 @@ function playLaunchSound() {
   master.gain.setValueAtTime(0.0001, now);
   master.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
   master.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-  master.connect(audio.destination);
+  master.connect(getAudioOutput(audio));
 
   const tone = audio.createOscillator();
   const toneGain = audio.createGain();
@@ -1177,7 +1227,7 @@ function formatMultiplierValue(value, maximumFractionDigits = 2, locale = null) 
 function parseBet(slot) {
   const input = slot.querySelector(".bet-value");
   const value = Number.parseFloat(input.value.replace(",", "."));
-  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+  return Number.isFinite(value) && value > 0 ? Math.max(BET_STEPS[0], Math.min(BET_STEPS.at(-1), value)) : 0;
 }
 
 function formatStake(value) {
@@ -1212,25 +1262,26 @@ function getTodayWinsStorageKey() {
 }
 
 function loadTodayWins() {
+  // Extend the existing local sample ranking, without touching gameplay RNG.
+  const samples=Array.from({length:90},(_,i)=>({
+    id:'seed-extra-'+i,name:'Player'+(1000+i*817),multiplier:Number((5.9-i*.06).toFixed(2)),timestamp:0
+  }));
+  const defaults=[...state.purpleLeaderboard,...samples].sort((a,b)=>b.multiplier-a.multiplier);
+  state.purpleLeaderboard=defaults.slice(0,100);
   try {
-    const saved = JSON.parse(window.localStorage.getItem(getTodayWinsStorageKey()) || "null");
-    if (!Array.isArray(saved) || saved.length === 0) return;
-    const valid = saved.filter((entry) => entry && typeof entry.name === "string" && Number(entry.multiplier) > 0)
-      .map((entry) => ({ ...entry, multiplier: Number(entry.multiplier) }))
-      .sort((a, b) => b.multiplier - a.multiplier || b.timestamp - a.timestamp)
-      .slice(0, 10);
-    if (valid.length) state.purpleLeaderboard = valid;
+    // Forget legacy saved results, but preserve profile and sound preferences.
+    const storage=window.localStorage;
+    for(let index=storage.length-1;index>=0;index--){
+      const key=storage.key(index);
+      if(key && key.startsWith(TODAY_WINS_STORAGE_PREFIX+':'))storage.removeItem(key);
+    }
   } catch {
     // The daily board remains available in memory when storage is unavailable.
   }
 }
 
 function saveTodayWins() {
-  try {
-    window.localStorage.setItem(getTodayWinsStorageKey(), JSON.stringify(state.purpleLeaderboard));
-  } catch {
-    // Storage is optional for the local prototype.
-  }
+  // Ranking is session-only: a reload starts a fresh game.
 }
 
 function renderPurpleLeaderboard() {
@@ -1246,11 +1297,17 @@ function renderPurpleLeaderboard() {
     rank.textContent = String(index + 1);
     const name = document.createElement("span");
     name.className = "purple-player-name";
-    name.textContent = entry.name;
+    name.textContent = entry.isReal && typeof getPlayerNickname==='function' ? getPlayerNickname() + ' (YOU)' : entry.name;
     const value = document.createElement("strong");
     value.className = "purple-player-value";
     value.textContent = formatPurpleMultiplier(entry.multiplier);
-    item.append(rank, name, value);
+    const avatar=document.createElement("span");
+    avatar.className="leaderboard-avatar";
+    avatar.setAttribute("aria-hidden","true");
+    // Stable presentation-only assignment: sorting never changes a player's face.
+    const avatarSeed=[...entry.name].reduce((hash,char)=>(hash*31+char.codePointAt(0))>>>0,0);
+    setAvatarVars(avatar,avatars[entry.isReal ? state.avatarIndex : avatarSeed%avatars.length]);
+    item.append(rank, avatar, name, value);
     els.purpleLeaderboard.append(item);
   });
 }
@@ -1272,17 +1329,44 @@ function addPurpleLeaderboardEntry(entry) {
     state.processedPurpleEvents.delete(state.processedPurpleEvents.values().next().value);
   }
 
-  const candidate = { ...entry, multiplier, timestamp: entry.timestamp || Date.now() };
+  const candidate = { ...entry, multiplier, timestamp: entry.timestamp ?? Date.now() };
+  const oldPlace=state.purpleLeaderboard.findIndex(item=>item.isReal);
   const previousEntry = state.purpleLeaderboard.find((item) => item.name === candidate.name);
   if (previousEntry && previousEntry.multiplier >= candidate.multiplier) return;
   const ranked = [...state.purpleLeaderboard.filter((item) => item.name !== candidate.name), candidate]
-    .sort((a, b) => b.multiplier - a.multiplier || b.timestamp - a.timestamp)
-    .slice(0, 10);
+    .sort((a, b) => b.multiplier - a.multiplier || a.timestamp - b.timestamp)
+    .slice(0, 100);
   if (!ranked.some((item) => item.id === candidate.id)) return;
   state.purpleLeaderboard = ranked;
+  const newPlace=ranked.findIndex(item=>item.isReal);
+  if(candidate.isReal && newPlace>=0 && (oldPlace<0 || newPlace<oldPlace))
+    showRankPromotion(newPlace+1);
   state.latestPurpleLeaderboardId = candidate.id;
   saveTodayWins();
   renderPurpleLeaderboard();
+}
+
+let rankPromotionTimer;
+function showRankPromotion(place) {
+  let notice=document.getElementById('rankPromotion');
+  if(!notice){
+    notice=document.createElement('div');notice.id='rankPromotion';
+    notice.setAttribute('role','button');notice.setAttribute('aria-live','polite');notice.tabIndex=0;
+    const openTop=()=>{
+      if(!matchMedia('(max-width:720px)').matches || typeof desktopUi==='undefined')return;
+      clearTimeout(rankPromotionTimer);notice.hidden=true;
+      desktopUi.openTop?.();
+    };
+    notice.addEventListener('click',openTop);
+    notice.addEventListener('keydown',event=>{
+      if(event.key==='Enter'||event.key===' '){event.preventDefault();openTop();}
+    });
+    document.querySelector('.mine-stage').append(notice);
+  }
+  notice.textContent='Вы заняли '+place+' место в топ-100!';
+  notice.setAttribute('aria-label',notice.textContent+' Открыть таблицу топ-100');
+  notice.hidden=false;clearTimeout(rankPromotionTimer);
+  rankPromotionTimer=setTimeout(()=>{notice.hidden=true;},4500);
 }
 
 function setAvatarVars(element, avatar) {
@@ -1312,6 +1396,7 @@ function renderAvatars() {
 
 function syncAvatar() {
   setAvatarVars(els.menuAvatarPreview, avatars[state.avatarIndex]);
+  renderPurpleLeaderboard();
 }
 
 function renderHistory() {
@@ -1347,15 +1432,22 @@ function updateCrownCounter() {
   }
 
   const requiredStars = getRequiredStars();
-  const pendingDiamonds = getPendingCounterFlyInCount("diamond");
-  const visualCrownsCollected = clamp(state.crownsCollected - pendingDiamonds, 0, requiredStars);
+  const pendingDiamonds = window.BalloroBonusUI?.isV2 ? 0 : getPendingCounterFlyInCount("diamond");
+  const stored = window.BalloroBonusUI?.isV2 ? state.v2BonusProgress.diamond : state.crownsCollected;
+  const visualCrownsCollected = window.BalloroBonusUI?.isV2
+    && state.v2BonusArrivedActive.diamond
+    ? requiredStars : clamp(stored - pendingDiamonds, 0, requiredStars);
   Array.from(els.crownCounter.children).forEach((item, index) => {
     item.classList.toggle("is-unused", index >= requiredStars);
     item.classList.toggle("filled", index < visualCrownsCollected);
   });
   const bonusCounter = els.crownCounter.closest(".crown-bonus-counter");
-  const isActive = visualCrownsCollected >= requiredStars;
+  const isActive = window.BalloroBonusUI?.isV2
+    ? state.v2BonusArrivedActive.diamond
+    : visualCrownsCollected >= requiredStars;
+  const wasActive = bonusCounter?.classList.contains("is-active");
   bonusCounter?.classList.toggle("is-active", isActive);
+  if (isActive && !wasActive) bubbleBonusCounter();
   if (!isActive) {
     bonusCounter?.classList.remove("bonus-bubble");
   }
@@ -1363,14 +1455,30 @@ function updateCrownCounter() {
 
 function updateMultiPlusCounter() {
   if (!els.multiPlusCounter) return;
-  const visualMultiPlusActive = state.multiPlusActive && getPendingCounterFlyInCount("multiPlus") === 0;
+  const wasActive = els.multiPlusCounter.classList.contains("is-active");
+  const visualMultiPlusActive = window.BalloroBonusUI?.isV2
+    ? Boolean(state.v2BonusArrivedActive.lemon)
+    : Boolean(state.multiPlusToken?.consumed)
+      || (state.multiPlusActive && getPendingCounterFlyInCount("multiPlus") === 0);
+  if (window.BalloroBonusUI?.isV2) {
+    const visible = visualMultiPlusActive ? V2_BONUS_THRESHOLDS.lemon : state.v2BonusProgress.lemon;
+    els.multiPlusCounter.querySelectorAll(".v2-lemon-slots .v2-lemon")
+      .forEach((icon, index) => icon.classList.toggle("filled", index < visible));
+  }
   els.multiPlusCounter.classList.toggle("is-active", visualMultiPlusActive);
+  if (visualMultiPlusActive && !wasActive) bubbleMultiPlusCounter();
   if (!visualMultiPlusActive) els.multiPlusCounter.classList.remove("multi-plus-bubble");
 }
 
 function isFieldPocketBonusActive() {
-  if (!usesFieldPocketMechanics() || !state.running || !state.fieldPocket) return false;
-  return state.pucks.some((puck) => puck.secretRoom?.zoneId === FIELD_POCKET_ZONE_ID
+  if (window.BalloroBonusUI?.isV2) return Boolean(state.v2BonusArrivedActive.blue);
+  const pocket = window.BalloroBonusUI?.isV2 ? state.bluePocket : state.fieldPocket;
+  const zoneId = window.BalloroBonusUI?.isV2
+    ? BLUE_FIELD_POCKET_ZONE_ID : FIELD_POCKET_ZONE_ID;
+  if (!usesFieldPocketMechanics() || !pocket) return false;
+  if (pocket.consumed) return !window.BalloroBonusUI?.isV2
+    || Boolean(state.v2BonusArrivedActive.blue);
+  return !window.BalloroBonusUI?.isV2 && state.pucks.some((puck) => puck.secretRoom?.zoneId === zoneId
     && ["capturing", "pocket_wait"].includes(puck.secretRoom.phase));
 }
 
@@ -1382,6 +1490,9 @@ function updatePocketBonusCounter() {
   const wasActive = counter.classList.contains("is-active");
   counter.classList.toggle("hidden", !isVisible);
   counter.classList.toggle("is-active", isActive);
+  if (window.BalloroBonusUI?.isV2) {
+    counter.querySelector(".v2-blue-symbol")?.classList.toggle("filled", isActive);
+  }
   if (isActive && !wasActive) {
     if (state.animationsEnabled) {
       counter.classList.remove("bonus-bubble");
@@ -1391,6 +1502,28 @@ function updatePocketBonusCounter() {
     }
   } else if (!isActive) {
     counter.classList.remove("bonus-bubble");
+  }
+}
+
+function updateChanceBonusCounter() {
+  if (!els.chanceBonusCounter) return;
+  const wasActive = els.chanceBonusCounter.classList.contains("is-active");
+  const active = window.BalloroBonusUI?.isV2
+    ? Boolean(state.v2BonusArrivedActive.crown)
+    : Boolean(state.chancePocket?.consumed)
+      || ["capturing", "captured", "spinning", "sinking"].includes(state.chancePhase);
+  els.chanceBonusCounter.classList.toggle("is-active", active);
+  if (window.BalloroBonusUI?.isV2) {
+    const visible = active ? V2_BONUS_THRESHOLDS.crown : state.v2BonusProgress.crown;
+    els.chanceBonusCounter.querySelectorAll(".v2-crown-slots .v2-crown")
+      .forEach((icon, index) => icon.classList.toggle("filled", index < visible));
+  }
+  if (active && !wasActive && state.animationsEnabled) {
+    els.chanceBonusCounter.classList.remove("bonus-bubble");
+    void els.chanceBonusCounter.offsetWidth;
+    els.chanceBonusCounter.classList.add("bonus-bubble");
+    els.chanceBonusCounter.addEventListener("animationend", () =>
+      els.chanceBonusCounter.classList.remove("bonus-bubble"), { once: true });
   }
 }
 
@@ -1405,16 +1538,69 @@ function bubbleMultiPlusCounter() {
 }
 
 function getRequiredStars() {
-  return Math.max(1, Math.min(3, state.puckCount));
+  return window.BalloroBonusUI?.isV2 ? V2_BONUS_THRESHOLDS.diamond : 3;
+}
+
+const V2_BONUS_PROGRESS_KEY = window.BalloroPocketExperiment
+  ? "balloro-x-test-v2-pocket-experiment-progress-1" : "balloro-x-test-v2-bonus-progress-1";
+const V2_BONUS_THRESHOLDS = Object.freeze(window.BalloroPocketExperiment
+  ? { diamond: 3, crown: 2, lemon: 1, blue: 1 }
+  : { diamond: 5, crown: 3, lemon: 2, blue: 1 });
+
+function loadV2BonusProgress() {
+  if (!window.BalloroBonusUI?.isV2) return;
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(V2_BONUS_PROGRESS_KEY) || "{}");
+    for (const [kind, threshold] of Object.entries(V2_BONUS_THRESHOLDS)) {
+      const value = Number(saved[kind]);
+      state.v2BonusProgress[kind] = Number.isInteger(value) && value >= 0 && value < threshold ? value : 0;
+    }
+  } catch (_) { /* Private browsing can deny storage; the current session still works. */ }
+}
+
+function saveV2BonusProgress() {
+  if (!window.BalloroBonusUI?.isV2) return;
+  try { window.localStorage.setItem(V2_BONUS_PROGRESS_KEY, JSON.stringify(state.v2BonusProgress)); }
+  catch (_) { /* Keep session progress if storage is unavailable. */ }
+}
+
+function resetV2BonusProgressForLineChange() {
+  if (!window.BalloroBonusUI?.isV2) return;
+  clearCounterFlyIns();
+  state.v2BonusProgress = { diamond: 0, crown: 0, lemon: 0, blue: 0 };
+  state.v2BonusArrivedActive = { diamond: false, crown: false, lemon: false, blue: false };
+  state.crownsCollected = 0;
+  saveV2BonusProgress();
+  updateCrownCounter();
+  updateChanceBonusCounter();
+  updateMultiPlusCounter();
+  updatePocketBonusCounter();
+}
+
+function claimV2BonusSymbol(kind) {
+  if (!window.BalloroBonusUI?.isV2) return true;
+  const threshold = V2_BONUS_THRESHOLDS[kind];
+  if (!threshold) return false;
+  const next = (state.v2BonusProgress[kind] || 0) + 1;
+  const activated = next >= threshold;
+  state.v2BonusProgress[kind] = activated ? 0 : next;
+  if (activated) state.v2BonusArrivedActive[kind] = true;
+  if (kind === "diamond") state.crownsCollected = state.v2BonusProgress.diamond;
+  saveV2BonusProgress();
+  updateCrownCounter();
+  updateChanceBonusCounter();
+  updateMultiPlusCounter();
+  updatePocketBonusCounter();
+  return activated;
 }
 
 function resetDiamondBoostAfterPuckCountChange() {
   if (state.running) return;
+  if (window.BalloroBonusUI?.isV2) return;
   state.bonusStars = [];
   clearCounterFlyIns("diamond");
   state.crownsCollected = 0;
   state.x10BoostActivated = false;
-  state.bonusFieldTransitionStartedAt = 0;
   state.crownBonusAwarded = false;
   state.starPickupLog = [];
   updateCrownCounter();
@@ -1449,17 +1635,10 @@ function setupCanvas() {
   const winLabelStyle = window.getComputedStyle(els.roundWinLabel);
   const winLabelBottom = Number.parseFloat(winLabelStyle.bottom) || 18;
   const winLabelHeight = Number.parseFloat(winLabelStyle.fontSize) || 25;
-  const isMobileField = width <= 720;
-  const wallSafeInset = isMobileField ? clamp(width * 0.016, 6, 9) : width * 0.04;
-  const topFieldReserve = isMobileField
-    ? clamp(height * 0.025, 10, 18)
-    : clamp(height * 0.11, 58, 104);
-  const bottomFieldReserve = winLabelBottom + winLabelHeight + (isMobileField
-    ? clamp(height * 0.012, 6, 12)
-    : clamp(height * 0.052, 30, 58));
+  const topFieldReserve = clamp(height * 0.12, 62, 108);
+  const bottomFieldReserve = winLabelBottom + winLabelHeight + clamp(height * 0.052, 30, 58);
   const verticalFieldLimit = Math.max(1, height - topFieldReserve - bottomFieldReserve);
-  const horizontalFieldLimit = Math.max(1, width - wallSafeInset * 2);
-  const maxDiamondSize = Math.min(horizontalFieldLimit, verticalFieldLimit);
+  const maxDiamondSize = Math.min(width * 0.92, verticalFieldLimit);
   const diamondBottomAnchor = height - bottomFieldReserve;
   state.field.width = width;
   state.field.height = height;
@@ -1470,27 +1649,182 @@ function setupCanvas() {
   state.field.cy = diamondBottomAnchor - maxDiamondSize / 2;
   const mathConfig = getMathConfiguration();
   state.field.puckRadius = mathConfig ? state.field.half * mathConfig.puck_radius : state.field.grid / 4;
-  positionBonusCountersOnFieldEdges();
+  // Move the whole board assembly up enough to fit the launch ball's largest
+  // wave and its glow below either lower room, without shrinking the diamonds.
+  const mainRadius = maxDiamondSize / 2;
+  const roomRadius = mainRadius * 0.4;
+  const roomOffsetY = (mainRadius + roomRadius + CHANCE_ROOM_GAP_PX) * CHANCE_ROOM_CORNER_Y_SHARE;
+  const launchWaveClearance = state.field.puckRadius * 2.5 + CHANCE_ROOM_VIEWPORT_MARGIN_PX;
+  state.field.cy = Math.min(state.field.cy, height - roomOffsetY - roomRadius - launchWaveClearance);
+  if (document.body.classList.contains('slot-ui')) {
+    const footer = document.querySelector('.bet-panel').getBoundingClientRect();
+    const canvasRect = els.canvas.getBoundingClientRect();
+    let centerY = window.innerHeight / 2 - canvasRect.top;
+    const radiusRatio = mathConfig ? mathConfig.puck_radius : 1 / (2 * GRID_SIZE);
+    // Keep the main diamond centred and reserve space for the two lower rooms.
+    const lowerSpace = footer.top - canvasRect.top - centerY - 16;
+    const assemblyRatio = 1.4 * CHANCE_ROOM_CORNER_Y_SHARE + .4 + radiusRatio * 2.5 / Math.SQRT2;
+    let radius = Math.max(1, Math.min(width * .48, centerY - 200,
+      (lowerSpace - CHANCE_ROOM_GAP_PX * CHANCE_ROOM_CORNER_Y_SHARE) / assemblyRatio));
+    if(width<=720){
+      const bonusUiV2 = window.BalloroBonusUI?.isV2;
+      radius=width*(bonusUiV2 ? .49 : .48);
+      if (bonusUiV2) {
+        const footerTop = footer.top - canvasRect.top - 6;
+        radius = Math.min(radius, Math.max(1,
+          (footerTop - 134 - CHANCE_ROOM_V2_WALL_OFFSET_PX) / 2.4));
+      }
+      // Mobile presentation may overlap transient labels with the board. Keep
+      // the full-width diamond and use the space immediately above the footer.
+      const visibleAssemblyRatio=1.4*CHANCE_ROOM_CORNER_Y_SHARE+.4;
+      centerY=footer.top-canvasRect.top-6-radius*visibleAssemblyRatio
+        -CHANCE_ROOM_GAP_PX*CHANCE_ROOM_CORNER_Y_SHARE;
+      centerY=Math.max(radius+(bonusUiV2 ? 134 : 70),centerY);
+      if (bonusUiV2) {
+        const dockBottom = 134;
+        const footerTop = footer.top - canvasRect.top - 6;
+        // V2 previews the launch puck at the rooms' shared upper entry, so it
+        // does not need the old wave reserve below the lower room vertices.
+        const lowerExtent = radius * 1.4 + CHANCE_ROOM_V2_WALL_OFFSET_PX;
+        const highestCenter = footerTop - lowerExtent;
+        const lowestCenter = dockBottom + radius;
+        if (highestCenter >= lowestCenter) {
+          const balancedCenter = (lowestCenter + highestCenter) / 2;
+          const visualDrop = clamp(height * 0.025, 16, 24);
+          centerY = Math.min(highestCenter, balancedCenter + visualDrop);
+        }
+      }
+    }
+    if (width > 720) {
+      // Transparent footer space is usable. Test the actual controls against
+      // all three diamonds, keeping the main centre fixed throughout the fit.
+      const obstacles = [...document.querySelectorAll('[data-bonus-help], .sound-button, .purple-leaderboard, .desktop-logo, .desktop-panel, .slot-controls > .slot-circle, .bet-action, .bank, .slot-total')]
+        .filter(element => !(document.body.classList.contains('desktop-ui-experiment') && element.matches('[data-bonus-help]')))
+        .map(element => element.matches('.desktop-panel')
+          ? {left:element.offsetLeft,top:element.offsetTop,right:element.offsetLeft+element.offsetWidth,
+            bottom:element.offsetTop+element.offsetHeight,width:element.offsetWidth,height:element.offsetHeight}
+          : element.getBoundingClientRect()).filter(rect => rect.width && rect.height)
+        .map(rect => ({left:rect.left-canvasRect.left-12,right:rect.right-canvasRect.left+12,
+          top:rect.top-canvasRect.top-12,bottom:rect.bottom-canvasRect.top+12}));
+      const maximum = Math.min(width*.48, centerY-200,
+        (height-centerY-16-CHANCE_ROOM_GAP_PX*CHANCE_ROOM_CORNER_Y_SHARE)/assemblyRatio);
+      const fits = candidate => {
+        const distance = candidate*1.4+CHANCE_ROOM_GAP_PX;
+        const rooms = [-1,1].map(side => ({x:width/2+side*distance*CHANCE_ROOM_CORNER_X_SHARE,
+          y:centerY+distance*CHANCE_ROOM_CORNER_Y_SHARE,r:candidate*.4}));
+        const diamonds = [{x:width/2,y:centerY,r:candidate},...rooms];
+        const wave = candidate/Math.SQRT2*radiusRatio*2.5;
+        return obstacles.every(rect => diamonds.every(d =>
+          Math.abs(d.x-clamp(d.x,rect.left,rect.right))+Math.abs(d.y-clamp(d.y,rect.top,rect.bottom))>d.r)
+          && rooms.every(d => Math.hypot(d.x-clamp(d.x,rect.left,rect.right),
+            d.y+d.r-clamp(d.y+d.r,rect.top,rect.bottom))>wave));
+      };
+      for (let candidate=maximum; candidate>radius; candidate-=1) {
+        if (fits(candidate)) {radius=candidate;break;}
+      }
+    }
+    state.field.half = radius / Math.SQRT2;
+    state.field.grid = state.field.half * 2 / GRID_SIZE;
+    state.field.puckRadius = state.field.half * radiusRatio;
+    state.field.cy = centerY;
+    els.roundWinLabel.style.top='auto';
+    els.roundWinLabel.style.bottom = `${height - (footer.top - canvasRect.top) + 4}px`;
+  }
+  fitBonusCountersToField();
+  positionBonusUiV2Logo();
 }
 
-function positionBonusCountersOnFieldEdges() {
-  if (!FIELD_HUD_VISIBILITY_EXPERIMENT.enabled) return;
-  const { cx, cy, half } = state.field;
-  const diamondRadius = half * Math.SQRT2;
-  const edgeMidpointOffset = diamondRadius * 0.5;
-  const outwardOffset = clamp(diamondRadius * 0.075, 18, 30);
-  const scale = clamp(diamondRadius / 310, 0.78, 1);
-  const placements = [
-    [els.diamondBonusEdge, cx - edgeMidpointOffset - outwardOffset, cy - edgeMidpointOffset - outwardOffset, -45],
-    [els.multiPlusBonusEdge, cx + edgeMidpointOffset + outwardOffset, cy - edgeMidpointOffset - outwardOffset, 45],
-    [els.pocketBonusEdge, cx - edgeMidpointOffset - outwardOffset, cy + edgeMidpointOffset + outwardOffset, 45]
-  ];
-  placements.forEach(([element, x, y, angle]) => {
-    if (!element) return;
-    element.style.left = `${x}px`;
-    element.style.top = `${y}px`;
-    element.style.setProperty("--bonus-edge-angle", `${angle}deg`);
-    element.style.setProperty("--bonus-edge-scale", scale.toFixed(3));
+function positionBonusUiV2Logo() {
+  const logo = document.querySelector(".desktop-logo");
+  if (!logo?.style) return;
+  logo.style.removeProperty("left");
+  logo.style.removeProperty("top");
+  logo.style.removeProperty("font-size");
+}
+
+function fitBonusCountersToField() {
+  const counters = [els.crownCounter?.closest(".crown-bonus-counter"),
+    els.chanceBonusCounter, els.multiPlusCounter, els.pocketBonusCounter].filter(Boolean);
+  if (counters.length !== 4) return;
+  const {cx, cy, half, width} = state.field;
+  const gap = 8;
+  const canvasRect=els.canvas.getBoundingClientRect();
+  const side=width>720 ? document.getElementById?.('desktopRounds') : null;
+  // Use layout coordinates so collapsing the side table cannot move the counters.
+  const panelClearance=side?.offsetWidth ? side.offsetLeft+side.offsetWidth-canvasRect.left+26 : 12;
+  // On desktop, place the counters visually between the side tables and the
+  // diamond instead of leaving them attached to the panel edges.
+  const left=Math.max(12,panelClearance+(width>720 ? 34 : 0));
+  const logo=document.querySelector('.desktop-logo')?.getBoundingClientRect();
+  const arrow=document.querySelector('.mobile-table-left')?.getBoundingClientRect();
+  const mobile=width<=720;
+  if (window.BalloroBonusUI?.isV2) {
+    counters.forEach(counter => {
+      counter.style.removeProperty("left");
+      counter.style.removeProperty("top");
+      counter.style.removeProperty("scale");
+      counter.style.removeProperty("transform-origin");
+    });
+    return;
+  }
+  const top=mobile
+    ? Math.max(54,(arrow?.bottom||0)-canvasRect.top+6)
+    : Math.max(88,(logo?.bottom||0)-canvasRect.top+16,(arrow?.bottom||0)-canvasRect.top+12);
+  const radius=half*Math.SQRT2;
+  const layout=value=>{
+    const legacyY=[];
+    let y=top;
+    counters.forEach(counter=>{
+      legacyY.push(y);
+      y+=counter.offsetHeight*value+gap;
+    });
+    // Two mobile rows should consume two rows of vertical space, not inherit
+    // the third/fourth slots of the former four-item column. This keeps the
+    // plaques large while leaving the logo and corner arrows unobstructed.
+    const rowHeight=Math.max(...counters.map(counter=>counter.offsetHeight))*value;
+    let upperY=legacyY[2];
+    let lowerY=legacyY[3];
+    if(mobile){
+      const fieldTop=cy-radius;
+      const anchoredLower=fieldTop-rowHeight-14;
+      const anchoredUpper=anchoredLower-rowHeight-gap;
+      // Follow the diamond down when there is room, but never enter the logo
+      // and corner-arrow band on a short viewport.
+      upperY=Math.max(top,anchoredUpper);
+      lowerY=upperY+rowHeight+gap;
+    }
+    return [
+      {counter:counters[0],x:left,y:upperY},
+      {counter:counters[2],x:width-left-counters[2].offsetWidth*value,y:upperY},
+      {counter:counters[1],x:left,y:lowerY},
+      {counter:counters[3],x:width-left-counters[3].offsetWidth*value,y:lowerY}
+    ];
+  };
+  const fits=value=>{
+    return layout(value).every(({counter,x,y})=>{
+      const glow=mobile ? 1.06 : 1.14;
+      const counterWidth=counter.offsetWidth*value;
+      const counterHeight=counter.offsetHeight*value;
+      const glowX=counterWidth*(glow-1)/2+12;
+      const glowY=counterHeight*(glow-1)/2+12;
+      const visualRight=x+counterWidth;
+      const clearRight=visualRight+glowX;
+      const clearBottom=y+counterHeight+glowY;
+      const clear=Math.abs(cx-clamp(cx,x-glowX,clearRight))
+        +Math.abs(cy-clamp(cy,y-glowY,clearBottom))>radius;
+      // Glow may fade into the viewport edge; only the interactive plaque itself
+      // must fit. Counting the glow as width made right-hand mobile counters tiny.
+      return clear && x>=0 && visualRight<=width;
+    });
+  };
+  let scale=mobile ? 1.28 : 1.12;
+  while(scale>.2 && !fits(scale))scale-=.01;
+  scale=Math.floor(scale*1000)/1000;
+  layout(scale).forEach(({counter,x,y:counterY})=>{
+    counter.style.transformOrigin = "top left";
+    counter.style.scale = scale.toFixed(3);
+    counter.style.left = `${x}px`;
+    counter.style.top = `${counterY}px`;
   });
 }
 
@@ -1787,15 +2121,15 @@ function getFieldPocketNormalized(pocket = state.fieldPocket) {
   };
 }
 
-function getFieldPocketGeometry() {
-  const normalized = getFieldPocketNormalized();
+function getFieldPocketGeometry(pocket = state.fieldPocket, id = FIELD_POCKET_ZONE_ID) {
+  const normalized = getFieldPocketNormalized(pocket);
   if (!normalized) return null;
   const hole = {
     x: normalized.x * state.field.half,
     y: normalized.y * state.field.half
   };
   return {
-    id: FIELD_POCKET_ZONE_ID,
+    id,
     normal: { x: 0, y: -1 },
     tangent: { x: 1, y: 0 },
     portal: { ...hole },
@@ -1810,6 +2144,9 @@ function getFieldPocketGeometry() {
 }
 
 function getSecretZoneGeometry(id) {
+  if (id === BLUE_FIELD_POCKET_ZONE_ID && state.bluePocket) {
+    return getFieldPocketGeometry(state.bluePocket, BLUE_FIELD_POCKET_ZONE_ID);
+  }
   if (usesFieldPocketMechanics() && state.fieldPocket) {
     return getFieldPocketGeometry();
   }
@@ -1960,129 +2297,20 @@ function drawPurpleNeonPocketGlow(point, radius) {
   ctx.restore();
 }
 
-const fieldMultiplierOutlineSpriteCache = new Map();
-
-function getFieldMultiplierOutlineSprite(text, font, color, lineWidth, shadowColor, shadowBlur) {
-  const key = [text, font, color, lineWidth, shadowColor, shadowBlur].join("|");
-  const cached = fieldMultiplierOutlineSpriteCache.get(key);
-  if (cached) return cached;
-
-  const measurementCanvas = document.createElement("canvas");
-  const measurementContext = measurementCanvas.getContext("2d");
-  measurementContext.font = font;
-  const metrics = measurementContext.measureText(text);
-  const fontSize = Number.parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] || "24");
-  const outlineRadius = Math.max(0.5, lineWidth * 0.5);
-  const padding = Math.ceil(outlineRadius + shadowBlur * 2 + 4);
-  const width = Math.max(1, Math.ceil(metrics.width + padding * 2));
-  const height = Math.max(1, Math.ceil(fontSize * 1.5 + padding * 2));
-  const glyphCanvas = document.createElement("canvas");
-  glyphCanvas.width = width;
-  glyphCanvas.height = height;
-  const glyphContext = glyphCanvas.getContext("2d");
-  const contourCanvas = document.createElement("canvas");
-  contourCanvas.width = width;
-  contourCanvas.height = height;
-  const contourContext = contourCanvas.getContext("2d");
-  const spriteCanvas = document.createElement("canvas");
-  spriteCanvas.width = width;
-  spriteCanvas.height = height;
-  const spriteContext = spriteCanvas.getContext("2d");
-  const anchorX = width / 2;
-  const anchorY = height / 2;
-
-  glyphContext.font = font;
-  glyphContext.textAlign = "center";
-  glyphContext.textBaseline = "middle";
-  glyphContext.fillStyle = "#fff";
-  glyphContext.fillText(text, anchorX, anchorY);
-
-  // Build a round dilation of the filled glyph instead of using strokeText.
-  // This avoids font-path joins that can create inward spikes in digits such as 2.
-  const outlineSamples = 24;
-  for (let sample = 0; sample < outlineSamples; sample += 1) {
-    const angle = sample / outlineSamples * Math.PI * 2;
-    contourContext.drawImage(
-      glyphCanvas,
-      Math.cos(angle) * outlineRadius,
-      Math.sin(angle) * outlineRadius
-    );
-  }
-  contourContext.globalCompositeOperation = "destination-out";
-  contourContext.drawImage(glyphCanvas, 0, 0);
-  contourContext.globalCompositeOperation = "source-in";
-  contourContext.fillStyle = color;
-  contourContext.fillRect(0, 0, width, height);
-
-  spriteContext.shadowColor = shadowColor;
-  spriteContext.shadowBlur = shadowBlur;
-  spriteContext.drawImage(contourCanvas, 0, 0);
-
-  const sprite = { canvas: spriteCanvas, anchorX, anchorY };
-  fieldMultiplierOutlineSpriteCache.set(key, sprite);
-  return sprite;
-}
-
-function drawFieldMultiplierOuterContour(text, x, y, color, lineWidth, shadowColor, shadowBlur) {
-  const sprite = getFieldMultiplierOutlineSprite(
-    text,
-    ctx.font,
-    color,
-    lineWidth,
-    shadowColor,
-    shadowBlur
-  );
-  ctx.drawImage(sprite.canvas, x - sprite.anchorX, y - sprite.anchorY);
-}
-
-function drawPurpleNeonMultiplierText(text, x, y, color, filled = false) {
+function drawPurpleNeonMultiplierText(text, x, y, color) {
   const neonScale = getPurpleNeonPerformanceScale();
-  const fontSize = Number.parseFloat(ctx.font.match(/(\d+(?:\.\d+)?)px/)?.[1] || "24");
-  const outlineWidth = clamp(fontSize * 0.035, 0.5, 1.8);
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
-  ctx.globalAlpha *= 0.78;
-  drawFieldMultiplierOuterContour(
-    text,
-    x,
-    y,
-    color,
-    outlineWidth,
-    `rgba(213, 122, 255, ${0.82 * neonScale})`,
-    Math.max(5, 10 * neonScale)
-  );
-  ctx.restore();
-
-  ctx.save();
-  drawFieldMultiplierOuterContour(
-    text,
-    x,
-    y,
-    color,
-    outlineWidth,
-    `rgba(235, 176, 255, ${0.68 * neonScale})`,
-    Math.max(2, 5 * neonScale)
-  );
-  if (filled) {
-    ctx.fillStyle = color;
-    ctx.shadowColor = `rgba(223, 145, 255, ${0.9 * neonScale})`;
-    ctx.shadowBlur = Math.max(4, 8 * neonScale);
-    ctx.fillText(text, x, y);
-  }
-  ctx.restore();
-}
-
-function drawFieldMultiplierOutlineText(text, x, y, color, fontSize) {
-  ctx.save();
-  drawFieldMultiplierOuterContour(
-    text,
-    x,
-    y,
-    color,
-    clamp(fontSize * 0.035, 0.5, 1.8),
-    "rgba(0, 0, 0, 0)",
-    0
-  );
+  ctx.lineJoin = "round";
+  ctx.shadowColor = `rgba(202, 104, 255, ${0.46 * neonScale})`;
+  ctx.shadowBlur = Math.max(2, 7 * neonScale);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = `rgba(187, 91, 255, ${0.18 * neonScale})`;
+  ctx.strokeText(text, x, y);
+  ctx.shadowColor = `rgba(202, 104, 255, ${0.42 * neonScale})`;
+  ctx.shadowBlur = Math.max(2, 5 * neonScale);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
   ctx.restore();
 }
 
@@ -2129,6 +2357,7 @@ function drawSecretMultiplierCell(zone, bonusGridActive) {
     const center = secretRoomLocalPoint(zone, cell.u, cell.v);
     const screenCenter = toScreen(center.x, center.y);
     let fontSize = Math.max(11, Math.min(34, state.field.grid * 0.38));
+    ctx.fillStyle = multiplierColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
@@ -2287,6 +2516,60 @@ function drawBlueReadyWaves(point, radius, pulse) {
   ctx.stroke();
 }
 
+function drawGreenReadyWaves(point, radius, pulse) {
+  const outer = radius * (2.35 + pulse * .32);
+  const glow = ctx.createRadialGradient(point.x, point.y, radius * .18, point.x, point.y, outer);
+  glow.addColorStop(0, `rgba(197, 255, 196, ${.48 + pulse * .2})`);
+  glow.addColorStop(.34, `rgba(55, 234, 78, ${.3 + pulse * .18})`);
+  glow.addColorStop(.7, `rgba(25, 177, 55, ${.12 + pulse * .1})`);
+  glow.addColorStop(1, "rgba(20, 150, 45, 0)");
+  ctx.beginPath(); ctx.arc(point.x, point.y, outer, 0, Math.PI * 2);
+  ctx.fillStyle = glow; ctx.fill();
+  ctx.beginPath(); ctx.arc(point.x, point.y, radius * (1.45 + pulse * .18), 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(55, 234, 78, ${.48 + pulse * .42})`;
+  ctx.lineWidth = 2; ctx.stroke();
+}
+
+function drawRedReadyWaves(point, radius, pulse) {
+  const readyGlowRadius = radius * (2.35 + pulse * 0.32);
+  const readyGlow = ctx.createRadialGradient(
+    point.x, point.y, radius * 0.18, point.x, point.y, readyGlowRadius
+  );
+  readyGlow.addColorStop(0, `rgba(255, 190, 194, ${0.48 + pulse * 0.2})`);
+  readyGlow.addColorStop(0.34, `rgba(255, 74, 82, ${0.3 + pulse * 0.18})`);
+  readyGlow.addColorStop(0.7, `rgba(230, 42, 52, ${0.12 + pulse * 0.1})`);
+  readyGlow.addColorStop(1, "rgba(215, 35, 45, 0)");
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, readyGlowRadius, 0, Math.PI * 2);
+  ctx.fillStyle = readyGlow;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius * (1.45 + pulse * 0.18), 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 74, 82, ${0.48 + pulse * 0.42})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawYellowReadyWaves(point, radius, pulse) {
+  const readyGlowRadius = radius * (2.35 + pulse * 0.32);
+  const readyGlow = ctx.createRadialGradient(
+    point.x, point.y, radius * 0.18, point.x, point.y, readyGlowRadius
+  );
+  readyGlow.addColorStop(0, `rgba(255, 248, 190, ${0.48 + pulse * 0.2})`);
+  readyGlow.addColorStop(0.34, `rgba(255, 213, 61, ${0.3 + pulse * 0.18})`);
+  readyGlow.addColorStop(0.7, `rgba(230, 175, 30, ${0.12 + pulse * 0.1})`);
+  readyGlow.addColorStop(1, "rgba(215, 155, 20, 0)");
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, readyGlowRadius, 0, Math.PI * 2);
+  ctx.fillStyle = readyGlow;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius * (1.45 + pulse * 0.18), 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 213, 61, ${0.48 + pulse * 0.42})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
 function drawPurpleReadyWaves(point, radius, pulse) {
   const glowRadius = radius * (2.45 + pulse * 0.42);
   const glow = ctx.createRadialGradient(point.x, point.y, radius * 0.18, point.x, point.y, glowRadius);
@@ -2350,55 +2633,10 @@ function drawSecretPocketVortex(point, radius) {
   ctx.restore();
 }
 
-function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, outerGlowColor = null,
-  pulseInnerEdge = false) {
-  const { puckRadius } = state.field;
-  const point = zone.screenHole;
-  const pulseSeed = 4.8 + zone.hole.x * 0.007 + zone.hole.y * 0.011;
-  const proximityMetrics = pulseInnerEdge
-    ? getBonusProximityMetrics(zone.hole.x, zone.hole.y)
-    : null;
-  const collectibleBubble = pulseInnerEdge
-    ? getCollectibleIdleBubble(
-      pulseSeed,
-      proximityMetrics.glowIntensity,
-      proximityMetrics.pulseIntensity,
-      state.fieldPocket
-    )
-    : null;
-  const pocketScale = pulseInnerEdge
-    ? 1 + (collectibleBubble.scale - 1) * 0.35
-    : 1;
-  const isPreparing = state.pucks.some((puck) => puck.secretRoom?.zoneId === zone.id
-    && ["capturing", "pocket_wait"].includes(puck.secretRoom.phase));
-  const radius = Math.max(6, puckRadius * pocketScale);
-  const activePocketStrokeColor = isPreparing
-    ? usesFieldPocketMechanics()
-      ? "rgba(117, 217, 255, 0.98)"
-      : "rgba(255, 255, 255, 0.98)"
-    : bonusGridActive
-      ? "rgba(202, 104, 255, 0.98)"
-      : pocketStrokeColor;
-
-  ctx.save();
-  if (isPreparing) {
-    if (usesFieldPocketMechanics()) {
-      const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
-      drawBlueReadyWaves(point, radius, pulse);
-    } else {
-      const pulse = 0.5 + Math.sin(performance.now() / 145) * 0.5;
-      drawWhiteReadyWaves(point, radius, pulse);
-    }
-  } else if (bonusGridActive) {
-    drawPurpleNeonPocketGlow(point, radius);
-  }
+function drawPulsingFieldPocketSurface(point, radius, collectibleBubble, palette, strokeColor, outerGlowColor) {
   const hole = ctx.createRadialGradient(
-    point.x - radius * 0.24,
-    point.y - radius * 0.28,
-    radius * 0.08,
-    point.x,
-    point.y,
-    radius
+    point.x - radius * 0.24, point.y - radius * 0.28, radius * 0.08,
+    point.x, point.y, radius
   );
   hole.addColorStop(0, "#090b10");
   hole.addColorStop(0.48, "#010205");
@@ -2410,57 +2648,242 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
   ctx.shadowBlur = radius * 0.45;
   ctx.fill();
   ctx.shadowBlur = 0;
-  if (pulseInnerEdge && collectibleBubble.glowAlpha > 0.001) {
-    const pulse = collectibleBubble.glowAlpha;
-    const glowAlpha = pulse * 0.48;
-    const glowBandInnerRadius = Math.max(0, radius * 0.98 - 8 * 1.2);
-    const innerGlow = ctx.createRadialGradient(
-      point.x,
-      point.y,
-      glowBandInnerRadius,
-      point.x,
-      point.y,
-      radius * 0.98
-    );
-    innerGlow.addColorStop(0, "rgba(117, 217, 255, 0)");
-    innerGlow.addColorStop(0.35, `rgba(117, 217, 255, ${glowAlpha * 0.1})`);
-    innerGlow.addColorStop(0.65, `rgba(117, 217, 255, ${glowAlpha * 0.52})`);
-    innerGlow.addColorStop(0.84, `rgba(117, 217, 255, ${glowAlpha * 0.78})`);
-    innerGlow.addColorStop(1, `rgba(205, 245, 255, ${glowAlpha})`);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, radius * 0.965, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, radius * 0.965, 0, Math.PI * 2);
-    ctx.fillStyle = innerGlow;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, radius * 0.67, 0, Math.PI * 2);
-    ctx.lineWidth = Math.min(8, radius * (0.4 + pulse * 0.1) * 1.2);
-    ctx.strokeStyle = `rgba(117, 217, 255, ${glowAlpha * 0.7})`;
-    ctx.shadowColor = `rgba(117, 217, 255, ${(0.41 + pulse * 0.08) * 0.8})`;
-    ctx.shadowBlur = Math.min(8, radius * (0.62 + pulse * 0.28) * 1.2);
-    ctx.stroke();
-    ctx.restore();
-  }
+
+  const pulse = clamp((collectibleBubble.glowAlpha - 0.9) / 0.52, 0, 1);
+  const glowAlpha = (0.26 + pulse * 0.19) * 0.8;
+  const glowBandInnerRadius = Math.max(0, radius * 0.98 - 8 * 1.2);
+  const innerGlow = ctx.createRadialGradient(
+    point.x, point.y, glowBandInnerRadius, point.x, point.y, radius * 0.98
+  );
+  innerGlow.addColorStop(0, palette.transparent);
+  innerGlow.addColorStop(0.35, palette.alpha(glowAlpha * 0.1));
+  innerGlow.addColorStop(0.65, palette.alpha(glowAlpha * 0.52));
+  innerGlow.addColorStop(0.84, palette.alpha(glowAlpha * 0.78));
+  innerGlow.addColorStop(1, palette.highlight(glowAlpha));
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius * 0.965, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius * 0.965, 0, Math.PI * 2);
+  ctx.fillStyle = innerGlow;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius * 0.67, 0, Math.PI * 2);
+  ctx.lineWidth = Math.min(8, radius * (0.4 + pulse * 0.1) * 1.2);
+  ctx.strokeStyle = palette.alpha(glowAlpha * 0.7);
+  ctx.shadowColor = palette.alpha((0.41 + pulse * 0.08) * 0.8);
+  ctx.shadowBlur = Math.min(8, radius * (0.62 + pulse * 0.28) * 1.2);
+  ctx.stroke();
+  ctx.restore();
+
   ctx.beginPath();
   ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = activePocketStrokeColor;
+  ctx.strokeStyle = strokeColor;
   ctx.lineWidth = 4;
-  if (outerGlowColor && (!pulseInnerEdge || collectibleBubble.glowAlpha > 0.001)) {
-    ctx.shadowColor = outerGlowColor;
-    const outerGlowScale = pulseInnerEdge ? collectibleBubble.glowScale : 1;
-    ctx.shadowBlur = Math.max(4, radius * outerGlowScale * 0.42);
-  }
+  ctx.shadowColor = outerGlowColor;
+  ctx.shadowBlur = Math.max(4, radius * 0.34);
   ctx.stroke();
   ctx.shadowBlur = 0;
+}
+
+const BLUE_FIELD_POCKET_PALETTE = Object.freeze({
+  transparent: "rgba(117, 217, 255, 0)",
+  alpha: (alpha) => `rgba(117, 217, 255, ${alpha})`,
+  highlight: (alpha) => `rgba(205, 245, 255, ${alpha})`
+});
+const GREEN_FIELD_POCKET_PALETTE = Object.freeze({
+  transparent: "rgba(41, 236, 73, 0)",
+  alpha: (alpha) => `rgba(41, 236, 73, ${alpha})`,
+  highlight: (alpha) => `rgba(184, 255, 186, ${alpha})`
+});
+const RED_FIELD_POCKET_PALETTE = Object.freeze({
+  transparent: "rgba(255, 74, 82, 0)",
+  alpha: (alpha) => `rgba(255, 74, 82, ${alpha})`,
+  highlight: (alpha) => `rgba(255, 205, 208, ${alpha})`
+});
+const YELLOW_FIELD_POCKET_PALETTE = Object.freeze({
+  transparent: "rgba(255, 213, 61, 0)",
+  alpha: (alpha) => `rgba(255, 213, 61, ${alpha})`,
+  highlight: (alpha) => `rgba(255, 246, 190, ${alpha})`
+});
+const PURPLE_FIELD_POCKET_PALETTE = Object.freeze({
+  transparent: "rgba(202, 104, 255, 0)",
+  alpha: (alpha) => `rgba(202, 104, 255, ${alpha})`,
+  highlight: (alpha) => `rgba(244, 213, 255, ${alpha})`
+});
+
+function getV2PocketVisual(kind) {
+  if (kind === "diamond") return { palette: PURPLE_FIELD_POCKET_PALETTE,
+    stroke: "rgba(202, 104, 255, 0.98)", glow: "rgba(202, 104, 255, 0.29)",
+    waves: drawPurpleReadyWaves };
+  if (kind === "crown") return { palette: RED_FIELD_POCKET_PALETTE,
+    stroke: "rgb(255, 74, 82)", glow: "rgba(255, 48, 58, 0.29)",
+    waves: drawRedReadyWaves };
+  if (kind === "lemon") return { palette: YELLOW_FIELD_POCKET_PALETTE,
+    stroke: "rgb(255, 213, 61)", glow: "rgba(255, 213, 61, 0.29)",
+    waves: drawYellowReadyWaves };
+  return { palette: GREEN_FIELD_POCKET_PALETTE, stroke: "rgb(55, 234, 78)",
+    glow: "rgba(55, 234, 78, 0.29)", waves: drawGreenReadyWaves };
+}
+
+const v2PocketSymbolImages = Object.fromEntries(Object.entries({
+  lemon: "assets/duckies-star.svg",
+  crown: "assets/duckies-fire.png",
+  blue: "assets/duckies-cactus.svg"
+}).map(([kind, src]) => {
+  const icon = new Image();
+  icon.src = src;
+  icon.addEventListener("load", () => render());
+  return [kind, icon];
+}));
+const v2GlintCanvas = document.createElement("canvas");
+v2GlintCanvas.width = 64;
+v2GlintCanvas.height = 64;
+const V2_POCKET_SYMBOL_GLINT_INTERVAL_MS = 3800;
+
+function getV2PocketSymbolDrawBounds(kind, size) {
+  const drawSize = kind === "crown" ? size * 1.055 : size;
+  return {
+    x: -drawSize + (kind === "crown" ? drawSize * 0.16 : 0),
+    y: -drawSize - (kind === "crown" ? drawSize * 0.05 : 0),
+    width: drawSize * 2,
+    height: drawSize * 2
+  };
+}
+
+function drawV2PocketSymbolGlint(kind, point, size) {
+  // One shared phase makes every pocket symbol sparkle together, without
+  // scanning the whole field or keeping a per-symbol animation timer.
+  const sweepTime = performance.now() % V2_POCKET_SYMBOL_GLINT_INTERVAL_MS;
+  if (sweepTime >= 650) return;
+  const mask = v2GlintCanvas.getContext("2d");
+  mask.clearRect(0, 0, 64, 64);
+  const image = v2PocketSymbolImages[kind];
+  if (image?.complete && image.naturalWidth) mask.drawImage(image, 0, 0, 64, 64);
+  else if (kind === "diamond") {
+    mask.fillStyle = "#fff";
+    mask.beginPath();
+    mask.moveTo(32 - 32 * .92, 32 - 32 * .28);
+    mask.lineTo(32 - 32 * .48, 32 - 32 * .74);
+    mask.lineTo(32 + 32 * .48, 32 - 32 * .74);
+    mask.lineTo(32 + 32 * .92, 32 - 32 * .28);
+    mask.lineTo(32, 32 + 32 * .86);
+    mask.closePath(); mask.fill();
+  } else return;
+  // Keep only the moving light strip inside the silhouette. source-atop left
+  // the opaque white diamond mask visible for the whole glint interval.
+  mask.globalCompositeOperation = "source-in";
+  const center = -18 + sweepTime / 650 * 100;
+  const shine = mask.createLinearGradient(center - 12, 0, center + 12, 0);
+  shine.addColorStop(0, "rgba(255,255,255,0)");
+  shine.addColorStop(.5, "rgba(255,255,255,.82)");
+  shine.addColorStop(1, "rgba(255,255,255,0)");
+  mask.fillStyle = shine;
+  mask.fillRect(0, 0, 64, 64);
+  mask.globalCompositeOperation = "source-over";
+  // Match the base icon's exact draw bounds; a smaller glint mask made the
+  // symbol appear to jump and the off-centre fire appear to change size.
+  const bounds = getV2PocketSymbolDrawBounds(kind, size);
+  ctx.drawImage(v2GlintCanvas, point.x + bounds.x, point.y + bounds.y,
+    bounds.width, bounds.height);
+}
+
+function drawV2PocketSymbol(kind, point, radius, bubble) {
+  if (!window.BalloroBonusUI?.isV2) return;
+  const size = radius * 0.91 * bubble.scale;
+  ctx.save();
+  ctx.translate(point.x, point.y);
+  ctx.shadowBlur = radius * (0.32 + bubble.glowAlpha * 0.3);
+  ctx.lineJoin = "round";
+  if (kind === "diamond") {
+    ctx.shadowColor = "#ce79ff";
+    drawDiamondPath(0, 0, size);
+    ctx.fillStyle = "#d8a4ff";
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.5, radius * 0.1);
+    ctx.strokeStyle = "#9439d0";
+    ctx.stroke();
+    drawDiamondFacets(0, 0, size, "rgba(255, 236, 255, .9)");
+  } else {
+    const image = v2PocketSymbolImages[kind];
+    if (image?.complete && image.naturalWidth) {
+      ctx.shadowColor = kind === "blue" ? "#27ed4b" : kind === "lemon" ? "#ffdb36" : "#ff4a39";
+      // Align the fire's transparent bitmap with the other pocket symbols and
+      // keep its lower tip inside the rim.
+      const bounds = getV2PocketSymbolDrawBounds(kind, size);
+      ctx.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height);
+    }
+  }
+  ctx.restore();
+  drawV2PocketSymbolGlint(kind, point, size);
+}
+
+function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, outerGlowColor = null,
+  pulseInnerEdge = false) {
+  const pocket = zone.id === BLUE_FIELD_POCKET_ZONE_ID ? state.bluePocket : state.fieldPocket;
+  if (usesFieldPocketMechanics() && pocket?.finished) return;
+  const { puckRadius } = state.field;
+  const point = zone.screenHole;
+  const pulseSeed = 4.8 + zone.hole.x * 0.007 + zone.hole.y * 0.011;
+  const collectibleBubble = pulseInnerEdge ? getCollectibleIdleBubble(pulseSeed) : null;
+  const v2Visual = window.BalloroBonusUI?.isV2 && usesFieldPocketMechanics()
+    ? getV2PocketVisual(zone.id === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond") : null;
+  // Only the collectible bounces; the pocket rim stays still.
+  const pocketScale = 1;
+  const isPreparing = state.pucks.some((puck) => puck.secretRoom?.zoneId === zone.id
+    && ["capturing", "pocket_wait"].includes(puck.secretRoom.phase));
+  const radius = Math.max(6, puckRadius * pocketScale);
+  const activePocketStrokeColor = v2Visual?.stroke || (isPreparing
+    ? usesFieldPocketMechanics()
+      ? "rgba(117, 217, 255, 0.98)"
+      : "rgba(255, 255, 255, 0.98)"
+    : bonusGridActive
+      ? "rgba(202, 104, 255, 0.98)"
+      : pocketStrokeColor);
+
+  ctx.save();
+  if (isPreparing) {
+    if (usesFieldPocketMechanics()) {
+      const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
+      if (v2Visual) v2Visual.waves(point, radius, pulse);
+      else drawBlueReadyWaves(point, radius, pulse);
+    } else {
+      const pulse = 0.5 + Math.sin(performance.now() / 145) * 0.5;
+      drawWhiteReadyWaves(point, radius, pulse);
+    }
+  } else if (bonusGridActive && !v2Visual) {
+    drawPurpleNeonPocketGlow(point, radius);
+  }
+  if (pulseInnerEdge) {
+    drawPulsingFieldPocketSurface(point, radius, collectibleBubble,
+      v2Visual?.palette || BLUE_FIELD_POCKET_PALETTE,
+      activePocketStrokeColor, v2Visual?.glow || outerGlowColor || "rgba(117, 217, 255, 0.29)");
+    const symbolKind = zone.id === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond";
+    if (!pocket?.consumed && !state.counterFlyIns.some((flyIn) => flyIn.kind === symbolKind)) {
+      drawV2PocketSymbol(symbolKind, point, radius, collectibleBubble);
+    }
+  } else {
+    const hole = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+    hole.addColorStop(0, "#090b10");
+    hole.addColorStop(1, "#000000");
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = hole;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = activePocketStrokeColor;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
 function drawSecretPocketRimsOverlay() {
-  const bonusGridActive = state.crownsCollected >= getRequiredStars();
+  if (usesFieldPocketMechanics() && state.fieldPocket?.finished) return;
+  const bonusGridActive = isX10VisualActive();
   const radius = Math.max(6, state.field.puckRadius);
   SECRET_ZONE_IDS.map(getSecretZoneGeometry).forEach((zone) => {
     const isPreparing = state.pucks.some((puck) => puck.secretRoom?.zoneId === zone.id
@@ -2470,7 +2893,10 @@ function drawSecretPocketRimsOverlay() {
     ctx.arc(zone.screenHole.x, zone.screenHole.y, radius, 0, Math.PI * 2);
     ctx.strokeStyle = isPreparing
       ? usesFieldPocketMechanics()
-        ? "rgba(117, 217, 255, 0.98)"
+        ? window.BalloroBonusUI?.isV2
+          ? zone.id === BLUE_FIELD_POCKET_ZONE_ID
+            ? "rgba(55, 234, 78, 0.98)" : "rgba(202, 104, 255, 0.98)"
+          : "rgba(117, 217, 255, 0.98)"
         : "rgba(255, 255, 255, 0.98)"
       : bonusGridActive
         ? "rgba(202, 104, 255, 0.98)"
@@ -2491,96 +2917,455 @@ function drawSecretRooms(bonusGridActive, innerGridColor, borderGradient) {
   return zones;
 }
 
-function puckIsUsingSecretRoom(puck) {
-  const phase = puck.secretRoom?.phase;
-  return ["capturing", "pocket_wait", "pocket"].includes(phase);
+function getChanceRoomGridSize() {
+  return Math.max(2, Math.round(GRID_SIZE * 0.4));
 }
 
-function getBonusFieldCascadeTiming(col, row, size = 1) {
-  if (!state.animationsEnabled || !state.bonusFieldTransitionStartedAt) {
-    return { delay: 0, fieldProgress: 1, multiplierProgress: 1 };
+function traceChanceRoomVisibleBorder(room) {
+  tracePolygon(room.vertices);
+}
+
+function drawPurpleNeonChanceRoomStroke(room, baseWidth) {
+  if (!window.BalloroBonusUI?.isV2) {
+    drawPurpleNeonPolygonStroke(room.vertices, baseWidth);
+    return;
   }
-  const center = (GRID_SIZE - 1) / 2;
-  const cellCenterCol = col + (size - 1) / 2;
-  const cellCenterRow = row + (size - 1) / 2;
-  const radialDistance = Math.max(
-    Math.abs(cellCenterCol - center),
-    Math.abs(cellCenterRow - center)
-  );
-  const maximumDistance = Math.max(center, 0.5);
-  const waveTravelDuration = BONUS_FIELD_CASCADE_DURATION_MS
-    - BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS;
-  const delay = radialDistance / maximumDistance * waveTravelDuration;
-  const elapsed = performance.now() - state.bonusFieldTransitionStartedAt;
-  const fieldProgress = clamp(
-    (elapsed - delay) / BONUS_FIELD_CELL_REVEAL_DURATION_MS,
-    0,
-    1
-  );
-  const multiplierProgress = clamp(
-    (elapsed - delay) / BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS,
-    0,
-    1
-  );
-  return { delay, fieldProgress, multiplierProgress };
-}
-
-function getBonusFieldEdgeProgress() {
-  if (!state.animationsEnabled || !state.bonusFieldTransitionStartedAt) return 1;
-  const edgeStart = BONUS_FIELD_CASCADE_DURATION_MS
-    - BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS;
-  return clamp(
-    (performance.now() - state.bonusFieldTransitionStartedAt - edgeStart)
-      / BONUS_FIELD_MULTIPLIER_BOUNCE_DURATION_MS,
-    0,
-    1
-  );
-}
-
-function getBonusMultiplierBounceMotion(col, row, size, endY) {
-  const progress = getBonusFieldCascadeTiming(col, row, size).multiplierProgress;
-  if (progress <= 0) return { y: endY, alpha: 0, scale: 0 };
-  if (progress >= 1) return { y: endY, alpha: 1, scale: 1 };
-  const overshoot = 1.70158;
-  const shifted = progress - 1;
-  const scale = 1 + (overshoot + 1) * shifted ** 3 + overshoot * shifted ** 2;
-  return {
-    y: endY,
-    alpha: clamp(progress * 4, 0, 1),
-    scale: Math.max(0, scale)
-  };
-}
-
-function drawBonusFieldCascade(mergedMultiplierCells) {
-  const drawCascadeCell = (col, row, size = 1) => {
-    const rawProgress = getBonusFieldCascadeTiming(col, row, size).fieldProgress;
-    if (rawProgress <= 0) return;
-    const progress = rawProgress * rawProgress * (3 - 2 * rawProgress);
-    ctx.save();
-    ctx.globalAlpha = progress;
-    if (size > 1) {
-      drawMergedMultiplierCell(
-        { col, row, size },
-        "#14091b",
-        "rgba(190, 124, 234, 0.27)",
-        4
-      );
-    } else {
-      drawCell(col, row, "#14091b", "rgba(190, 124, 234, 0.27)", 4);
-    }
-    ctx.restore();
-  };
-
-  mergedMultiplierCells.groups.forEach((group) => {
-    drawCascadeCell(group.col, group.row, group.size);
+  const neonScale = getPurpleNeonPerformanceScale();
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  [
+    { width: baseWidth + 10, blur: 12, alpha: 0.11 },
+    { width: baseWidth + 3, blur: 5, alpha: 0.22 }
+  ].forEach((layer) => {
+    traceChanceRoomVisibleBorder(room);
+    ctx.strokeStyle = `rgba(204, 124, 255, ${layer.alpha * neonScale})`;
+    ctx.lineWidth = layer.width;
+    ctx.shadowColor = `rgba(202, 104, 255, ${0.62 * neonScale})`;
+    ctx.shadowBlur = Math.max(2, layer.blur * neonScale);
+    ctx.stroke();
   });
-  for (let row = 0; row < GRID_SIZE; row += 1) {
-    for (let col = 0; col < GRID_SIZE; col += 1) {
-      if (!mergedMultiplierCells.covered.has(`${col}_${row}`)) {
-        drawCascadeCell(col, row);
+  ctx.restore();
+}
+
+function getChanceRoomGeometry(id) {
+  const mainRadius = state.field.half * Math.SQRT2;
+  const halfDiagonal = mainRadius * 0.4;
+  const sharedCornerLayout = window.BalloroBonusUI?.isV2;
+  const centerDistance = mainRadius + halfDiagonal + CHANCE_ROOM_GAP_PX;
+  const horizontalOffset = sharedCornerLayout ? halfDiagonal : centerDistance * CHANCE_ROOM_CORNER_X_SHARE;
+  const verticalOffset = sharedCornerLayout
+    ? mainRadius + CHANCE_ROOM_V2_WALL_OFFSET_PX
+    : centerDistance * CHANCE_ROOM_CORNER_Y_SHARE;
+  const positions = {
+    "top-left": [-horizontalOffset, -verticalOffset],
+    "top-right": [horizontalOffset, -verticalOffset],
+    "bottom-right": [horizontalOffset, verticalOffset],
+    "bottom-left": [-horizontalOffset, verticalOffset]
+  };
+  const [offsetX, offsetY] = positions[id] || positions["top-left"];
+  const center = {
+    x: clamp(state.field.cx + offsetX,
+      CHANCE_ROOM_VIEWPORT_MARGIN_PX + halfDiagonal,
+      state.field.width - CHANCE_ROOM_VIEWPORT_MARGIN_PX - halfDiagonal),
+    y: clamp(state.field.cy + offsetY,
+      CHANCE_ROOM_VIEWPORT_MARGIN_PX + halfDiagonal,
+      state.field.height - CHANCE_ROOM_VIEWPORT_MARGIN_PX - halfDiagonal)
+  };
+  const halfSide = halfDiagonal / Math.SQRT2;
+  return {
+    id,
+    center,
+    halfDiagonal,
+    halfSide,
+    vertices: [
+      { x: center.x, y: center.y - halfDiagonal },
+      { x: center.x + halfDiagonal, y: center.y },
+      { x: center.x, y: center.y + halfDiagonal },
+      { x: center.x - halfDiagonal, y: center.y }
+    ]
+  };
+}
+
+function getChanceRoomEntryLocal(id, inset = 1) {
+  if (!window.BalloroBonusUI?.isV2) return { u: inset, v: inset };
+  return id === "bottom-left"
+    ? { u: inset, v: -inset }
+    : { u: -inset, v: inset };
+}
+
+function mapLegacyChanceFrameToV2(id, frame) {
+  if (!window.BalloroBonusUI?.isV2 || !Array.isArray(frame)) return frame;
+  const [u, v, vu, vv, ...rest] = frame;
+  return id === "bottom-left"
+    ? [u, -v, vu, -vv, ...rest]
+    : [-u, v, -vu, vv, ...rest];
+}
+
+function chanceRoomLocalToScreen(room, u, v) {
+  return {
+    x: room.center.x + (u - v) * room.halfSide / Math.SQRT2,
+    y: room.center.y + (u + v) * room.halfSide / Math.SQRT2
+  };
+}
+
+function getChancePresentationFrame(puck) {
+  if (window.BalloroBonusUI?.isV2 && !puck.chance.v2SharedEntryCoordinates) {
+    return mapLegacyChanceFrameToV2(puck.chance.roomId,
+      [puck.chance.u, puck.chance.v, puck.chance.vu || 0, puck.chance.vv || 0]);
+  }
+  return [puck.chance.u, puck.chance.v, puck.chance.vu || 0, puck.chance.vv || 0];
+}
+
+function getChancePuckScreenPoint(puck) {
+  const room = getChanceRoomGeometry(puck.chance.roomId);
+  const frame = getChancePresentationFrame(puck);
+  return chanceRoomLocalToScreen(room, frame[0], frame[1]);
+}
+
+function getChanceRoomMultiplier(id) {
+  return state.chanceRoomMultipliers[id] || getRiskBands().outer;
+}
+
+function drawChanceRoomPreviewPuck(point) {
+  const radius = state.field.puckRadius;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+  const gradient = ctx.createRadialGradient(
+    point.x - radius * 0.34,
+    point.y - radius * 0.38,
+    radius * 0.08,
+    point.x + radius * 0.12,
+    point.y + radius * 0.18,
+    radius * 1.08
+  );
+  gradient.addColorStop(0, "#ffffff");
+  gradient.addColorStop(0.3, "#fafaf6");
+  gradient.addColorStop(0.68, "#dfe4de");
+  gradient.addColorStop(1, "#929b94");
+  ctx.fillStyle = gradient;
+  ctx.shadowColor = "rgba(255, 255, 255, 0.48)";
+  ctx.shadowBlur = radius * 0.55;
+  ctx.fill();
+  ctx.lineWidth = Math.max(2, radius * 0.13);
+  ctx.strokeStyle = "rgba(22, 25, 25, 0.94)";
+  ctx.stroke();
+  const waveProgress = (performance.now() % 700) / 700;
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius * (1.05 + waveProgress * 0.8), 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 74, 82, ${0.85 * (1 - waveProgress)})`;
+  ctx.lineWidth = Math.max(2, radius * 0.1);
+  ctx.shadowColor = "rgba(255, 74, 82, 0.8)";
+  ctx.shadowBlur = radius * 0.6;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function isChanceRoomDimmed(id) {
+  const selected = state.chancePhase !== "spinning" && state.chanceSelectedRoomId === id;
+  const spinning = state.chancePhase === "spinning" && CHANCE_ROOM_IDS[state.chanceSpinRoomIndex] === id;
+  const won = state.chanceRoomOutcome?.roomId === id && state.chanceRoomOutcome.won;
+  const completed = state.chanceCompletedRoomIds.has(id);
+  const active = spinning || selected || won || completed;
+  return !active;
+}
+
+function getChanceFinalCueStrength(id, now = performance.now()) {
+  if (state.chanceFinalCueRoomId !== id || now >= state.chanceFinalCueUntil) return 0;
+  const elapsed = Math.max(0, now - state.chanceFinalCueStartedAt);
+  if (elapsed < 150) return 1 - elapsed / 150;
+  return 0;
+}
+
+function getChanceMultiplierCell(id = "bottom-left", gridSize = getChanceRoomGridSize()) {
+  const index = Math.floor((gridSize - 1) / 2);
+  let col = index;
+  let row = index;
+  if (window.BalloroBonusUI?.isV2 && gridSize % 2 === 0) {
+    if (id === "bottom-left") row += 1;
+    else col += 1;
+  }
+  return {
+    col,
+    row,
+    u: -1 + (col + 0.5) * 2 / gridSize,
+    v: -1 + (row + 0.5) * 2 / gridSize
+  };
+}
+
+function isChanceMultiplierHit(u, v, id = "bottom-left", gridSize = getChanceRoomGridSize()) {
+  const cell = getChanceMultiplierCell(id, gridSize);
+  return Math.floor((u + 1) * gridSize / 2) === cell.col
+    && Math.floor((v + 1) * gridSize / 2) === cell.row;
+}
+
+function drawChanceMultiplierCrown(roomId, center, fontSize, color, bonusGridActive) {
+  if (roomId !== "bottom-right") return;
+  if (window.BalloroBonusUI?.isV2) {
+    const icon = v2PocketSymbolImages.crown;
+    if (icon.complete && icon.naturalWidth) {
+      const size = Math.max(18, fontSize * .7);
+      ctx.save();
+      ctx.shadowColor = bonusGridActive ? "#c36aff" : "#ff4b37";
+      ctx.shadowBlur = size * .35;
+      if (bonusGridActive) ctx.filter = "hue-rotate(240deg)";
+      ctx.drawImage(icon, center.x - size * .5,
+        center.y - fontSize * .57 - size, size, size);
+      ctx.restore();
+    }
+    return;
+  }
+  const width = Math.max(18, fontSize * 0.72);
+  const height = Math.max(11, fontSize * 0.42);
+  const baseY = center.y - fontSize * 0.56;
+  const topY = baseY - height;
+  const traceCrown = () => {
+    ctx.beginPath();
+    ctx.moveTo(center.x - width * 0.5, baseY);
+    ctx.lineTo(center.x - width * 0.48, topY + height * 0.12);
+    ctx.lineTo(center.x - width * 0.2, topY + height * 0.58);
+    ctx.lineTo(center.x, topY);
+    ctx.lineTo(center.x + width * 0.2, topY + height * 0.58);
+    ctx.lineTo(center.x + width * 0.48, topY + height * 0.12);
+    ctx.lineTo(center.x + width * 0.5, baseY);
+    ctx.closePath();
+  };
+  ctx.save();
+  ctx.lineJoin = "round";
+  traceCrown();
+  if (bonusGridActive) {
+    const neonScale = getPurpleNeonPerformanceScale();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.shadowColor = `rgba(202, 104, 255, ${0.46 * neonScale})`;
+    ctx.shadowBlur = Math.max(2, 7 * neonScale);
+    ctx.lineWidth = Math.max(2, fontSize * 0.085);
+    ctx.strokeStyle = `rgba(187, 91, 255, ${0.22 * neonScale})`;
+    ctx.stroke();
+    ctx.shadowColor = `rgba(202, 104, 255, ${0.42 * neonScale})`;
+    ctx.shadowBlur = Math.max(2, 5 * neonScale);
+    ctx.fillStyle = color;
+    ctx.fill();
+  } else {
+    ctx.lineWidth = Math.max(1.5, fontSize * 0.055);
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.58)";
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawChanceRooms() {
+  const gridSize = getChanceRoomGridSize();
+  const bonusGridActive = isX10VisualActive();
+  CHANCE_ROOM_IDS.forEach((id) => {
+    const room = getChanceRoomGeometry(id);
+    const selected = state.chancePhase !== "spinning" && state.chanceSelectedRoomId === id;
+    const spinning = state.chancePhase === "spinning" && CHANCE_ROOM_IDS[state.chanceSpinRoomIndex] === id;
+    const won = state.chanceRoomOutcome?.roomId === id && state.chanceRoomOutcome.won;
+    const completed = state.chanceCompletedRoomIds.has(id);
+    const active = spinning || selected || won || completed;
+    const dimmed = isChanceRoomDimmed(id);
+    ctx.save();
+    tracePolygon(room.vertices);
+    ctx.fillStyle = bonusGridActive
+      ? "#14091b"
+      : active ? "rgba(18, 7, 9, 0.97)" : "rgba(2, 3, 5, 0.9)";
+    ctx.fill();
+    ctx.clip();
+    ctx.globalAlpha = dimmed ? 0.2 : 1;
+    ctx.beginPath();
+    for (let index = 1; index < gridSize; index += 1) {
+      const value = -1 + index * 2 / gridSize;
+      const a1 = chanceRoomLocalToScreen(room, value, -1);
+      const a2 = chanceRoomLocalToScreen(room, value, 1);
+      const b1 = chanceRoomLocalToScreen(room, -1, value);
+      const b2 = chanceRoomLocalToScreen(room, 1, value);
+      ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y);
+      ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y);
+    }
+    ctx.strokeStyle = bonusGridActive
+      ? "rgba(190, 124, 234, 0.46)"
+      : active ? "rgba(255, 84, 84, 0.38)" : "rgba(104, 39, 43, 0.28)";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    const roomPuck = state.pucks.find((puck) => puck.chance?.roomId === id
+      && ["inside", "settled"].includes(puck.chance.phase)) || null;
+    if (roomPuck?.chance && ["inside", "settled"].includes(roomPuck.chance.phase)) {
+      const presentationFrame = getChancePresentationFrame(roomPuck);
+      const cellCol = clamp(Math.floor((presentationFrame[0] + 1) * gridSize / 2), 0, gridSize - 1);
+      const cellRow = clamp(Math.floor((presentationFrame[1] + 1) * gridSize / 2), 0, gridSize - 1);
+      const u0 = -1 + cellCol * 2 / gridSize;
+      const u1 = -1 + (cellCol + 1) * 2 / gridSize;
+      const v0 = -1 + cellRow * 2 / gridSize;
+      const v1 = -1 + (cellRow + 1) * 2 / gridSize;
+      const puckCellCorners = [
+        chanceRoomLocalToScreen(room, u0, v0), chanceRoomLocalToScreen(room, u1, v0),
+        chanceRoomLocalToScreen(room, u1, v1), chanceRoomLocalToScreen(room, u0, v1)
+      ];
+      const winningCell = roomPuck.chance.phase === "settled" && state.chanceRoomOutcome?.won;
+      if (roomPuck.chance.phase === "inside" || winningCell) {
+        ctx.save();
+        if (winningCell) applyBigWinCellFlash(id);
+        if (winningCell && bonusGridActive) {
+          tracePolygon(puckCellCorners);
+          ctx.fillStyle = "rgba(202, 104, 255, 0.56)";
+          ctx.strokeStyle = "rgba(238, 202, 255, 0.98)";
+          ctx.lineWidth = 3;
+          ctx.fill();
+          ctx.stroke();
+          tracePolygon(puckCellCorners);
+          ctx.fillStyle = "rgba(130, 46, 200, 0.24)";
+          ctx.strokeStyle = "rgba(202, 104, 255, 0.86)";
+          ctx.fill();
+          ctx.stroke();
+        }
+        tracePolygon(puckCellCorners);
+        ctx.fillStyle = winningCell ? "rgba(255, 213, 77, 0.62)" : "rgba(117, 217, 255, 0.26)";
+        ctx.strokeStyle = winningCell ? "rgba(255, 245, 166, 0.98)" : "rgba(117, 217, 255, 0.54)";
+        ctx.lineWidth = 3;
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
       }
     }
+
+    const multiplierCell = getChanceMultiplierCell(id, gridSize);
+    const multiplierCenter = chanceRoomLocalToScreen(room, multiplierCell.u, multiplierCell.v);
+    const roomMultiplier = getChanceRoomMultiplier(id);
+    const displayedMultiplier = bonusGridActive ? roomMultiplier * 10 : roomMultiplier;
+    const multiplierText = getFieldMultiplierText(displayedMultiplier);
+    const multiplierColor = bonusGridActive
+      ? getBonusMultiplierColor(roomMultiplier)
+      : getMultiplierColor(roomMultiplier);
+    ctx.fillStyle = multiplierColor;
+    const maxTextWidth = room.halfDiagonal * 1.32 / gridSize;
+    let fontSize = Math.max(18, Math.min(78, state.field.grid * 0.41));
+    ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
+    while (ctx.measureText(multiplierText).width > maxTextWidth && fontSize > 12) {
+      fontSize -= 1;
+      ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
+    }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (bonusGridActive) {
+      drawPurpleNeonMultiplierText(multiplierText, multiplierCenter.x, multiplierCenter.y, multiplierColor);
+    } else {
+      ctx.fillText(multiplierText, multiplierCenter.x, multiplierCenter.y);
+    }
+    drawChanceMultiplierCrown(id, multiplierCenter, fontSize, multiplierColor, bonusGridActive);
+    ctx.restore();
+
+    const finalCueStrength = getChanceFinalCueStrength(id);
+    if (finalCueStrength > 0) {
+      const cueFill = bonusGridActive ? "202, 104, 255" : "255, 55, 62";
+      const cueStroke = bonusGridActive ? "214, 126, 255" : "255, 58, 64";
+      const cueEdge = bonusGridActive ? "244, 220, 255" : "255, 255, 255";
+      ctx.save();
+      traceChanceRoomVisibleBorder(room);
+      ctx.fillStyle = `rgba(${cueFill}, ${0.28 * finalCueStrength})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${cueStroke}, ${0.94 * finalCueStrength})`;
+      ctx.lineWidth = 13;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+      traceChanceRoomVisibleBorder(room);
+      ctx.strokeStyle = `rgba(${cueEdge}, ${0.98 * finalCueStrength})`;
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+  });
+}
+
+function drawChanceRoomBordersOverlay() {
+  const bonusGridActive = isX10VisualActive();
+  CHANCE_ROOM_IDS.forEach((id) => {
+    const room = getChanceRoomGeometry(id);
+    const selected = state.chancePhase !== "spinning" && state.chanceSelectedRoomId === id;
+    const spinning = state.chancePhase === "spinning" && CHANCE_ROOM_IDS[state.chanceSpinRoomIndex] === id;
+    const won = state.chanceRoomOutcome?.roomId === id && state.chanceRoomOutcome.won;
+    const completed = state.chanceCompletedRoomIds.has(id);
+    const active = spinning || selected || won || completed;
+    const dimmed = isChanceRoomDimmed(id);
+    ctx.save();
+    ctx.globalAlpha = dimmed ? 0.22 : 1;
+    traceChanceRoomVisibleBorder(room);
+    ctx.strokeStyle = bonusGridActive
+      ? active ? "rgba(226, 172, 255, 0.98)" : "rgba(166, 72, 226, 0.72)"
+      : active ? "#ff4b4b" : "rgba(139, 44, 49, 0.62)";
+    ctx.lineWidth = active ? 7 : 5;
+    ctx.shadowColor = bonusGridActive
+      ? active ? "rgba(202, 104, 255, 0.72)" : "rgba(166, 72, 226, 0.16)"
+      : active ? "rgba(255, 45, 45, 0.72)" : "rgba(255, 45, 45, 0.12)";
+    ctx.shadowBlur = active ? 18 : 5;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.restore();
+    if (bonusGridActive) {
+      ctx.save();
+      ctx.globalAlpha = dimmed ? 0.22 : 1;
+      drawPurpleNeonChanceRoomStroke(room, active ? 7 : 5);
+      ctx.restore();
+    }
+  });
+}
+
+function drawChanceRoomLaunchPreview() {
+  let id = null;
+  if (state.chancePhase === "spinning") id = CHANCE_ROOM_IDS[state.chanceSpinRoomIndex];
+  else if (state.chancePhase === "final_cue") id = state.chanceSelectedRoomId;
+  if (!id) return;
+  const room = getChanceRoomGeometry(id);
+  const entry = getChanceRoomEntryLocal(id);
+  drawChanceRoomPreviewPuck(chanceRoomLocalToScreen(room, entry.u, entry.v));
+}
+
+function getChancePocketGeometry() {
+  if (!state.chancePocket) return null;
+  const normalized = {
+    x: -1 + (state.chancePocket.col + 0.5) * 2 / GRID_SIZE,
+    y: -1 + (state.chancePocket.row + 0.5) * 2 / GRID_SIZE
+  };
+  const point = toScreen(normalized.x * state.field.half, normalized.y * state.field.half);
+  return { ...state.chancePocket, normalized, point };
+}
+
+function drawChancePocket() {
+  if (state.chancePocket?.finished) return;
+  const pocket = getChancePocketGeometry();
+  if (!pocket) return;
+  const collectibleBubble = getCollectibleIdleBubble(7.4);
+  const pocketScale = 1;
+  const radius = Math.max(6, state.field.puckRadius * pocketScale);
+  const capturedPuck = state.chanceCapturedPuck;
+  const visual = window.BalloroBonusUI?.isV2 ? getV2PocketVisual("crown") : null;
+  const waveActive = Boolean(capturedPuck)
+    && ["capturing", "captured", "sinking"].includes(state.chancePhase);
+  ctx.save();
+  if (waveActive) {
+    const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
+    (visual?.waves || drawRedReadyWaves)(pocket.point, radius, pulse);
   }
+  drawPulsingFieldPocketSurface(pocket.point, radius, collectibleBubble,
+    visual?.palette || RED_FIELD_POCKET_PALETTE,
+    visual?.stroke || "rgb(255, 74, 82)", visual?.glow || "rgba(255, 48, 58, 0.29)");
+  if (!state.chancePocket?.consumed
+    && !state.counterFlyIns.some((flyIn) => flyIn.kind === "crown")) {
+    drawV2PocketSymbol("crown", pocket.point, radius, collectibleBubble);
+  }
+  ctx.restore();
+}
+
+function puckIsUsingSecretRoom(puck) {
+  if (puck === state.multiPlusCapturedPuck
+    && ["capturing", "captured", "revealing"].includes(state.multiPlusPhase)) return true;
+  if (puck.chance && puck.chance.phase !== "settled") return true;
+  const phase = puck.secretRoom?.phase;
+  return ["capturing", "pocket_wait", "pocket"].includes(phase);
 }
 
 function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid) {
@@ -2589,11 +3374,9 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
       -half + grid * group.col + grid * group.size / 2,
       -half + grid * group.row + grid * group.size / 2
     );
-    const reveal = bonusGridActive
-      ? getBonusMultiplierBounceMotion(group.col, group.row, group.size, center.y)
-      : group.category === "multi_plus"
-        ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y)
-        : { y: center.y, alpha: 1, scale: 1 };
+    const reveal = group.category === "multi_plus"
+      ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y, group.col, group.row)
+      : { y: center.y, alpha: 1 };
     const displayedMultiplier = bonusGridActive ? group.multiplier * 10 : group.multiplier;
     const text = getFieldMultiplierText(displayedMultiplier, group.category);
     const maxTextWidth = grid * group.size * 1.02;
@@ -2601,6 +3384,7 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
     const multiplierColor = bonusGridActive
       ? getBonusMultiplierColor(group.multiplier)
       : getMultiplierColor(group.multiplier);
+    ctx.fillStyle = multiplierColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
@@ -2617,20 +3401,11 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         && puckCell.row >= group.row
         && puckCell.row < group.row + group.size;
     });
-    const idleOpacity = getIdleFieldMultiplierOpacity();
-    ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : idleOpacity) * reveal.alpha;
-    if (bonusGridActive && reveal.scale !== 1) {
-      ctx.translate(center.x, reveal.y);
-      ctx.scale(reveal.scale, reveal.scale);
-      ctx.translate(-center.x, -reveal.y);
-    }
+    ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
     if (bonusGridActive) {
-      drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor, hasPuck);
-    } else if (hasPuck) {
-      ctx.fillStyle = multiplierColor;
-      ctx.fillText(text, center.x, reveal.y);
+      drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
     } else {
-      drawFieldMultiplierOutlineText(text, center.x, reveal.y, multiplierColor, fontSize);
+      ctx.fillText(text, center.x, reveal.y);
     }
     ctx.restore();
   });
@@ -2650,16 +3425,15 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         -half + grid * row + grid / 2
       );
       const category = getCellCategory(col, row);
-      const reveal = bonusGridActive
-        ? getBonusMultiplierBounceMotion(col, row, 1, center.y)
-        : category === "multi_plus"
-          ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y)
-          : { y: center.y, alpha: 1, scale: 1 };
+      const reveal = category === "multi_plus"
+        ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y, col, row)
+        : { y: center.y, alpha: 1 };
       const displayedMultiplier = bonusGridActive ? multiplier * 10 : multiplier;
       const text = getFieldMultiplierText(displayedMultiplier, category);
       const maxTextWidth = grid * 1.02;
       let fontSize = Math.max(10, Math.min(42, grid * 0.42));
       const multiplierColor = bonusGridActive ? getBonusMultiplierColor(multiplier) : getMultiplierColor(multiplier);
+      ctx.fillStyle = multiplierColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
@@ -2673,37 +3447,21 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         const puckCell = getCellFromPoint(puck.x, puck.y);
         return puckCell.col === col && puckCell.row === row;
       });
-      const idleOpacity = getIdleFieldMultiplierOpacity();
-      ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : idleOpacity) * reveal.alpha;
-      if (bonusGridActive && reveal.scale !== 1) {
-        ctx.translate(center.x, reveal.y);
-        ctx.scale(reveal.scale, reveal.scale);
-        ctx.translate(-center.x, -reveal.y);
-      }
+      ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
       if (bonusGridActive) {
-        drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor, hasPuck);
-      } else if (hasPuck) {
-        ctx.fillStyle = multiplierColor;
-        ctx.fillText(text, center.x, reveal.y);
+        drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
       } else {
-        drawFieldMultiplierOutlineText(text, center.x, reveal.y, multiplierColor, fontSize);
+        ctx.fillText(text, center.x, reveal.y);
       }
       ctx.restore();
     }
   }
 }
 
-function getIdleFieldMultiplierOpacity() {
-  return FIELD_HUD_VISIBILITY_EXPERIMENT.enabled
-    ? FIELD_HUD_VISIBILITY_EXPERIMENT.idleOpacity
-    : FIELD_HUD_VISIBILITY_EXPERIMENT.fallbackIdleMultiplierOpacity;
-}
-
 function drawField() {
   const { half, grid } = state.field;
-  const bonusGridActive = state.crownsCollected >= getRequiredStars();
-  // Same perceived color as the former translucent line over #05070c, but without alpha seams.
-  const innerGridColor = "rgb(11, 57, 37)";
+  const bonusGridActive = isX10VisualActive();
+  const innerGridColor = bonusGridActive ? "rgba(190, 124, 234, 0.46)" : "rgba(27, 184, 102, 0.28)";
   const corners = [
     toScreen(-half, -half),
     toScreen(half, -half),
@@ -2712,29 +3470,33 @@ function drawField() {
   ];
 
   ctx.clearRect(0, 0, state.field.width, state.field.height);
-  ctx.fillStyle = "#010205";
+  ctx.fillStyle = document.body.classList.contains('slot-ui') ? "#000000" : "#010205";
   ctx.fillRect(0, 0, state.field.width, state.field.height);
+  drawChanceRooms();
 
-  const borderGradient = createFieldBorderGradient(corners, false);
-  const purpleBorderGradient = bonusGridActive ? createFieldBorderGradient(corners, true) : null;
+  const borderGradient = createFieldBorderGradient(corners, bonusGridActive);
   const secretZones = usesFieldPocketMechanics()
-    ? [getFieldPocketGeometry()].filter(Boolean)
+    ? [getFieldPocketGeometry(), state.bluePocket
+      ? getFieldPocketGeometry(state.bluePocket, BLUE_FIELD_POCKET_ZONE_ID) : null].filter(Boolean)
     : SECRET_ZONE_IDS.map(getSecretZoneGeometry);
   const cornerRadius = getFieldCornerRadius();
 
   ctx.save();
   traceRoundedPolygon(corners, cornerRadius);
-  ctx.fillStyle = "#05070c";
+  ctx.fillStyle = bonusGridActive ? "#14091b" : "#05070c";
   ctx.fill();
   ctx.clip();
 
+  for (let i = 0; i < 18; i += 1) {
+    const alpha = 0.02 + i * 0.002;
+    const offset = -half + (i / 17) * half * 2;
+    drawLine(toScreen(-half, offset), toScreen(half, offset), `rgba(117, 217, 255, ${alpha})`, 1);
+  }
+
   drawGridLines(half, grid, innerGridColor, 4);
   const mergedMultiplierCells = buildMergedMultiplierCells();
-  const fieldFill = "#05070c";
+  const fieldFill = bonusGridActive ? "#14091b" : "#05070c";
   eraseMergedMultiplierInternalLines(mergedMultiplierCells.groups, fieldFill);
-  if (bonusGridActive) {
-    drawBonusFieldCascade(mergedMultiplierCells);
-  }
 
   state.pucks.forEach((puck) => {
     if (puck.stopped || puckIsUsingSecretRoom(puck)) {
@@ -2747,14 +3509,14 @@ function drawField() {
         cell.col,
         cell.row,
         "rgba(202, 104, 255, 0.38)",
-        innerGridColor
+        "rgba(226, 172, 255, 0.92)"
       );
       drawMultiplierCellHighlight(
         mergedMultiplierCells,
         cell.col,
         cell.row,
         "rgba(130, 46, 200, 0.22)",
-        innerGridColor
+        "rgba(202, 104, 255, 0.68)"
       );
       return;
     }
@@ -2763,12 +3525,14 @@ function drawField() {
       cell.col,
       cell.row,
       "rgba(117, 217, 255, 0.26)",
-      innerGridColor
+      "rgba(117, 217, 255, 0.54)"
     );
   });
 
   state.settledCells.forEach((cell) => {
     if (!cell.squareWin) return;
+    ctx.save();
+    applyBigWinCellFlash("main");
     if (cell.purpleBoost) {
       drawMultiplierCellHighlight(
         mergedMultiplierCells,
@@ -2807,6 +3571,7 @@ function drawField() {
           "rgba(255, 238, 122, 0.98)"
         );
       }
+      ctx.restore();
       return;
     }
     drawMultiplierCellHighlight(
@@ -2832,53 +3597,39 @@ function drawField() {
         "rgba(255, 238, 122, 0.98)"
       );
     }
+    ctx.restore();
   });
 
   ctx.restore();
 
-  if (usesFieldPocketMechanics()) {
-    secretZones.forEach((zone) => drawSecretPocket(
-      zone,
-      "rgb(117, 217, 255)",
-      false,
-      "rgba(117, 217, 255, 0.29)",
-      true
-    ));
-  } else {
-    secretZones.forEach((zone) => drawSecretPocket(zone, "rgba(27, 184, 102, 0.62)", bonusGridActive));
-    drawSecretPocketRimsOverlay();
-  }
-
-  ctx.save();
-  traceRoundedPolygon(corners, cornerRadius);
-  ctx.strokeStyle = fieldFill;
-  ctx.lineWidth = 9;
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  ctx.stroke();
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalAlpha = getIdleFieldMultiplierOpacity();
   traceRoundedPolygon(corners, cornerRadius);
   ctx.strokeStyle = borderGradient;
   ctx.lineWidth = 9;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.stroke();
-  ctx.restore();
   if (bonusGridActive) {
-    const edgeProgress = getBonusFieldEdgeProgress();
-    ctx.save();
-    ctx.globalAlpha = edgeProgress;
-    traceRoundedPolygon(corners, cornerRadius);
-    ctx.strokeStyle = purpleBorderGradient;
-    ctx.lineWidth = 9;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.stroke();
     drawPurpleNeonPolygonStroke(corners, 9, cornerRadius);
-    ctx.restore();
+  }
+  // Room borders are the final wall layer so their inner vertices cannot be
+  // clipped by the thicker main-diamond stroke or its X10 neon glow.
+  drawChanceRoomBordersOverlay();
+  if (usesFieldPocketMechanics()) {
+    secretZones.forEach((zone) => drawSecretPocket(
+      zone,
+      zone.id === BLUE_FIELD_POCKET_ZONE_ID
+        ? window.BalloroBonusUI?.isV2 ? "rgb(55, 234, 78)" : "rgb(117, 217, 255)"
+        : "rgb(202, 104, 255)",
+      false,
+      zone.id === BLUE_FIELD_POCKET_ZONE_ID
+        ? window.BalloroBonusUI?.isV2 ? "rgba(55, 234, 78, 0.29)" : "rgba(117, 217, 255, 0.29)"
+        : "rgba(202, 104, 255, 0.29)",
+      true
+    ));
+    drawChancePocket();
+  } else {
+    secretZones.forEach((zone) => drawSecretPocket(zone, "rgba(27, 184, 102, 0.62)", bonusGridActive));
+    drawSecretPocketRimsOverlay();
   }
 }
 
@@ -2899,12 +3650,23 @@ function getRiskBands() {
   return bands[state.riskLevel] || bands.normal;
 }
 
+function getMultiPlusFieldMultiplier() {
+  const config = getMathConfiguration();
+  if (!config) return 0;
+  const values = [...new Set(["outer", "middle", "center"].flatMap((category) =>
+    (config.sector_definitions[category] || []).map((sector) =>
+      sector.multiplier ?? config.multiplier_table[category])))].filter((value) => value > 0)
+    .sort((a, b) => a - b);
+  // With only two visible tiers, EX MULTI uses the lower tier, never the maximum.
+  return values[Math.floor((values.length - 1) / 2)] || 0;
+}
+
 function getCellMultiplier(col, row) {
   const config = getMathConfiguration();
   if (!config) return 0;
   if (isMultiPlusVisualActive()
-    && config.multi_plus?.sectors?.some((sector) => sector.col === col && sector.row === row)) {
-    return config.multiplier_table.multi_plus;
+    && getActiveMultiPlusCells().some((sector) => sector.col === col && sector.row === row)) {
+    return getMultiPlusFieldMultiplier();
   }
   for (const category of ["center", "middle", "outer"]) {
     const sector = config.sector_definitions[category]
@@ -2959,6 +3721,14 @@ function interpolateMultiplierColor(multiplier) {
 }
 
 function withColorAlpha(color, alpha) {
+  const hex = color.match(/^#([\da-f]{3}|[\da-f]{6})$/i)?.[1];
+  if (hex) {
+    const expanded = hex.length === 3 ? [...hex].map((value) => value + value).join("") : hex;
+    const red = Number.parseInt(expanded.slice(0, 2), 16);
+    const green = Number.parseInt(expanded.slice(2, 4), 16);
+    const blue = Number.parseInt(expanded.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+  }
   return color.replace(/,\s*[\d.]+\)$/, `, ${alpha})`);
 }
 
@@ -3043,97 +3813,39 @@ function drawDiamondFacets(x, y, size, color) {
   ctx.stroke();
 }
 
-function getBonusProximityMetrics(x, y, target = null) {
-  const heldGlowIntensity = clamp(Number(target?.proximityGlowHeld) || 0, 0, 1);
-  if (!BONUS_PROXIMITY_VISUAL_EXPERIMENT.enabled
-    || !state.animationsEnabled
-    || !Number.isFinite(x)
-    || !Number.isFinite(y)) {
-    return { glowIntensity: heldGlowIntensity, pulseIntensity: 0 };
-  }
-
-  const positionedPucks = state.pucks.filter((puck) => Number.isFinite(puck.x)
-    && Number.isFinite(puck.y));
-  if (!positionedPucks.length) {
-    return { glowIntensity: heldGlowIntensity, pulseIntensity: 0 };
-  }
-  const movingPucks = positionedPucks.filter((puck) => !puck.stopped
-    && Number.isFinite(puck.speed)
-    && puck.speed > 0);
-
-  const puckRadius = state.field.puckRadius;
-  const symbolRadius = Number.isFinite(target?.radius) ? target.radius : puckRadius * 0.56;
-  const contactDistance = puckRadius + symbolRadius;
-  const triggerDistance = contactDistance + puckRadius * 2
-    * BONUS_PROXIMITY_VISUAL_EXPERIMENT.glowSurfaceGapInBallDiameters;
-  const distanceRange = Math.max(1, triggerDistance - contactDistance);
-  let glowIntensity = 0;
-  let pulseIntensity = 0;
-
-  positionedPucks.forEach((puck) => {
-    const distance = Math.hypot(puck.x - x, puck.y - y);
-    const proximity = clamp((triggerDistance - distance) / distanceRange, 0, 1);
-    glowIntensity = Math.max(glowIntensity, proximity);
-  });
-
-  movingPucks.forEach((puck) => {
-    const distance = Math.hypot(puck.x - x, puck.y - y);
-    const proximity = clamp((triggerDistance - distance) / distanceRange, 0, 1);
-    const hasLostHalfSpeed = Number.isFinite(puck.bonusPulseReferenceSpeed)
-      && puck.bonusPulseReferenceSpeed > 0
-      && puck.speed <= puck.bonusPulseReferenceSpeed
-        * BONUS_PROXIMITY_VISUAL_EXPERIMENT.maximumSpeedFraction;
-    if (hasLostHalfSpeed) pulseIntensity = Math.max(pulseIntensity, proximity);
-  });
-
-  if (target) {
-    // Keep the exact distance-based intensity, including already stopped balls, visible until
-    // launchPuck starts the next paid round and clears the stored values.
-    target.proximityGlowHeld = glowIntensity;
-  }
-  return { glowIntensity, pulseIntensity };
-}
-
-function clearBonusProximityGlowHolds() {
-  state.bonusStars.forEach((star) => { star.proximityGlowHeld = 0; });
-  if (state.multiPlusToken) state.multiPlusToken.proximityGlowHeld = 0;
-}
-
-function getCycleLockedPulseIntensity(target, seed, proximityIntensity, now) {
-  if (!target) return proximityIntensity;
-  const phase = now / BONUS_PROXIMITY_VISUAL_EXPERIMENT.pulseTimeScaleMs + seed;
-  const cycleIndex = Math.floor(phase / (Math.PI * 2));
-  if (target.proximityPulseCycle !== cycleIndex) {
-    target.proximityPulseCycle = cycleIndex;
-    target.proximityPulseIntensity = proximityIntensity;
-  }
-  return clamp(target.proximityPulseIntensity || 0, 0, 1);
-}
-
-function getCollectibleIdleBubble(seed = 0, glowIntensity = 0, pulseIntensity = 0, pulseTarget = null) {
+function getCollectibleIdleBubble(seed = 0) {
   if (!state.animationsEnabled) {
-    return { scale: 1, glowScale: 1, glowAlpha: 0, proximity: 0 };
+    return { scale: 1, glowScale: 1, glowAlpha: 1 };
   }
   const now = performance.now();
-  const glowProximity = Math.pow(clamp(glowIntensity, 0, 1), 1.12);
-  const pulseProximity = clamp(pulseIntensity, 0, 1);
-  const phase = now / BONUS_PROXIMITY_VISUAL_EXPERIMENT.pulseTimeScaleMs + seed;
-  const pulse = Math.pow(0.5 - Math.cos(phase) * 0.5, 1.35);
-  const lockedProximity = getCycleLockedPulseIntensity(pulseTarget, seed, pulseProximity, now);
-  const maximumMultiplier = BONUS_PROXIMITY_VISUAL_EXPERIMENT.maximumPulseAmplitudeMultiplier;
-  const pulseAmplitudeMultiplier = 1 + lockedProximity * (maximumMultiplier - 1);
-  const glowPulse = 0.48 + pulse * 0.4;
+  const mainWave = Math.sin(now / 260 + seed);
+  const beatWave = Math.sin(now / 132 + seed * 0.45 + 0.7);
+  const softWave = Math.sin(now / 540 + seed * 0.73 + 1.4);
+  const pop = Math.pow(0.5 + mainWave * 0.5, 1.35);
+  const beat = 0.5 + beatWave * 0.5;
   return {
-    scale: 1 + pulse * 0.14 * pulseAmplitudeMultiplier,
-    glowScale: 1.15 + pulse * 0.42 + glowProximity * (1.08 + pulse * 0.82),
-    glowAlpha: clamp(glowPulse * (1 + glowProximity * 0.82), 0, 1),
-    proximity: glowProximity
+    scale: 0.91 + pop * 0.21 + beat * 0.025 + softWave * 0.015,
+    glowScale: 1.02 + pop * 0.48 + beat * 0.08,
+    glowAlpha: 0.9 + pop * 0.3 + (0.5 + softWave * 0.5) * 0.22
   };
 }
 
 function drawPuck(puck, index) {
-  const puckRadius = state.field.puckRadius * (1 - (puck.pocketDepth || 0) * 0.18);
-  const point = toScreen(puck.x, puck.y);
+  if (["spinning", "final_cue"].includes(puck.chance?.phase)) return;
+  const chanceSinkProgress = puck.chance?.phase === "sinking"
+    ? clamp(((puck.pocketDepth || 0) - 0.55) / 0.45, 0, 1)
+    : 0;
+  const chanceSinkScale = puck.chance?.phase === "sinking"
+    ? Math.max(0.02, 1 - chanceSinkProgress)
+    : 1;
+  const puckRadius = state.field.puckRadius * (1 - (puck.pocketDepth || 0) * 0.18) * chanceSinkScale;
+  const point = puck.chance && ["inside", "settled"].includes(puck.chance.phase)
+    ? getChancePuckScreenPoint(puck)
+    : toScreen(puck.x, puck.y);
+  const chanceRoomDimmed = puck.chance?.roomId && isChanceRoomDimmed(puck.chance.roomId);
+
+  ctx.save();
+  if (chanceRoomDimmed) ctx.globalAlpha *= 0.2;
 
   ctx.beginPath();
   ctx.arc(point.x, point.y, puckRadius, 0, Math.PI * 2);
@@ -3205,9 +3917,45 @@ function drawPuck(puck, index) {
     ctx.stroke();
     drawDiamondFacets(point.x, point.y + puckRadius * 0.04, puckRadius * 0.88, "rgba(237, 196, 255, 0.68)");
   }
+  ctx.restore();
+}
+
+function isQuickTrailActiveForPuck(puck) {
+  if (!state.animationsEnabled || !state.quickPlay || !state.running || puck.stopped) return false;
+  const playbackSpeed = window.BalloroRoundTapes?.enabled
+    ? window.BalloroRoundTapes.playbackSpeed
+    : window.BalloroQuickPlayTiming?.recordedFrameSpeed(state, true) || 1;
+  if (playbackSpeed !== 3) return false;
+  if (["capturing", "captured", "pocket_wait"].includes(puck.secretRoom?.phase)) return false;
+  if (["capturing", "captured", "sinking", "spinning"].includes(puck.chance?.phase)) return false;
+  if (puck.multiPlusCapture || ["capturing", "captured", "revealing"].includes(state.multiPlusPhase)) return false;
+  return true;
+}
+
+function drawQuickPuckTrail(puck, now) {
+  if (!window.BalloroQuickTrail || ["spinning", "final_cue"].includes(puck.chance?.phase)) return;
+  const chanceSinkProgress = puck.chance?.phase === "sinking"
+    ? clamp(((puck.pocketDepth || 0) - 0.55) / 0.45, 0, 1)
+    : 0;
+  const radius = state.field.puckRadius * (1 - (puck.pocketDepth || 0) * 0.18)
+    * (puck.chance?.phase === "sinking" ? Math.max(0.02, 1 - chanceSinkProgress) : 1);
+  const point = puck.chance && ["inside", "settled"].includes(puck.chance.phase)
+    ? getChancePuckScreenPoint(puck)
+    : toScreen(puck.x, puck.y);
+  const alpha = puck.chance?.roomId && isChanceRoomDimmed(puck.chance.roomId) ? 0.2 : 1;
+  window.BalloroQuickTrail.draw(ctx, puck, point, radius, {
+    active: isQuickTrailActiveForPuck(puck), alpha, now,
+    bonusKind: puck.trailBonusKind || null
+  });
 }
 
 function drawPucks() {
+  // A recorded round's first frame already contains its launch ball. While
+  // holding Spin, show only the separate visual ball with ready waves; the
+  // recorded ball becomes visible on release when playback actually starts.
+  if (window.BalloroRoundTapes?.enabled && state.launchPrepared && !state.running) return;
+  const now = performance.now();
+  state.pucks.forEach((puck) => drawQuickPuckTrail(puck, now));
   state.pucks.forEach((puck, index) => drawPuck(puck, index));
 }
 
@@ -3247,28 +3995,20 @@ function drawBonusStar() {
 
     const point = toScreen(star.x, star.y);
     const outer = star.radius;
-    const proximityMetrics = getBonusProximityMetrics(star.x, star.y, star);
-    const bubble = getCollectibleIdleBubble(
-      (star.index ?? index) * 0.63 + index * 0.37,
-      proximityMetrics.glowIntensity,
-      proximityMetrics.pulseIntensity,
-      star
-    );
+    const bubble = getCollectibleIdleBubble((star.index ?? index) * 0.63 + index * 0.37);
     const visualOuter = outer * bubble.scale;
     const glowOuter = outer * bubble.glowScale;
     const starStrokeWidth = Math.max(3, outer * 0.28);
 
     ctx.save();
-    if (bubble.glowAlpha > 0.001) {
-      const glow = ctx.createRadialGradient(point.x, point.y, glowOuter * 0.1, point.x, point.y, glowOuter * 2.15);
-      glow.addColorStop(0, `rgba(232, 194, 255, ${0.6 * bubble.glowAlpha})`);
-      glow.addColorStop(0.48, `rgba(202, 104, 255, ${0.28 * bubble.glowAlpha})`);
-      glow.addColorStop(1, "rgba(202, 104, 255, 0)");
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, glowOuter * 2.15, 0, Math.PI * 2);
-      ctx.fillStyle = glow;
-      ctx.fill();
-    }
+    const glow = ctx.createRadialGradient(point.x, point.y, glowOuter * 0.1, point.x, point.y, glowOuter * 2.15);
+    glow.addColorStop(0, `rgba(232, 194, 255, ${0.34 * bubble.glowAlpha})`);
+    glow.addColorStop(0.48, `rgba(202, 104, 255, ${0.16 * bubble.glowAlpha})`);
+    glow.addColorStop(1, "rgba(202, 104, 255, 0)");
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, glowOuter * 2.15, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
 
     drawDiamondPath(point.x, point.y, visualOuter);
     ctx.lineWidth = starStrokeWidth + 2;
@@ -3277,7 +4017,7 @@ function drawBonusStar() {
     ctx.stroke();
 
     ctx.shadowColor = "rgba(218, 142, 255, 0.72)";
-    ctx.shadowBlur = bubble.glowAlpha > 0.001 ? glowOuter * bubble.glowAlpha * 1.05 : 0;
+    ctx.shadowBlur = glowOuter * 1.05;
     drawDiamondPath(point.x, point.y, visualOuter);
     ctx.fillStyle = "rgba(214, 171, 255, 0.96)";
     ctx.fill();
@@ -3294,48 +4034,24 @@ function drawBonusStar() {
 
 function drawMultiPlusToken() {
   const token = state.multiPlusToken;
-  if (!token || token.collected) return;
+  if (!token || token.finished) return;
   const point = toScreen(token.x, token.y);
-  const radius = token.radius;
-  const proximityMetrics = getBonusProximityMetrics(token.x, token.y, token);
-  const bubble = getCollectibleIdleBubble(
-    (token.col ?? 0) * 0.79 + (token.row ?? 0) * 1.13 + 2.4,
-    proximityMetrics.glowIntensity,
-    proximityMetrics.pulseIntensity,
-    token
-  );
-  const visualRadius = radius * bubble.scale;
-  const glowRadius = radius * bubble.glowScale;
-  const inner = visualRadius * 0.46;
-  const starStrokeWidth = Math.max(3, radius * 0.28);
+  const bubble = getCollectibleIdleBubble((token.col ?? 0) * 0.79 + (token.row ?? 0) * 1.13 + 2.4);
+  const radius = Math.max(6, state.field.puckRadius);
+  const visual = window.BalloroBonusUI?.isV2 ? getV2PocketVisual("lemon") : null;
 
   ctx.save();
-  if (bubble.glowAlpha > 0.001) {
-    const glow = ctx.createRadialGradient(point.x, point.y, glowRadius * 0.1, point.x, point.y, glowRadius * 2.15);
-    glow.addColorStop(0, `rgba(255, 224, 70, ${0.6 * bubble.glowAlpha})`);
-    glow.addColorStop(0.48, `rgba(255, 198, 20, ${0.28 * bubble.glowAlpha})`);
-    glow.addColorStop(1, "rgba(255, 198, 20, 0)");
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, glowRadius * 2.15, 0, Math.PI * 2);
-    ctx.fillStyle = glow;
-    ctx.fill();
+  if (["capturing", "captured", "revealing"].includes(state.multiPlusPhase)) {
+    const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
+    (visual?.waves || drawYellowReadyWaves)(point, radius, pulse);
   }
-
-  drawStarPath(point.x, point.y, visualRadius, inner);
-  ctx.lineWidth = starStrokeWidth + 2;
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.92)";
-  ctx.lineJoin = "round";
-  ctx.stroke();
-
-  ctx.shadowColor = "rgba(255, 215, 45, 0.72)";
-  ctx.shadowBlur = bubble.glowAlpha > 0.001 ? glowRadius * bubble.glowAlpha * 1.05 : 0;
-  drawStarPath(point.x, point.y, visualRadius, inner);
-  ctx.fillStyle = "rgba(255, 235, 128, 0.98)";
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.lineWidth = starStrokeWidth;
-  ctx.strokeStyle = "rgba(255, 198, 20, 0.98)";
-  ctx.stroke();
+  drawPulsingFieldPocketSurface(point, radius, bubble,
+    visual?.palette || YELLOW_FIELD_POCKET_PALETTE,
+    visual?.stroke || "rgb(255, 213, 61)", visual?.glow || "rgba(255, 213, 61, 0.29)");
+  if (!token.consumed && !token.collected
+    && !state.counterFlyIns.some((flyIn) => flyIn.kind === "lemon")) {
+    drawV2PocketSymbol("lemon", point, radius, bubble);
+  }
   ctx.restore();
 }
 
@@ -3345,13 +4061,24 @@ function drawStarBursts() {
   ctx.globalCompositeOperation = "lighter";
   state.starBursts.forEach((burst) => {
     const yellow = burst.theme === "yellow";
+    const blue = burst.theme === "blue";
+    const green = burst.theme === "green";
+    const red = burst.theme === "red";
     const progress = Math.min(1, (now - burst.startedAt) / burst.duration);
     const alpha = Math.pow(1 - progress, 1.8);
     const flashRadius = 8 + progress * 24;
     const flash = ctx.createRadialGradient(burst.x, burst.y, 0, burst.x, burst.y, flashRadius);
-    flash.addColorStop(0, yellow ? `rgba(255, 244, 155, ${alpha * 0.92})` : `rgba(235, 196, 255, ${alpha * 0.9})`);
-    flash.addColorStop(0.35, yellow ? `rgba(255, 211, 61, ${alpha * 0.58})` : `rgba(202, 104, 255, ${alpha * 0.55})`);
-    flash.addColorStop(1, yellow ? "rgba(255, 190, 20, 0)" : "rgba(202, 104, 255, 0)");
+    flash.addColorStop(0, yellow ? `rgba(255, 244, 155, ${alpha * 0.92})`
+      : green ? `rgba(195, 255, 192, ${alpha * 0.9})`
+      : blue ? `rgba(205, 246, 255, ${alpha * 0.9})`
+        : red ? `rgba(255, 205, 208, ${alpha * 0.9})` : `rgba(235, 196, 255, ${alpha * 0.9})`);
+    flash.addColorStop(0.35, yellow ? `rgba(255, 211, 61, ${alpha * 0.58})`
+      : green ? `rgba(55, 234, 78, ${alpha * 0.55})`
+      : blue ? `rgba(106, 218, 255, ${alpha * 0.55})`
+        : red ? `rgba(255, 78, 91, ${alpha * 0.55})` : `rgba(202, 104, 255, ${alpha * 0.55})`);
+    flash.addColorStop(1, yellow ? "rgba(255, 190, 20, 0)" : green
+      ? "rgba(55, 234, 78, 0)" : blue
+      ? "rgba(106, 218, 255, 0)" : red ? "rgba(255, 78, 91, 0)" : "rgba(202, 104, 255, 0)");
     if (yellow) {
       drawStarPath(burst.x, burst.y, flashRadius, flashRadius * 0.42);
     } else {
@@ -3371,7 +4098,10 @@ function drawStarBursts() {
       ctx.lineTo(x, y + size);
       ctx.lineTo(x - size, y);
       ctx.closePath();
-      ctx.fillStyle = yellow ? `rgba(255, 218, 61, ${alpha})` : `rgba(213, 122, 255, ${alpha})`;
+      ctx.fillStyle = yellow ? `rgba(255, 218, 61, ${alpha})` : green
+        ? `rgba(76, 241, 92, ${alpha})` : blue
+        ? `rgba(123, 222, 255, ${alpha})` : red
+          ? `rgba(255, 92, 100, ${alpha})` : `rgba(213, 122, 255, ${alpha})`;
       ctx.fill();
     });
   });
@@ -3423,8 +4153,43 @@ function getCrownCounterTargetPoint(index) {
   return getCanvasRelativeCenter(slots[targetIndex]);
 }
 
-function getMultiPlusCounterTargetPoint() {
-  return getCanvasRelativeCenter(els.multiPlusCounter?.querySelector(".multi-plus-icon"));
+function getMultiPlusCounterTargetPoint(index = 0) {
+  return getCanvasRelativeCenter(els.multiPlusCounter?.querySelectorAll(".v2-lemon-slots .v2-lemon")[index]
+    || els.multiPlusCounter?.querySelector(".multi-plus-icon"));
+}
+
+function recordV2PocketPickup(kind, x, y, radius, onArrival = null) {
+  if (!window.BalloroBonusUI?.isV2) return false;
+  const previous = state.v2BonusProgress[kind];
+  const target = kind === "diamond" ? getCrownCounterTargetPoint(previous)
+    : kind === "lemon" ? getMultiPlusCounterTargetPoint(previous)
+      : kind === "blue" ? getCanvasRelativeCenter(els.pocketBonusCounter?.querySelector(".v2-blue-symbol"))
+        : getCanvasRelativeCenter(els.chanceBonusCounter?.querySelectorAll(".v2-crown-slots .v2-crown")[previous]);
+  const activated = previous + 1 >= V2_BONUS_THRESHOLDS[kind];
+  let arrived = false;
+  const complete = () => {
+    if (arrived) return;
+    arrived = true;
+    const awarded = claimV2BonusSymbol(kind);
+    onArrival?.(awarded);
+    updateCrownCounter();
+    updateChanceBonusCounter();
+    updateMultiPlusCounter();
+    updatePocketBonusCounter();
+    const counter = kind === "diamond" ? els.crownCounter?.closest(".crown-bonus-counter")
+      : kind === "lemon" ? els.multiPlusCounter
+        : kind === "crown" ? els.chanceBonusCounter : els.pocketBonusCounter;
+    if (counter) {
+      counter.classList.remove("v2-meter-arrival");
+      void counter.offsetWidth;
+      counter.classList.add("v2-meter-arrival");
+      setTimeout(() => counter.classList.remove("v2-meter-arrival"), 430);
+    }
+  };
+  if (!spawnCounterFlyIn(kind, toScreen(x, y), target, radius, complete)) complete();
+  spawnStarBurst({ x, y, radius }, kind === "lemon" ? "yellow"
+    : kind === "blue" ? "green" : kind === "crown" ? "red" : "purple");
+  return activated;
 }
 
 function startCounterFlyInAnimation() {
@@ -3438,13 +4203,19 @@ function createCounterFlyInElement(kind) {
     return null;
   }
   const element = document.createElement("span");
-  element.className = `counter-flyin-symbol ${kind === "diamond" ? "is-diamond" : "is-star"}`;
+  element.className = `counter-flyin-symbol ${kind === "diamond" ? "is-diamond" : kind === "lemon" ? "is-lemon" : kind === "crown" ? "is-crown" : kind === "blue" ? "is-blue" : "is-star"}`;
   element.style.width = "1px";
   element.style.height = "1px";
   element.style.opacity = "0";
   element.style.transform = "translate3d(-1000px, -1000px, 0)";
-  element.innerHTML = kind === "diamond"
+  element.innerHTML = kind === "lemon"
+    ? '<img src="assets/duckies-star.svg" alt="">'
+    : kind === "crown"
+    ? '<img src="assets/duckies-fire.png" alt="">'
+    : kind === "diamond"
     ? '<svg viewBox="0 0 100 100" aria-hidden="true"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg>'
+    : kind === "blue"
+    ? '<img src="assets/duckies-cactus.svg" alt="">'
     : '<svg viewBox="0 0 100 100" aria-hidden="true"><path class="multi-plus-star-body" d="M47.6 17.58Q50 12 52.4 17.58L59.17 33.29Q60.27 35.86 63.06 36.12L80.09 37.7Q86.14 38.26 81.57 42.27L68.73 53.56Q66.62 55.4 67.24 58.13L71 74.81Q72.34 80.74 67.11 77.64L52.4 68.91Q50 67.48 47.6 68.91L32.89 77.64Q27.66 80.74 29 74.81L32.76 58.13Q33.38 55.4 31.27 53.56L18.43 42.27Q13.86 38.26 19.91 37.7L36.94 36.12Q39.73 35.86 40.83 33.29Z"/></svg>';
   els.counterFlyInLayer.append(element);
   return element;
@@ -3475,11 +4246,16 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
     source,
     target,
     sourceSize,
+    // The yellow pocket uses a smaller collision token. Grow its star during
+    // the lift so the flight starts at the same visual size as other symbols.
+    liftSize: window.BalloroBonusUI?.isV2 && kind === "lemon"
+      ? Math.max(sourceSize, state.field.puckRadius) : sourceSize,
     targetSize,
     startedAt: performance.now(),
-    holdDuration: COUNTER_PICKUP_HOLD_DURATION_MS,
-    flightDuration: COUNTER_FLY_IN_DURATION_MS,
-    duration: COUNTER_PICKUP_HOLD_DURATION_MS + COUNTER_FLY_IN_DURATION_MS,
+    holdDuration: window.BalloroBonusUI?.isV2 ? 315 : COUNTER_PICKUP_HOLD_DURATION_MS,
+    flightDuration: window.BalloroBonusUI?.isV2 ? 300 : COUNTER_FLY_IN_DURATION_MS,
+    duration: window.BalloroBonusUI?.isV2 ? 615
+      : COUNTER_PICKUP_HOLD_DURATION_MS + COUNTER_FLY_IN_DURATION_MS,
     element: createCounterFlyInElement(kind),
     onComplete
   };
@@ -3491,20 +4267,22 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
 
 function getCounterFlyInMotion(flyIn, now) {
   const elapsed = Math.max(0, now - flyIn.startedAt);
-  const holdLift = Math.max(22, state.field.puckRadius * 1.2);
+  const v2Icon = window.BalloroBonusUI?.isV2;
+  const holdLift = v2Icon ? Math.max(38, state.field.puckRadius * 2.15)
+    : Math.max(22, state.field.puckRadius * 1.2);
   if (elapsed < flyIn.holdDuration) {
     const holdProgress = clamp(elapsed / flyIn.holdDuration, 0, 1);
-    const riseProgress = clamp(holdProgress / 0.3, 0, 1);
+    const riseProgress = clamp(holdProgress / (v2Icon ? 0.58 : 0.3), 0, 1);
     const riseEased = 1 - Math.pow(1 - riseProgress, 3);
     const jumpOvershoot = Math.sin(riseProgress * Math.PI) * 0.12;
     const hover = holdProgress > 0.3
       ? Math.sin((holdProgress - 0.3) / 0.7 * Math.PI * 2) * 1.4
       : 0;
-    const scale = 1 + riseEased;
+    const liftedSize = flyIn.liftSize * (v2Icon ? 1.35 : 2);
     return {
       x: flyIn.source.x,
       y: flyIn.source.y - holdLift * (riseEased + jumpOvershoot) - hover,
-      size: flyIn.sourceSize * scale,
+      size: flyIn.sourceSize + (liftedSize - flyIn.sourceSize) * riseEased,
       alpha: 1,
       rotationDegrees: flyIn.kind === "multiPlus" ? Math.sin(holdProgress * Math.PI * 2) * 6 : 0
     };
@@ -3516,8 +4294,8 @@ function getCounterFlyInMotion(flyIn, now) {
   const x = flyIn.source.x + (flyIn.target.x - flyIn.source.x) * eased;
   const y = flightStartY + (flyIn.target.y - flightStartY) * eased;
   const arcLift = Math.sin(progress * Math.PI) * Math.max(18, state.field.puckRadius * 1.1);
-  const size = flyIn.sourceSize * 2
-    + (flyIn.targetSize - flyIn.sourceSize * 2) * eased;
+  const startSize = flyIn.liftSize * (v2Icon ? 1.35 : 2);
+  const size = startSize + (flyIn.targetSize - startSize) * eased;
   const pop = 1 + Math.sin(progress * Math.PI) * 0.1;
   return {
     x,
@@ -3649,6 +4427,7 @@ function animateCounterFlyIns() {
   if (completedFlyIn) {
     updateCrownCounter();
     updateMultiPlusCounter();
+    updateChanceBonusCounter();
   }
   if (callbacks.length) {
     callbacks.forEach((callback) => callback());
@@ -3664,7 +4443,7 @@ function animateCounterFlyIns() {
 function hasVisibleCollectibles() {
   return state.bonusStars.some((star) => !star.collected)
     || Boolean(state.multiPlusToken && !state.multiPlusToken.collected)
-    || (usesFieldPocketMechanics() && Boolean(state.fieldPocket));
+    || (usesFieldPocketMechanics() && Boolean(state.fieldPocket || state.bluePocket));
 }
 
 function animateCollectibleIdle(timestamp = performance.now()) {
@@ -3693,12 +4472,10 @@ function startCollectibleIdleAnimation() {
 function animateResultReveal() {
   state.resultRevealFrame = null;
   const now = performance.now();
-  const bonusFieldRevealActive = state.bonusFieldTransitionStartedAt > 0
-    && now - state.bonusFieldTransitionStartedAt < BONUS_FIELD_CASCADE_DURATION_MS;
   const fieldRevealActive = state.multiPlusActive
     && state.multiPlusActivatedAt > 0
     && now - state.multiPlusActivatedAt < RESULT_BOOST_REVEAL_DURATION_MS;
-  const revealActive = bonusFieldRevealActive || fieldRevealActive || state.pucks.some((puck) => puck.result?.multiplier > 0
+  const revealActive = now - bigWinEffect.startedAt < BIG_WIN_DURATION_MS || fieldRevealActive || state.pucks.some((puck) => puck.result?.multiplier > 0
     && (now - (puck.resultRevealStartedAt || 0) < RESULT_BOOST_REVEAL_DURATION_MS
       || now - (puck.result.boostRevealStartedAt || 0) < RESULT_BOOST_REVEAL_DURATION_MS));
   if (!state.running) render();
@@ -3717,12 +4494,54 @@ function startResultRevealAnimation() {
   }
 }
 
-function getMultiplierRevealMotion(startedAt, endY) {
+function getMultiplierRevealMotion(startedAt, endY, col = -1, row = -1) {
   if (!state.animationsEnabled || !startedAt) return { y: endY, alpha: 1 };
   const elapsed = performance.now() - startedAt;
+  if (state.multiPlusPhase === "revealing") {
+    return { y: endY, alpha: 0 };
+  }
   const progress = clamp(elapsed / RESULT_BOOST_REVEAL_DURATION_MS, 0, 1);
   const eased = 1 - Math.pow(1 - progress, 3);
   return { y: endY + (1 - eased) * 26, alpha: progress };
+}
+
+function drawMultiPlusRoomsBlinkVisual(now = performance.now()) {
+  if (state.multiPlusPhase !== "revealing" || !state.multiPlusActivatedAt) return;
+  if (!state.multiPlusNeonCells.length) return;
+  const { half, grid } = state.field;
+  const chasing = now - state.multiPlusRevealStartedAt < MULTI_PLUS_NEON_DURATION_MS;
+  const flash = now < state.multiPlusNeonFlashUntil;
+  const pulse = 0.62 + Math.sin(now / 58) * 0.22;
+
+  state.multiPlusNeonCells.forEach((cell, index) => {
+    // Recorded EX MULTI chases can predate the green pocket's placement rule.
+    // Never paint a yellow cell underneath a still-visible green pocket.
+    if (isBluePocketCoveringCell(cell)) return;
+    const center = toScreen(
+      -half + grid * (cell.col + 0.5),
+      -half + grid * (cell.row + 0.5)
+    );
+    const glowColor = flash ? "rgba(255,255,255,0.98)" : "rgba(255, 214, 52, 0.98)";
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = chasing ? clamp(pulse + (index % 3) * 0.08, 0.5, 1) : 1;
+    drawCell(
+      cell.col,
+      cell.row,
+      flash ? "rgba(255,255,255,0.34)" : "rgba(255, 193, 24, 0.12)",
+      glowColor,
+      flash ? 4 : 2
+    );
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `1000 ${Math.max(11, Math.min(42, grid * 0.42))}px Inter, system-ui, sans-serif`;
+    ctx.fillStyle = flash ? "#ffffff" : "#ffd83d";
+    ctx.shadowColor = flash ? "#ffffff" : "rgba(255, 194, 20, 0.96)";
+    ctx.shadowBlur = flash ? 26 : 14 + pulse * 12;
+    ctx.fillText(getFieldMultiplierText(cell.multiplier, "multi_plus"), center.x, center.y);
+    ctx.restore();
+  });
 }
 
 function spawnStarBurst(star, theme = "purple") {
@@ -3775,10 +4594,11 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const { width, height } = getWinningTextMetrics(text, font);
-    const glowRadius = Math.max(width * 0.78, height * 1.35);
+    const mobileGlowScale = state.field.width <= 720 ? 1.16 : 1;
+    const glowRadius = Math.max(width * 0.88, height * 1.52) * mobileGlowScale;
     const glow = ctx.createRadialGradient(x, y, 2, x, y, glowRadius);
-    glow.addColorStop(0, bonusGlow ? "rgba(214, 171, 255, 0.58)" : withColorAlpha(color, 0.34));
-    glow.addColorStop(0.48, bonusGlow ? "rgba(142, 63, 190, 0.22)" : withColorAlpha(color, 0.12));
+    glow.addColorStop(0, bonusGlow ? "rgba(214, 171, 255, 0.68)" : withColorAlpha(color, 0.5));
+    glow.addColorStop(0.5, bonusGlow ? "rgba(142, 63, 190, 0.3)" : withColorAlpha(color, 0.2));
     glow.addColorStop(1, bonusGlow ? "rgba(112, 42, 153, 0)" : withColorAlpha(color, 0));
     ctx.fillStyle = glow;
     ctx.fillRect(x - glowRadius, y - glowRadius, glowRadius * 2, glowRadius * 2);
@@ -3810,7 +4630,12 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
   ctx.textBaseline = "middle";
   const resultPucks = state.pucks.filter((puck) => puck.result?.multiplier > 0);
   const getRevealMotion = (puck, point) => {
-    return getMultiplierRevealMotion(puck.resultRevealStartedAt, point.y - 34);
+    const endY = point.y - 34;
+    if (!state.animationsEnabled || !puck.resultRevealStartedAt) return { y: endY, alpha: 1 };
+    const progress = clamp((performance.now() - puck.resultRevealStartedAt)
+      / RESULT_BOOST_REVEAL_DURATION_MS, 0, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    return { y: endY + (1 - eased) * 26, alpha: progress };
   };
   const getBoostRevealMotion = (puck, point) => {
     if (!state.animationsEnabled || !puck.result?.boostRevealStartedAt) return null;
@@ -3825,21 +4650,27 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
   };
   const resultItems = resultPucks
     .map((puck) => {
-      const point = toScreen(puck.x, puck.y);
+      const point = puck.chance && ["inside", "settled"].includes(puck.chance.phase)
+        ? getChancePuckScreenPoint(puck)
+        : toScreen(puck.x, puck.y);
       const reveal = getRevealMotion(puck, point);
       const boostReveal = getBoostRevealMotion(puck, point);
-      const canUseBonusMultiplier = (bonusVisualActive || puck.result.x10Boosted) && !puck.result.secretRoom;
+      const canUseBonusMultiplier = (bonusVisualActive || puck.result.x10Boosted)
+        && (!puck.result.secretRoom || puck.result.chanceRoom);
       const resultMultiplier = puck.result.multiplier * (canUseBonusMultiplier ? 10 : 1);
       const classification = classifyResult(resultMultiplier, puck.result.category);
       const resultText = getMultiplierText(resultMultiplier);
-      const resultColor = puck.result.purpleBoost
+      const resultColor = puck.result.chanceRoom && !canUseBonusMultiplier
+        ? getMultiplierColor(puck.result.multiplier)
+        : puck.result.purpleBoost
         ? getBonusResultColor(Math.max(1, puck.result.multiplier / PURPLE_POCKET_MULTIPLIER))
         : canUseBonusMultiplier
         ? getBonusResultColor(puck.result.multiplier)
         : puck.result.secretRoom
           ? getBonusResultColor(getSecretRoomBaseMultiplier())
           : getMultiplierColor(puck.result.multiplier);
-      const baseFontSize = classification.celebrate ? 30 : 23;
+      const mobileResultScale = state.field.width <= 720 ? 1.16 : 1;
+      const baseFontSize = (classification.celebrate ? 30 : 23) * mobileResultScale;
       const fontSize = (canUseBonusMultiplier || puck.result.secretRoom || puck.result.purpleBoost) ? baseFontSize * 1.2 : baseFontSize;
       const font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
       const metrics = getWinningTextMetrics(resultText, font);
@@ -3848,14 +4679,16 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
         x: point.x,
         y: boostReveal?.newY ?? reveal.y,
         baseY: boostReveal?.newY ?? reveal.y,
-        alpha: boostReveal?.progress ?? reveal.alpha,
+        alpha: reveal.alpha
+          * (bigWinEffect.winners.has(puck) && performance.now() - bigWinEffect.startedAt < BIG_WIN_DURATION_MS
+            && state.animationsEnabled ? 0.35 + 0.65 * getBigWinPulse() : 1),
         resultText,
         resultColor,
         font,
         boostReveal: boostReveal ? {
           oldText: getMultiplierText(puck.result.multiplier),
           oldColor: getMultiplierColor(puck.result.multiplier),
-          oldFont: `1000 ${classification.celebrate ? 30 : 23}px Inter, system-ui, sans-serif`,
+          oldFont: `1000 ${(classification.celebrate ? 30 : 23) * mobileResultScale}px Inter, system-ui, sans-serif`,
           oldY: boostReveal.oldY,
           alpha: 1 - boostReveal.progress
         } : null,
@@ -3939,20 +4772,143 @@ function classifyResult(multiplier, category = "") {
   return { key: bigWin ? "big_win" : "win", label: bigWin ? "BIG WIN" : "WIN", color: null, celebrate: true };
 }
 
+const BIG_WIN_DURATION_MS = 2600;
+let bigWinEffect = { roundId: null, count: 0, startedAt: -Infinity, winners: new Set(), boostedWinners: new Set(), voices: [] };
+
+function stopBigWinSound() {
+  bigWinEffect.voices.forEach((voice) => { try { voice.stop(); } catch (_) { /* already ended */ } });
+  bigWinEffect.voices = [];
+}
+
+function playBigWinFanfare(level) {
+  stopBigWinSound();
+  if (state.soundEffectsMuted) return;
+  duckBackgroundMusic(BIG_WIN_DURATION_MS);
+  const audio = getAudioContext();
+  if (!audio) return;
+  if (audio.state === "suspended") audio.resume();
+  const pitch = Math.pow(2, (Math.min(3, level) - 1) * 3 / 12);
+  const notes = [0, 4, 7, 12, 7, 12, 16, 19, 24];
+  notes.forEach((note, index) => {
+    const start = audio.currentTime + index * 0.19;
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "triangle";
+    oscillator.frequency.value = 261.63 * pitch * Math.pow(2, note / 12);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.11, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.65);
+    oscillator.connect(gain);
+    gain.connect(getAudioOutput(audio));
+    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    oscillator.start(start);
+    oscillator.stop(start + 0.7);
+    bigWinEffect.voices.push(oscillator);
+  });
+}
+
+function updateBigWinEffect(now = performance.now()) {
+  if (bigWinEffect.roundId !== state.roundId) {
+    stopBigWinSound();
+    bigWinEffect = { roundId: state.roundId, count: 0, startedAt: -Infinity, winners: new Set(), boostedWinners: new Set(), voices: [] };
+  }
+  state.pucks.forEach((puck) => {
+    const result = puck.result;
+    if (!puck.stopped || !result || result.multiplier <= 0) return;
+    const previousWinner=bigWinEffect.winners.has(puck);
+    const boostEncore=previousWinner && result.x10Boosted && !bigWinEffect.boostedWinners.has(puck);
+    if(previousWinner && !boostEncore)return;
+    const premium = result.chanceRoom || (["outer", "middle", "center"].includes(result.category)
+      && result.multiplier >= getMainFieldMaximumMultiplier());
+    if (!premium && !boostEncore) return;
+    bigWinEffect.winners.add(puck);
+    if(result.x10Boosted)bigWinEffect.boostedWinners.add(puck);
+    bigWinEffect.count += 1;
+    bigWinEffect.startedAt = now;
+    playBigWinFanfare(Math.min(3, bigWinEffect.count));
+    startResultRevealAnimation();
+  });
+}
+
+function getBigWinPulse(now = performance.now()) {
+  const elapsed = now - bigWinEffect.startedAt;
+  if (!state.animationsEnabled || elapsed < 0 || elapsed >= BIG_WIN_DURATION_MS) return 0;
+  return (0.5 + 0.5 * Math.cos(elapsed / 1000 * Math.PI * 5))
+    * Math.min(1, (BIG_WIN_DURATION_MS - elapsed) / 350);
+}
+
+function getBigWinWallRoomIds() {
+  return new Set([...bigWinEffect.winners].map((puck) =>
+    puck.result.chanceRoom ? puck.chance?.roomId : "main").filter(Boolean));
+}
+
+function applyBigWinCellFlash(roomId, now = performance.now()) {
+  const elapsed = now - bigWinEffect.startedAt;
+  if (!state.animationsEnabled || elapsed < 0 || elapsed >= BIG_WIN_DURATION_MS
+      || !getBigWinWallRoomIds().has(roomId)) return;
+  const pulse = getBigWinPulse(now);
+  ctx.globalAlpha *= 0.18 + pulse * 0.82;
+  ctx.shadowColor = "#ffd54d";
+  ctx.shadowBlur = 4 + pulse * 24;
+}
+
+function drawBigWinWalls() {
+  const pulse = getBigWinPulse();
+  if (!pulse) return;
+  const half = state.field.half;
+  const winningRooms = getBigWinWallRoomIds();
+  const outlines = [];
+  const purple = isX10VisualActive();
+  if (winningRooms.has("main")) {
+    outlines.push({ vertices: [toScreen(-half, -half), toScreen(half, -half),
+      toScreen(half, half), toScreen(-half, half)], color: purple ? "#ca68ff" : "#1bb866", room: null });
+  }
+  CHANCE_ROOM_IDS.filter((id) => winningRooms.has(id)).forEach((id) => {
+    const room = getChanceRoomGeometry(id);
+    outlines.push({ vertices: room.vertices, color: purple ? "#ca68ff" : "#ff4b4b", room });
+  });
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = pulse;
+  ctx.lineWidth = 11;
+  ctx.lineJoin = "round";
+  ctx.shadowBlur = 42;
+  outlines.forEach(({ vertices, color, room }) => {
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    if (room) traceChanceRoomVisibleBorder(room);
+    else tracePolygon(vertices);
+    ctx.stroke();
+    ctx.save();
+    ctx.lineWidth = 5;
+    ctx.shadowBlur = 14;
+    ctx.stroke();
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
 function render() {
+  document.body.classList.toggle("x10-visual-active", isX10VisualActive());
+  updateBigWinEffect();
   updatePocketBonusCounter();
+  updateChanceBonusCounter();
   drawField();
+  drawBigWinWalls();
   const { half, grid } = state.field;
-  const bonusGridActive = state.crownsCollected >= getRequiredStars();
+  const bonusGridActive = isX10VisualActive();
   drawMainFieldMultiplierLabels(buildMergedMultiplierCells(), bonusGridActive, half, grid);
+  drawMultiPlusRoomsBlinkVisual();
   // Collectible symbols stay above field labels; moving pucks are drawn above every field layer.
   drawMultiPlusToken();
   drawBonusStar();
   drawStarBursts();
   drawLaunchPrimePreview();
-  drawResultOverlay({ text: false });
   drawPucks();
-  // Field labels are below pucks, while their earlier pass remains above pocket rims.
+  // The selected LUCKY SHOT launch ball must remain above both joined walls.
+  drawChanceRoomLaunchPreview();
+  // Result gradients sit above the puck surface but below their multiplier text.
+  drawResultOverlay({ text: false });
   drawResultOverlay({ glows: false });
   drawPhysicsDebugOverlay();
   updatePhysicsDebug();
@@ -3972,7 +4928,9 @@ function updatePhysicsDebug() {
     `running: ${state.running}`,
     `active puck objects: ${state.pucks.length}`,
     `trajectory plans: ${state.trajectoryPlans.length}`,
-    `puck phases: ${state.pucks.map((puck) => puck.secretRoom?.phase || (puck.stopped ? "stopped" : "field")).join(", ") || "none"}`,
+    `puck phases: ${state.pucks.map((puck) => puck.chance?.phase || puck.secretRoom?.phase || (puck.stopped ? "stopped" : "field")).join(", ") || "none"}`,
+    `chance pocket: ${state.chancePocket ? `${state.chancePocket.col}_${state.chancePocket.row}${state.chancePocket.forced ? " forced" : ""}` : "none"}`,
+    `chance phase: ${state.chancePhase}`,
     `bonus expected: ${Boolean(state.roundOutcome?.bonus_triggered)}`,
     `bonus visually collected: ${visualCollected}/${getRequiredStars()}`
   ];
@@ -4451,12 +5409,91 @@ function selectRoundFieldPocket(roundOutcome) {
   return null;
 }
 
+function selectPrototypeFieldPocket() {
+  const candidates = (getMathConfiguration()?.sector_definitions?.empty || [])
+    .filter((sector) => sector.index >= 0
+      && !(sector.col === GRID_SIZE - 1 && sector.row === GRID_SIZE - 1));
+  const selected = candidates[Math.floor(randomPrototypeUnit() * candidates.length)];
+  return selected ? { ...selected } : null;
+}
+
+function selectV2BluePocket(roundOutcome) {
+  if (!window.BalloroBonusUI?.isV2 || !usesFieldPocketMechanics()) return null;
+  const blocked = new Set([state.fieldPocket, state.chancePocket,
+    roundOutcome?.multi_plus_position].filter(Boolean).map(cell => `${cell.col}_${cell.row}`));
+  const candidates = [];
+  for (let row = 0; row < GRID_SIZE; row++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
+      if ((col !== GRID_SIZE - 1 || row !== GRID_SIZE - 1)
+        && getCellMultiplier(col, row) === 0 && !blocked.has(`${col}_${row}`)) {
+        candidates.push({ col, row });
+      }
+    }
+  }
+  if (!candidates.length) return null;
+  const rng = window.PuckLuckMath.createRng(((roundOutcome?.seed || 1) ^ 0x424c5545) >>> 0);
+  return { ...candidates[rng.int(candidates.length)] };
+}
+
+function selectRoundChancePocket(roundOutcome, trajectories = []) {
+  if (!usesFieldPocketMechanics() || !roundOutcome) return null;
+  const candidates = [];
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      if (state.fieldPocket?.col === col && state.fieldPocket?.row === row) continue;
+      if (col === GRID_SIZE - 1 && row === GRID_SIZE - 1) continue;
+      if (getCellMultiplier(col, row) > 0) continue;
+      candidates.push({ col, row });
+    }
+  }
+  if (!candidates.length) return null;
+  const forceChance = new URLSearchParams(window.location.search).get("forceChance") === "1";
+  if (forceChance && trajectories[0]?.frames?.length) {
+    const frames = trajectories[0].frames;
+    const scored = candidates.map((candidate) => {
+      const center = {
+        x: -1 + (candidate.col + 0.5) * 2 / GRID_SIZE,
+        y: -1 + (candidate.row + 0.5) * 2 / GRID_SIZE
+      };
+      let distance = Infinity;
+      let frameIndex = 0;
+      frames.forEach((frame, index) => {
+        const value = Math.hypot(frame[1] - center.x, frame[2] - center.y);
+        if (value < distance) { distance = value; frameIndex = index; }
+      });
+      return { ...candidate, distance, forceFrameIndex: frameIndex };
+    }).sort((a, b) => a.distance - b.distance);
+    return { ...scored[0], forced: true };
+  }
+  const rng = window.PuckLuckMath.createRng((roundOutcome.seed ^ 0x4348414e) >>> 0);
+  return { ...candidates[rng.int(candidates.length)], forced: false };
+}
+
+function getMainFieldMaximumMultiplier() {
+  let maximumMultiplier = 0;
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      maximumMultiplier = Math.max(maximumMultiplier, getCellMultiplier(col, row));
+    }
+  }
+  return maximumMultiplier || getRiskBands().center;
+}
+
+function createChanceRoomMultipliers() {
+  const maximumMultiplier = getMainFieldMaximumMultiplier();
+  return Object.fromEntries(CHANCE_ROOM_IDS.map((id) => [
+    id,
+    id === "bottom-right" ? maximumMultiplier * 10 : maximumMultiplier
+  ]));
+}
+
 function planRuntimeFieldPocketTrajectory({
   result,
   seed,
   existingPlans = [],
   startPoint = null,
-  releaseIndex = 0
+  releaseIndex = 0,
+  avoidPockets = []
 }) {
   const planner = window.PuckLuckTrajectoryPlanner;
   const config = getMathConfiguration();
@@ -4490,6 +5527,8 @@ function planRuntimeFieldPocketTrajectory({
     if (!trajectory.valid) continue;
     if (!result.secret_room
       && !planner.trajectoryClearsPockets(trajectory.frames, puckRadius, [pocket])) continue;
+    if (avoidPockets.length
+      && !planner.trajectoryClearsPockets(trajectory.frames, puckRadius, avoidPockets)) continue;
     if (trajectoryConflictsWithRound(trajectory, existingPlans, puckRadius)) continue;
     trajectory.id = `field-pocket-${releaseIndex}-${result.result_path || result.visual_seed}-${attempt}`;
     trajectory.target_category = result.category;
@@ -4508,6 +5547,99 @@ function planRuntimeFieldPocketTrajectory({
     return trajectory;
   }
   return null;
+}
+
+function randomPrototypeUnit() {
+  if (window.crypto?.getRandomValues) {
+    const value = new Uint32Array(1);
+    window.crypto.getRandomValues(value);
+    return value[0] / 4294967296;
+  }
+  return Math.random();
+}
+
+function buildRandomPrototypeTrajectory(startPoint = null, angleCenter = -135) {
+  if (window.BalloroSavedPaths?.enabled) {
+    return window.BalloroSavedPaths.field(GRID_SIZE, startPoint, randomPrototypeUnit());
+  }
+  const planner = window.PuckLuckTrajectoryPlanner;
+  const config = getMathConfiguration();
+  const puckRadius = config?.puck_radius || 0.1;
+  const start = 1 - puckRadius * 1.8;
+  const origin = startPoint || { x: start, y: start };
+  let fallback = null;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const angleDegrees = angleCenter + (randomPrototypeUnit() - 0.5) * 76;
+    const duration = 2.25 + randomPrototypeUnit() * 0.55;
+    const trajectory = planner.simulateTrajectoryFromAngle({
+      lines: GRID_SIZE,
+      puckRadius,
+      startPoint: origin,
+      angleDegrees,
+      launchForce: planner.VISUAL_PHYSICS.visual_launch_force,
+      dampingPerStep: 0.972,
+      duration
+    });
+    fallback ||= trajectory;
+    if (trajectory.bounce_count < planner.VISUAL_PHYSICS.min_bounces
+      || trajectory.bounce_count > planner.VISUAL_PHYSICS.max_bounces) continue;
+    trajectory.id = `pocket-test-${Date.now()}-${attempt}-${Math.floor(randomPrototypeUnit() * 1e9)}`;
+    trajectory.target_category = "physical";
+    trajectory.recent_usage_count = 0;
+    trajectory.stagger_delay = 0;
+    return trajectory;
+  }
+  fallback.id = `pocket-test-fallback-${Date.now()}-${Math.floor(randomPrototypeUnit() * 1e9)}`;
+  fallback.target_category = "physical";
+  fallback.recent_usage_count = 0;
+  fallback.stagger_delay = 0;
+  return fallback;
+}
+
+function applyPocketTestPrototypePlan(roundOutcome, trajectoryResult) {
+  if (!POCKET_TEST_RANDOM_PHYSICS) return;
+  trajectoryResult.valid = true;
+  trajectoryResult.reason = null;
+  trajectoryResult.plans = roundOutcome.puck_results.map(() => buildRandomPrototypeTrajectory());
+  roundOutcome.star_positions = getFixedBonusSymbolSlots(GRID_SIZE, state.puckCount).diamonds.map((slot) => ({
+    index: slot.row * GRID_SIZE + slot.col,
+    x: slot.x,
+    y: slot.y,
+    row: slot.row,
+    col: slot.col,
+    collected: true,
+    assigned_puck: -1,
+    assigned_result_path: null,
+    collect_time: null,
+    pickup_phase: "physical"
+  }));
+  roundOutcome.stars_collected = getRequiredStars();
+  roundOutcome.bonus_triggered = false;
+  roundOutcome.paid_bonus_triggered = false;
+  roundOutcome.multi_plus_triggered = false;
+}
+
+function placePrototypeMultiPlusPosition(roundOutcome) {
+  if (!POCKET_TEST_RANDOM_PHYSICS) return;
+  const blocked = new Set([
+    state.fieldPocket && `${state.fieldPocket.col}_${state.fieldPocket.row}`,
+    state.chancePocket && `${state.chancePocket.col}_${state.chancePocket.row}`,
+    `${GRID_SIZE - 1}_${GRID_SIZE - 1}`,
+    ...roundOutcome.star_positions.map((star) => `${star.col}_${star.row}`)
+  ].filter(Boolean));
+  const candidates = (getMathConfiguration()?.sector_definitions?.empty || [])
+    .filter((cell) => cell.index >= 0 && !blocked.has(`${cell.col}_${cell.row}`));
+  const cell = candidates[Math.floor(randomPrototypeUnit() * candidates.length)] || { col: 0, row: 0 };
+  roundOutcome.multi_plus_position = {
+    index: cell.row * GRID_SIZE + cell.col,
+    row: cell.row,
+    col: cell.col,
+    collected: true,
+    assigned_puck: -1,
+    assigned_result_path: null,
+    collect_time: null,
+    pickup_phase: "physical"
+  };
 }
 
 function buildTrajectoryPlans(roundOutcome) {
@@ -4618,11 +5750,7 @@ function getFixedBonusSymbolSlots(lines, puckCount) {
     { side: "bottom", x: -sevenLineOffsets[2], y: edgeCellCenter },
     { side: "left", x: -edgeCellCenter, y: -sevenLineOffsets[3] }
   ];
-  const diamondSides = lines === 7 && puckCount === 2
-    ? [1, 3]
-    : lines === 7 && puckCount === 3
-      ? [0, 1, 2]
-      : puckCount === 1 ? [1] : puckCount === 2 ? [1, 2] : [1, 2, 3];
+  const diamondSides = lines === 7 ? [0, 1, 2] : [1, 2, 3];
   const toSlot = (anchorIndex, type, index) => {
     const anchor = anchors[anchorIndex];
     return {
@@ -4783,7 +5911,7 @@ function buildFixedBonusSymbolPlan(roundOutcome, trajectories) {
   const symbols = slots.diamonds;
   const diamondMask = (1 << symbols.length) - 1;
   const hitRadius = config.puck_radius * 1.56;
-  const desiredDiamonds = roundOutcome.bonus_triggered ? state.puckCount : roundOutcome.stars_collected;
+  const desiredDiamonds = roundOutcome.bonus_triggered ? getRequiredStars() : roundOutcome.stars_collected;
 
   let optionsByPuck = roundOutcome.puck_results.map((result) =>
     collectFixedTrajectoryOptions(result, config, symbols, hitRadius, true));
@@ -4852,7 +5980,7 @@ function buildVisualStarPlanLegacy(roundOutcome, trajectories) {
   const eligibleStarCells = config.sector_definitions.empty.filter((sector) => sector.index >= 0
     && sector.index !== launchIndex);
   const eligibleStarCellKeys = new Set(eligibleStarCells.map((sector) => `${sector.col}_${sector.row}`));
-  const collectedNeeded = roundOutcome.bonus_triggered ? state.puckCount : roundOutcome.stars_collected;
+  const collectedNeeded = roundOutcome.bonus_triggered ? getRequiredStars() : roundOutcome.stars_collected;
   let candidatesByPuck;
   let touchedCells;
   for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -4975,7 +6103,7 @@ function buildVisualStarPlanLegacy(roundOutcome, trajectories) {
     }
     return null;
   }
-  while (stars.length < state.puckCount) {
+  while (stars.length < getRequiredStars()) {
     let cell = null;
     let position = null;
     while (fallbackCells.length && !position) {
@@ -5010,10 +6138,15 @@ function buildVisualMultiPlusPlanLegacy(roundOutcome, trajectories) {
   const launchIndex = GRID_SIZE * GRID_SIZE - 1;
   const stars = roundOutcome.star_positions || [];
   const starCellKeys = new Set(stars.map((star) => `${star.col}_${star.row}`));
+  const occupiedPocketCellKeys = new Set([
+    state.fieldPocket && `${state.fieldPocket.col}_${state.fieldPocket.row}`,
+    state.chancePocket && `${state.chancePocket.col}_${state.chancePocket.row}`
+  ].filter(Boolean));
   const multiPlusCellKeys = new Set((config.multi_plus?.sectors || []).map((sector) => `${sector.col}_${sector.row}`));
   const emptyCells = config.sector_definitions.empty.filter((sector) => sector.index >= 0
     && sector.index !== launchIndex
     && !starCellKeys.has(`${sector.col}_${sector.row}`)
+    && !occupiedPocketCellKeys.has(`${sector.col}_${sector.row}`)
     && (!roundOutcome.multi_plus_triggered || !multiPlusCellKeys.has(`${sector.col}_${sector.row}`)));
   if (!emptyCells.length) {
     return { valid: false, reason: "no_empty_cells_for_multi_plus_token" };
@@ -5032,18 +6165,20 @@ function buildVisualMultiPlusPlanLegacy(roundOutcome, trajectories) {
       for (let index = 1; index < frames.length - 1; index += 3) {
         const frame = frames[index];
         const progress = index / (frames.length - 1);
-        const x = frame[1];
-        const y = frame[2];
+        const pathX = frame[1];
+        const pathY = frame[2];
         const cell = {
-          col: clamp(Math.floor(((x + 1) / 2) * GRID_SIZE), 0, GRID_SIZE - 1),
-          row: clamp(Math.floor(((y + 1) / 2) * GRID_SIZE), 0, GRID_SIZE - 1)
+          col: clamp(Math.floor(((pathX + 1) / 2) * GRID_SIZE), 0, GRID_SIZE - 1),
+          row: clamp(Math.floor(((pathY + 1) / 2) * GRID_SIZE), 0, GRID_SIZE - 1)
         };
+        const x = -1 + (cell.col + 0.5) * 2 / GRID_SIZE;
+        const y = -1 + (cell.row + 0.5) * 2 / GRID_SIZE;
         if (progress < 0.08 || progress > 0.72) continue;
         if (Math.abs(x) > 1 - borderMargin || Math.abs(y) > 1 - borderMargin) continue;
         if (!collectibleSymbolClearsFieldObstaclesNormalized(x, y, tokenRadius)) continue;
         if (!emptyCellKeys.has(`${cell.col}_${cell.row}`)) continue;
         if (!clearsStars(x, y)) continue;
-        candidates.push({ frame, index, progress, puckIndex, orderIndex });
+        candidates.push({ frame, index, progress, puckIndex, orderIndex, x, y, cell });
       }
     });
     if (!candidates.length) {
@@ -5060,10 +6195,10 @@ function buildVisualMultiPlusPlanLegacy(roundOutcome, trajectories) {
       result.multi_plus = index === selected.puckIndex;
     });
     roundOutcome.multi_plus_position = {
-      x: frame[1],
-      y: frame[2],
-      col: clamp(Math.floor(((frame[1] + 1) / 2) * GRID_SIZE), 0, GRID_SIZE - 1),
-      row: clamp(Math.floor(((frame[2] + 1) / 2) * GRID_SIZE), 0, GRID_SIZE - 1),
+      x: selected.x,
+      y: selected.y,
+      col: selected.cell.col,
+      row: selected.cell.row,
       collected: true,
       assigned_puck: selected.puckIndex,
       collect_time: frame[0],
@@ -5113,13 +6248,8 @@ function buildVisualMultiPlusPlanLegacy(roundOutcome, trajectories) {
   const cellSize = 2 / GRID_SIZE;
   for (let attempt = 0; attempt < 600; attempt += 1) {
     const cell = emptyCells[rng.int(emptyCells.length)];
-    const padding = tokenRadius + 0.014;
-    const left = Math.max(-1 + borderMargin, -1 + cell.col * cellSize + padding);
-    const right = Math.min(1 - borderMargin, -1 + (cell.col + 1) * cellSize - padding);
-    const top = Math.max(-1 + borderMargin, -1 + cell.row * cellSize + padding);
-    const bottom = Math.min(1 - borderMargin, -1 + (cell.row + 1) * cellSize - padding);
-    const x = left + rng.next() * Math.max(0, right - left);
-    const y = top + rng.next() * Math.max(0, bottom - top);
+    const x = -1 + (cell.col + 0.5) * cellSize;
+    const y = -1 + (cell.row + 0.5) * cellSize;
     if (!collectibleSymbolClearsFieldObstaclesNormalized(x, y, tokenRadius)) continue;
     if (!clearsStars(x, y)) continue;
     if (touchesAnyPuckPath(x, y)) continue;
@@ -5360,18 +6490,13 @@ function createPuck(index, count, outcomePlan = null, trajectory = null) {
   const speed = outcomePlan?.launch_force || getMathConfiguration()?.fixed_launch_force || 1250;
   const target = outcomePlan?.sector || { col: GRID_SIZE - 1, row: GRID_SIZE - 1 };
   const firstFrame = trajectory?.frames?.[0];
-  const initialVx = firstFrame ? firstFrame[3] * half : Math.cos(angle) * speed;
-  const initialVy = firstFrame ? firstFrame[4] * half : Math.sin(angle) * speed;
-  const bonusPulseReferenceSpeed = Math.hypot(initialVx, initialVy)
-    * (firstFrame ? INITIAL_REPLAY_PLAYBACK_RATE : 1);
 
   const puck = {
     x: firstFrame ? firstFrame[1] * half : start,
     y: firstFrame ? firstFrame[2] * half : start,
-    vx: initialVx,
-    vy: initialVy,
+    vx: firstFrame ? firstFrame[3] * half : Math.cos(angle) * speed,
+    vy: firstFrame ? firstFrame[4] * half : Math.sin(angle) * speed,
     speed,
-    bonusPulseReferenceSpeed,
     age: 0,
     bounceCount: 0,
     requiredBounces: outcomePlan?.required_bounces || 3,
@@ -5398,11 +6523,46 @@ function createPuck(index, count, outcomePlan = null, trajectory = null) {
   return puck;
 }
 
+function keepBonusStarsOutsidePocketCells(stars) {
+  const { half, grid } = state.field;
+  // The yellow token is created after the stars; use its planned cell here.
+  const pockets = [state.fieldPocket, state.chancePocket, state.roundOutcome?.multi_plus_position];
+  const blocked = new Set(pockets.filter(Boolean).map((cell) => `${cell.col}_${cell.row}`));
+  const candidates = [];
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      const key = `${col}_${row}`;
+      // Multiplier cells are eligible too; only pockets and the launch cell are excluded.
+      if (!blocked.has(key)
+          && !(col === GRID_SIZE - 1 && row === GRID_SIZE - 1)) candidates.push({ col, row });
+    }
+  }
+  const rng = window.PuckLuckMath.createRng((state.roundOutcome?.seed || 1) ^ 0x4449414d);
+  stars.forEach((star, index) => {
+    const cell = candidates.splice(rng.int(candidates.length), 1)[0];
+    // Equal local offsets project vertically: upper/lower diamond corners.
+    // Inset the symbol slightly so it stays inside its cell and clear of the walls.
+    const inset = Math.min(grid * 0.24, Math.max(grid * 0.17, star.radius + 3));
+    const offset = rng.int(2) === 0 ? inset : grid - inset;
+    star.x = -half + grid * cell.col + offset;
+    star.y = -half + grid * cell.row + offset;
+    star.col = cell.col;
+    star.row = cell.row;
+    const planned = state.roundOutcome?.star_positions?.[index];
+    if (planned) Object.assign(planned, {
+      col: cell.col, row: cell.row, index: cell.row * GRID_SIZE + cell.col,
+      x: star.x / half, y: star.y / half
+    });
+  });
+  return stars;
+}
+
 function createBonusStars() {
+  if (window.BalloroBonusUI?.isV2) return [];
   const { half, grid, puckRadius } = state.field;
   const starRadius = puckRadius * 0.56;
   if (state.roundOutcome?.star_positions) {
-    return state.roundOutcome.star_positions.map((star, index) => ({
+    return keepBonusStarsOutsidePocketCells(state.roundOutcome.star_positions.map((star, index) => ({
       x: Number.isFinite(star.x) ? star.x * half : -half + grid * (star.col + 0.5),
       y: Number.isFinite(star.y) ? star.y * half : -half + grid * (star.row + 0.5),
       col: star.col,
@@ -5415,7 +6575,7 @@ function createBonusStars() {
       pickupBounceCount: star.pickup_bounce_count ?? null,
       pickupPhase: star.pickup_phase || (star.collected ? "unspecified" : "not_collected"),
       collected: false
-    }));
+    })));
   }
   const cells = [];
   for (let row = 0; row < GRID_SIZE; row += 1) {
@@ -5456,15 +6616,16 @@ function createBonusStars() {
       collected: false
     });
   }
-  return stars;
+  return keepBonusStarsOutsidePocketCells(stars);
 }
 
 function createMultiPlusToken() {
   const token = state.roundOutcome?.multi_plus_position;
   if (!token) return null;
+  const { half, grid } = state.field;
   return {
-    x: token.x * state.field.half,
-    y: token.y * state.field.half,
+    x: -half + grid * (token.col + 0.5),
+    y: -half + grid * (token.row + 0.5),
     col: token.col,
     row: token.row,
     radius: state.field.puckRadius * 0.56,
@@ -5473,7 +6634,8 @@ function createMultiPlusToken() {
     assignedResultPath: token.assigned_result_path || null,
     collectAfter: token.collect_time,
     pickupBounceCount: token.pickup_bounce_count,
-    collected: false
+    collected: false,
+    plannedCaptureConsumed: false
   };
 }
 
@@ -5491,7 +6653,7 @@ function launchBonusPuck() {
 function collectBonusStarByTouch(puck) {
   for (let index = state.bonusStars.length - 1; index >= 0; index -= 1) {
     const star = state.bonusStars[index];
-    if (star.collected || !star.shouldCollect || star.assignedResultPath) {
+    if (star.collected) {
       continue;
     }
 
@@ -5501,7 +6663,6 @@ function collectBonusStarByTouch(puck) {
     }
 
     collectBonusStar(index, puck);
-    return;
   }
 }
 
@@ -5514,7 +6675,7 @@ function markSettledCellAsBoosted(puck) {
 
 function upgradeSettledResultToX10(puck, { animate = true, playSound = true } = {}) {
   const result = puck?.result;
-  if (!result || result.multiplier <= 0 || result.secretRoom || result.x10Boosted) {
+  if (!result || result.multiplier <= 0 || (result.secretRoom && !result.chanceRoom) || result.x10Boosted) {
     return false;
   }
   const basePayout = Number.isFinite(result.basePayout)
@@ -5540,15 +6701,14 @@ function upgradeSettledResultToX10(puck, { animate = true, playSound = true } = 
 
 function activateX10Boost() {
   if (state.x10BoostActivated) return;
-  state.bonusFieldTransitionStartedAt = state.animationsEnabled ? performance.now() : 0;
   state.x10BoostActivated = true;
   state.crownBonusAwarded = true;
   const upgradedResults = state.pucks.filter((puck) => upgradeSettledResultToX10(puck));
   if (upgradedResults.length) {
     updateBank();
     updateRoundWinLabel();
+    startResultRevealAnimation();
   }
-  startResultRevealAnimation();
 }
 
 function collectBonusStar(index, collector = null) {
@@ -5572,16 +6732,12 @@ function collectBonusStar(index, collector = null) {
     star.radius
   );
   spawnStarBurst(star, "purple");
+  recordDiamondPickupEffect({ x: star.x, y: star.y, radius: star.radius }, state.crownsCollected);
   state.bonusStars.splice(index, 1);
   state.crownsCollected = Math.min(getRequiredStars(), state.crownsCollected + 1);
   updateCrownCounter();
   if (state.crownsCollected >= getRequiredStars()) {
-    if (state.roundOutcome?.bonus_triggered) activateX10Boost();
-    if (counterFlyIn) {
-      counterFlyIn.onComplete = bubbleBonusCounter;
-    } else {
-      bubbleBonusCounter();
-    }
+    if (state.roundOutcome?.bonus_triggered || POCKET_TEST_RANDOM_PHYSICS) activateX10Boost();
     playBonusCompleteSound();
   } else {
     playBonusStarSound(state.crownsCollected);
@@ -5603,14 +6759,7 @@ function distanceToPuckSegment(puck, target) {
 }
 
 function collectPocketReleaseSymbolsByTouch(puck) {
-  for (let index = state.bonusStars.length - 1; index >= 0; index -= 1) {
-    const star = state.bonusStars[index];
-    if (star.collected || !star.shouldCollect) continue;
-    const hitRadius = state.field.puckRadius + star.radius + 2;
-    if (distanceToPuckSegment(puck, star) > hitRadius) continue;
-    collectBonusStar(index, puck);
-    break;
-  }
+  collectBonusStarByTouch(puck);
   collectMultiPlusByTouch(puck, 1);
 }
 
@@ -5625,10 +6774,16 @@ function collectPlannedStars() {
   }
 }
 
-function collectMultiPlusByTouch(puck, captureChance = 1, allowUnplanned = false) {
+function collectMultiPlusByTouch(puck, captureChance = 1, allowUnplanned = false, atRest = false) {
+  if (window.BalloroBonusUI?.isV2 && !atRest) return;
   const token = state.multiPlusToken;
-  if (!token || token.collected || (!token.shouldCollect && !allowUnplanned)) return;
-  if (token.assignedResultPath && !puck.pocketRelease) return;
+  if (!token || token.collected || token.consumed) return;
+  const hitRadius = state.field.puckRadius + token.radius + 2;
+  if (puck.multiPlusExitRequired) {
+    if (Math.hypot(puck.x - token.x, puck.y - token.y) <= hitRadius) return;
+    puck.multiPlusExitRequired = false;
+    return;
+  }
   const startX = Number.isFinite(puck.previousX) ? puck.previousX : puck.x;
   const startY = Number.isFinite(puck.previousY) ? puck.previousY : puck.y;
   const segmentX = puck.x - startX;
@@ -5639,8 +6794,11 @@ function collectMultiPlusByTouch(puck, captureChance = 1, allowUnplanned = false
     : 0;
   const closestX = startX + segmentX * projection;
   const closestY = startY + segmentY * projection;
-  const hitRadius = state.field.puckRadius + token.radius + 2;
-  if ((closestX - token.x) ** 2 + (closestY - token.y) ** 2 <= hitRadius ** 2
+  const settledHitRadius = Math.max(0, state.field.puckRadius + token.radius - 1);
+  const inRange = window.BalloroBonusUI?.isV2
+    ? Math.hypot(puck.x - token.x, puck.y - token.y) <= settledHitRadius
+    : (closestX - token.x) ** 2 + (closestY - token.y) ** 2 <= hitRadius ** 2;
+  if (inRange
     && (captureChance >= 1 || nextPuckRandom(puck) <= captureChance)) {
     collectMultiPlus(puck, true);
   }
@@ -5648,7 +6806,9 @@ function collectMultiPlusByTouch(puck, captureChance = 1, allowUnplanned = false
 
 function upgradeSettledResultToMultiPlus(puck) {
   const result = puck?.result;
-  if (!puck?.pocketRelease || puck.authoritativeResult || !result || result.secretRoom || result.multiplier > 0) {
+  // EX MULTI can stop on any previously empty cell, including one occupied by
+  // an ordinary settled ball. Upgrade every settled zero-result puck there.
+  if (!result || result.secretRoom || result.multiplier > 0) {
     return false;
   }
   const multiplier = getCellMultiplier(result.col, result.row);
@@ -5691,43 +6851,264 @@ function upgradeSettledResultToMultiPlus(puck) {
 
 function collectMultiPlus(puck = null, allowUnplanned = false) {
   const token = state.multiPlusToken;
-  if (!token || token.collected || (!token.shouldCollect && !allowUnplanned)) return;
-  const counterFlyIn = spawnCounterFlyIn(
-    "multiPlus",
-    toScreen(token.x, token.y),
-    getMultiPlusCounterTargetPoint(),
-    token.radius
-  );
-  spawnStarBurst(token, "yellow");
-  token.collected = true;
-  state.multiPlusActive = true;
-  state.multiPlusActivatedAt = performance.now();
-  state.pucks
-    .filter((item) => item.pocketRelease && item.result)
-    .forEach(upgradeSettledResultToMultiPlus);
+  if (!token || token.consumed || token.collected || (!token.shouldCollect && !allowUnplanned)) return;
+  if (!puck || state.multiPlusCapturedPuck) return;
+  token.consumed = true;
+  token.captured = true;
+  token.v2SymbolPending = Boolean(window.BalloroBonusUI?.isV2);
+  token.v2Activated = false;
+  puck.multiPlusCapture = createFieldPocketPullCapture(puck, token.x, token.y);
+  state.multiPlusCapturedPuck = puck;
+  state.multiPlusPhase = "capturing";
   state.multiPlusPickupLog = {
     time: Number((puck?.age ?? token.collectAfter ?? 0).toFixed(4)),
     bounce_count: puck?.bounceCount ?? token.pickupBounceCount ?? 0,
     collector_result_path: puck?.authoritativeResult?.result_path || "main"
   };
   updateMultiPlusCounter();
-  if (counterFlyIn) {
-    counterFlyIn.onComplete = bubbleMultiPlusCounter;
-  } else {
-    bubbleMultiPlusCounter();
+}
+
+function createFieldPocketPullCapture(puck, targetX, targetY) {
+  const captureDistance = Math.hypot(targetX - puck.x, targetY - puck.y);
+  const entrySpeed = Math.max(0.001, puck.speed);
+  return {
+    elapsed: 0,
+    duration: Math.min(FIELD_POCKET_PULL_MAX_DURATION_SECONDS,
+      Math.max(FIXED_PHYSICS_STEP, captureDistance / entrySpeed)),
+    startX: puck.x,
+    startY: puck.y,
+    targetX,
+    targetY
+  };
+}
+
+function stepFieldPocketPullCapture(puck, capture) {
+  const captureStep = window.BalloroQuickPlayTiming
+    ? window.BalloroQuickPlayTiming.preparationStep(FIXED_PHYSICS_STEP, state.quickPlay)
+    : FIXED_PHYSICS_STEP / (state.quickPlay ? 3 : 1);
+  capture.elapsed += captureStep;
+  const progress = clamp(capture.elapsed / capture.duration, 0, 1);
+  puck.previousX = puck.x;
+  puck.previousY = puck.y;
+  puck.x = capture.startX + (capture.targetX - capture.startX) * progress;
+  puck.y = capture.startY + (capture.targetY - capture.startY) * progress;
+  puck.vx = (puck.x - puck.previousX) / captureStep;
+  puck.vy = (puck.y - puck.previousY) / captureStep;
+  puck.speed = Math.hypot(puck.vx, puck.vy);
+  puck.pocketDepth = progress * 0.55;
+  collectBonusStarByTouch(puck);
+  if (progress < 1) return false;
+  puck.x = capture.targetX;
+  puck.y = capture.targetY;
+  puck.vx = 0;
+  puck.vy = 0;
+  puck.speed = 0;
+  playPocketDropSound();
+  return true;
+}
+
+function stepMultiPlusPocketCapture(puck) {
+  if (state.multiPlusPhase !== "capturing" || !puck.multiPlusCapture) return false;
+  if (stepFieldPocketPullCapture(puck, puck.multiPlusCapture)) {
+    puck.multiPlusCapture = null;
+    state.multiPlusPhase = "captured";
+    if (window.BalloroBonusUI?.isV2) {
+      const token = state.multiPlusToken;
+      token.v2Activated = recordV2PocketPickup("lemon", token.x, token.y, token.radius,
+        (activated) => {
+          token.v2Activated = activated;
+          token.v2SymbolPending = false;
+        });
+    }
   }
-  playMultiPlusSound();
-  startResultRevealAnimation();
+  return true;
 }
 
 function collectPlannedMultiPlus() {
   const token = state.multiPlusToken;
-  if (!token || token.collected || !token.shouldCollect) return;
+  if (!token || token.collected || !token.shouldCollect || token.plannedCaptureConsumed) return;
   const puck = state.pucks[token.assignedPuck];
-  if (puck && !puck.purpleBoost && !puck.pocketRelease && puck.age >= token.collectAfter) collectMultiPlus(puck);
+  if (puck && !puck.purpleBoost && !puck.pocketRelease && !puck.chance && !puck.secretRoom
+    && puck.age >= token.collectAfter) {
+    token.plannedCaptureConsumed = true;
+    collectMultiPlus(puck);
+  }
 }
 
-function resetPucks() {
+function getMultiPlusNeonCandidateCells() {
+  const config = getMathConfiguration();
+  const launchKey = `${GRID_SIZE - 1}_${GRID_SIZE - 1}`;
+  const blockedKeys = new Set([
+    state.fieldPocket && `${state.fieldPocket.col}_${state.fieldPocket.row}`,
+    state.bluePocket && `${state.bluePocket.col}_${state.bluePocket.row}`,
+    state.chancePocket && `${state.chancePocket.col}_${state.chancePocket.row}`,
+    state.multiPlusToken && `${state.multiPlusToken.col}_${state.multiPlusToken.row}`,
+    launchKey
+  ].filter(Boolean));
+  return (config?.sector_definitions?.empty || [])
+    .filter((cell) => cell.index >= 0 && !blockedKeys.has(`${cell.col}_${cell.row}`))
+    .map((cell) => ({ col: cell.col, row: cell.row }));
+}
+
+function getActiveMultiPlusCells() {
+  // The chase is presentation only: no extra cell pays until its position is locked.
+  const cells = state.multiPlusFinalCells !== null ? state.multiPlusFinalCells
+    : POCKET_TEST_RANDOM_PHYSICS ? [] : getMathConfiguration()?.multi_plus?.sectors ?? [];
+  return cells.filter((cell) => !isBluePocketCoveringCell(cell));
+}
+
+function isBluePocketCoveringCell(cell) {
+  const pocket = state.bluePocket;
+  return Boolean(window.BalloroBonusUI?.isV2 && pocket && !pocket.finished
+    && cell.col === pocket.col && cell.row === pocket.row);
+}
+
+function moveMultiPlusNeonCells(now, final = false) {
+  const finalSectors = getMathConfiguration()?.multi_plus?.sectors || [];
+  if (final) {
+    state.multiPlusFinalCells = state.multiPlusNeonCells.map((cell) => ({ ...cell }));
+    return;
+  }
+  const candidates = getMultiPlusNeonCandidateCells();
+  const count = Math.min(finalSectors.length, candidates.length);
+  const step = Math.floor((now - state.multiPlusRevealStartedAt) / MULTI_PLUS_NEON_STEP_MS);
+  const rng = window.PuckLuckMath.createRng(
+    ((state.roundOutcome?.seed || 1) ^ Math.imul(step + 1, 0x9e3779b1)) >>> 0
+  );
+  const selected = [];
+  if (!state.multiPlusNeonCells.length) {
+    while (selected.length < count && candidates.length) {
+      selected.push(candidates.splice(rng.int(candidates.length), 1)[0]);
+    }
+  } else {
+    const candidateByKey = new Map(candidates.map((cell) => [`${cell.col}_${cell.row}`, cell]));
+    const occupied = new Set();
+    const previous = new Set(state.multiPlusNeonCells.map((cell) => `${cell.col}_${cell.row}`));
+    state.multiPlusNeonCells.slice(0, count).forEach((current) => {
+      const neighbors = [
+        [current.col + 1, current.row],
+        [current.col - 1, current.row],
+        [current.col, current.row + 1],
+        [current.col, current.row - 1]
+      ].map(([col, row]) => candidateByKey.get(`${col}_${row}`))
+        .filter((cell) => cell && !occupied.has(`${cell.col}_${cell.row}`));
+      const free = candidates.filter((cell) => !occupied.has(`${cell.col}_${cell.row}`));
+      // Empty cells can be isolated by base multipliers/pockets. Jump to another
+      // free cell instead of freezing, and avoid merely swapping lit cells.
+      const freshNeighbors = neighbors.filter((cell) => !previous.has(`${cell.col}_${cell.row}`));
+      const fresh = free.filter((cell) => !previous.has(`${cell.col}_${cell.row}`));
+      const moving = free.filter((cell) => cell.col !== current.col || cell.row !== current.row);
+      const choices = freshNeighbors.length ? freshNeighbors : fresh.length ? fresh
+        : neighbors.length ? neighbors : moving.length ? moving : free;
+      const next = choices[rng.int(choices.length)];
+      occupied.add(`${next.col}_${next.row}`);
+      selected.push(next);
+    });
+  }
+  state.multiPlusNeonCells = selected.map((cell, index) => {
+    return {
+      ...cell,
+      multiplier: getMultiPlusFieldMultiplier()
+    };
+  });
+}
+
+function maybeAdvanceMultiPlus(now) {
+  const puck = state.multiPlusCapturedPuck;
+  if (!puck) return;
+  if (state.multiPlusPhase === "captured") {
+    if (window.BalloroBonusUI?.isV2 && state.multiPlusToken?.v2SymbolPending) return;
+    const visualStopSpeed = state.field.half * 0.075;
+    const otherActivity = state.pucks.some((item) => item !== puck && !item.stopped
+      && item.speed > visualStopSpeed
+      && item.secretRoom?.phase !== "pocket_wait"
+      && item !== state.chanceCapturedPuck);
+    if (otherActivity) return;
+    if (window.BalloroBonusUI?.isV2 && !state.multiPlusToken?.v2Activated) {
+      releaseMultiPlusCapturedPuck(puck);
+      return;
+    }
+    state.multiPlusPhase = "revealing";
+    state.multiPlusRevealStartedAt = now;
+    state.multiPlusNeonCells = [];
+    state.multiPlusNeonLastStepAt = 0;
+    state.multiPlusNeonFlashUntil = 0;
+    state.multiPlusActive = true;
+    state.multiPlusActivatedAt = now;
+    moveMultiPlusNeonCells(now);
+    updateMultiPlusCounter();
+    playMultiPlusSound();
+    playMultiPlusNeonCue("start");
+    startResultRevealAnimation();
+    return;
+  }
+  if (state.multiPlusPhase !== "revealing") return;
+  const revealElapsed = now - state.multiPlusRevealStartedAt;
+  if (revealElapsed >= MULTI_PLUS_NEON_DURATION_MS && state.multiPlusNeonFlashUntil === 0) {
+    moveMultiPlusNeonCells(now, true);
+    // A locked EX MULTI cell pays every ball already resting in that formerly
+    // empty cell, not only balls that were released from the EX MULTI pocket.
+    state.pucks.filter((item) => item.result).forEach(upgradeSettledResultToMultiPlus);
+    state.multiPlusNeonFlashUntil = now + MULTI_PLUS_NEON_STOP_FLASH_MS;
+    playMultiPlusNeonCue("stop");
+  } else if (revealElapsed < MULTI_PLUS_NEON_DURATION_MS
+    && now - state.multiPlusNeonLastStepAt >= MULTI_PLUS_NEON_STEP_MS) {
+    state.multiPlusNeonLastStepAt = now;
+    moveMultiPlusNeonCells(now);
+    playMultiPlusNeonCue("step");
+  }
+  if (!state.multiPlusNeonFlashUntil || now < state.multiPlusNeonFlashUntil) return;
+  releaseMultiPlusCapturedPuck(puck);
+}
+
+function releaseMultiPlusCapturedPuck(puck) {
+  const activatedBonus = Boolean(window.BalloroBonusUI?.isV2 && state.multiPlusToken?.v2Activated && state.multiPlusActive);
+  const releaseIndex = state.nextPocketReleaseIndex;
+  state.nextPocketReleaseIndex += 1;
+  const releaseStartPoint = {
+    x: state.multiPlusToken.x / state.field.half,
+    y: state.multiPlusToken.y / state.field.half
+  };
+  const releaseTrajectory = POCKET_TEST_RANDOM_PHYSICS
+    ? buildRandomPrototypeTrajectory(releaseStartPoint, -135)
+    : planRuntimeFieldPocketTrajectory({
+      result: puck.authoritativeResult,
+      seed: ((puck.authoritativeResult?.visual_seed || state.roundOutcome?.seed || 1)
+        ^ 0x59454c4c ^ Math.imul(releaseIndex + 1, 0x9e3779b1)) >>> 0,
+      existingPlans: [],
+      startPoint: releaseStartPoint,
+      releaseIndex,
+      avoidPockets: [releaseStartPoint]
+    });
+  if (!releaseTrajectory) {
+    throw new Error("EX MULTI single-ball release trajectory is unavailable");
+  }
+  state.multiPlusPhase = "idle";
+  state.multiPlusNeonCells = [];
+  state.multiPlusToken.finished = true;
+  state.multiPlusToken.collected = false;
+  state.multiPlusToken.captured = false;
+  preparePocketReleasePuck(
+    puck,
+    { id: FIELD_POCKET_ZONE_ID },
+    releaseIndex,
+    puck.authoritativeResult,
+    releaseTrajectory
+  );
+  puck.trailBonusKind = activatedBonus ? "lemon" : null;
+  if (POCKET_TEST_RANDOM_PHYSICS) puck.authoritativeResult = null;
+  puck.multiPlusExitRequired = true;
+  state.multiPlusCapturedPuck = null;
+  updateMultiPlusCounter();
+  playLaunchSound();
+}
+
+function resetPucks({ force = false } = {}) {
+  if (window.BalloroRoundTapes?.busy && !force) return;
+  if (state.winPresentationUnlockTimer !== null) {
+    window.clearTimeout(state.winPresentationUnlockTimer);
+    state.winPresentationUnlockTimer = null;
+  }
   if (state.resultRevealFrame !== null) {
     cancelAnimationFrame(state.resultRevealFrame);
     state.resultRevealFrame = null;
@@ -5747,8 +7128,15 @@ function resetPucks() {
   state.bonusStars = [];
   state.multiPlusToken = null;
   state.multiPlusActive = false;
+  state.multiPlusFinalCells = null;
   state.multiPlusPickupLog = null;
   state.multiPlusActivatedAt = 0;
+  state.multiPlusCapturedPuck = null;
+  state.multiPlusPhase = "idle";
+  state.multiPlusRevealStartedAt = 0;
+  state.multiPlusNeonCells = [];
+  state.multiPlusNeonLastStepAt = 0;
+  state.multiPlusNeonFlashUntil = 0;
   state.starPickupLog = [];
   state.starBursts = [];
   clearCounterFlyIns();
@@ -5756,8 +7144,8 @@ function resetPucks() {
   state.secretZoneOpenTimes = {};
   state.secretRoomLaunchAt = 0;
   state.crownsCollected = 0;
+  state.v2BonusArrivedActive = { diamond: false, crown: false, lemon: false, blue: false };
   state.x10BoostActivated = false;
-  state.bonusFieldTransitionStartedAt = 0;
   state.crownBonusAwarded = false;
   state.running = false;
   state.launchPrepared = false;
@@ -5765,6 +7153,21 @@ function resetPucks() {
   state.launchButtonPrimed = false;
   state.roundOutcome = null;
   state.fieldPocket = null;
+  state.bluePocket = null;
+  state.chancePocket = null;
+  state.chanceCapturedPuck = null;
+  state.chancePhase = "idle";
+  state.chanceSpinStartedAt = 0;
+  state.chanceSpinRoomIndex = -1;
+  state.chanceSpinTotalSteps = 20;
+  state.chanceLastSoundStep = -1;
+  state.chanceSelectedRoomId = null;
+  state.chanceFinalCueStartedAt = 0;
+  state.chanceFinalCueUntil = 0;
+  state.chanceFinalCueRoomId = null;
+  state.chanceRoomMultipliers = {};
+  state.chanceRoomOutcome = null;
+  state.chanceCompletedRoomIds.clear();
   state.trajectoryPlans = [];
   state.trajectoryDiagnostics = [];
   state.physicsAccumulator = 0;
@@ -5776,22 +7179,19 @@ function resetPucks() {
   state.nextPocketReleaseIndex = 0;
   updateCrownCounter();
   updateMultiPlusCounter();
+  updateChanceBonusCounter();
   updateRoundWinLabel();
 }
 
 function prepareLaunchRound(slot) {
+  if (window.BalloroRoundTapes?.enabled) return false;
+  if (window.BalloroSavedPaths?.enabled && !window.BalloroSavedPaths.has(GRID_SIZE)) return false;
   if (state.running) {
     return false;
   }
   if (state.launchPrepared) {
     return state.launchPreparedSlot === slot;
   }
-
-  const retainedDiamondProximityGlow = state.bonusStars.reduce(
-    (maximum, star) => Math.max(maximum, Number(star.proximityGlowHeld) || 0),
-    0
-  );
-  const retainedMultiPlusProximityGlow = Number(state.multiPlusToken?.proximityGlowHeld) || 0;
 
   setupCanvas();
   const bet = parseBet(slot);
@@ -5815,37 +7215,59 @@ function prepareLaunchRound(slot) {
     betPerPuck: bet,
     seed: roundSeed
   }) || null;
-  state.fieldPocket = usesFieldPocketMechanics() ? selectRoundFieldPocket(roundOutcome) : null;
+  state.fieldPocket = usesFieldPocketMechanics()
+    ? POCKET_TEST_RANDOM_PHYSICS ? selectPrototypeFieldPocket() : selectRoundFieldPocket(roundOutcome)
+    : null;
   const trajectoryResult = usesFieldPocketMechanics() && !state.fieldPocket
     ? { valid: false, reason: "field_pocket_cell_unavailable", plans: [] }
-    : buildTrajectoryPlans(roundOutcome);
-  let pocketReleasePlan = { valid: false, reason: "pocket_release_dependencies_unavailable", plans: [] };
-  if (roundOutcome && trajectoryResult.valid) {
+    : POCKET_TEST_RANDOM_PHYSICS ? { valid: true, plans: [] } : buildTrajectoryPlans(roundOutcome);
+  applyPocketTestPrototypePlan(roundOutcome, trajectoryResult);
+  state.chancePocket = trajectoryResult.valid
+    ? selectRoundChancePocket(roundOutcome, trajectoryResult.plans)
+    : null;
+  placePrototypeMultiPlusPosition(roundOutcome);
+  state.bluePocket = selectV2BluePocket(roundOutcome);
+  if (window.BalloroBonusUI?.isV2 && !state.bluePocket) {
+    console.error("V2 blue pocket has no free field cell");
+    return false;
+  }
+  let pocketReleasePlan = POCKET_TEST_RANDOM_PHYSICS
+    ? { valid: true, plans: [] }
+    : { valid: false, reason: "pocket_release_dependencies_unavailable", plans: [] };
+  if (!POCKET_TEST_RANDOM_PHYSICS && roundOutcome && trajectoryResult.valid) {
     try {
       pocketReleasePlan = buildPocketReleaseTrajectoryPlans(roundOutcome);
     } catch (error) {
       pocketReleasePlan = { valid: false, reason: error.message, plans: [] };
     }
   }
-  const fixedSymbolPlan = FIXED_BONUS_SYMBOL_LAYOUT && trajectoryResult.valid
+  const fixedSymbolPlan = !POCKET_TEST_RANDOM_PHYSICS && FIXED_BONUS_SYMBOL_LAYOUT && trajectoryResult.valid
     ? buildFixedBonusSymbolPlan(roundOutcome, trajectoryResult.plans)
     : null;
   if (fixedSymbolPlan && !fixedSymbolPlan.valid) {
     roundOutcome.fixed_bonus_fallback_reason = fixedSymbolPlan.reason;
   }
-  const starPlan = fixedSymbolPlan?.valid
+  const starPlan = POCKET_TEST_RANDOM_PHYSICS
+    ? { valid: true, stars: roundOutcome.star_positions, mode: "physical" }
+    : fixedSymbolPlan?.valid
     ? fixedSymbolPlan
     : trajectoryResult.valid
       ? buildVisualStarPlanLegacy(roundOutcome, trajectoryResult.plans)
       : { valid: false, reason: trajectoryResult.reason };
-  const uniqueTrajectoryPlan = roundOutcome && trajectoryResult.valid && starPlan.valid
+  const uniqueTrajectoryPlan = POCKET_TEST_RANDOM_PHYSICS
+    ? { valid: true }
+    : roundOutcome && trajectoryResult.valid && starPlan.valid
     ? ensureUniqueRoundTrajectories(roundOutcome, trajectoryResult.plans)
     : { valid: false, reason: "trajectory_uniqueness_dependencies_unavailable" };
-  const multiPlusPlan = roundOutcome && trajectoryResult.valid && starPlan.valid && uniqueTrajectoryPlan.valid
+  const multiPlusPlan = POCKET_TEST_RANDOM_PHYSICS
+    ? { valid: true, token: roundOutcome.multi_plus_position }
+    : roundOutcome && trajectoryResult.valid && starPlan.valid && uniqueTrajectoryPlan.valid
     ? buildVisualMultiPlusPlanLegacy(roundOutcome, trajectoryResult.plans)
     : { valid: false, reason: "multi_plus_dependencies_unavailable" };
-  let pocketSymbolPlan = { valid: false, reason: "pocket_symbol_dependencies_unavailable" };
-  if (roundOutcome && pocketReleasePlan.valid && starPlan.valid && multiPlusPlan.valid) {
+  let pocketSymbolPlan = POCKET_TEST_RANDOM_PHYSICS
+    ? { valid: true }
+    : { valid: false, reason: "pocket_symbol_dependencies_unavailable" };
+  if (!POCKET_TEST_RANDOM_PHYSICS && roundOutcome && pocketReleasePlan.valid && starPlan.valid && multiPlusPlan.valid) {
     pocketSymbolPlan = assignPlannedSymbolsToPocketRelease(
       roundOutcome,
       pocketReleasePlan,
@@ -5890,6 +7312,7 @@ function prepareLaunchRound(slot) {
   state.launchPrepared = true;
   state.launchPreparedSlot = slot;
   state.roundOutcome = roundOutcome;
+  state.chanceRoomMultipliers = createChanceRoomMultipliers(roundOutcome);
   state.trajectoryPlans = trajectoryResult.plans;
   state.trajectoryPlans.forEach((plan) => {
     state.recentTrajectoryIds.push(plan.id);
@@ -5922,29 +7345,43 @@ function prepareLaunchRound(slot) {
   state.settledCells = [];
   state.wonLines = [];
   state.crownsCollected = 0;
+  state.v2BonusArrivedActive = { diamond: false, crown: false, lemon: false, blue: false };
   state.x10BoostActivated = false;
-  state.bonusFieldTransitionStartedAt = 0;
   state.crownBonusAwarded = false;
   state.multiPlusActive = false;
+  state.multiPlusFinalCells = null;
   state.multiPlusPickupLog = null;
   state.multiPlusActivatedAt = 0;
+  state.multiPlusCapturedPuck = null;
+  state.multiPlusPhase = "idle";
+  state.multiPlusRevealStartedAt = 0;
+  state.multiPlusNeonCells = [];
+  state.multiPlusNeonLastStepAt = 0;
+  state.multiPlusNeonFlashUntil = 0;
   state.starPickupLog = [];
   state.starBursts = [];
   clearCounterFlyIns();
   state.openSecretZones.clear();
   state.secretZoneOpenTimes = {};
   state.secretRoomLaunchAt = 0;
+  state.chanceCapturedPuck = null;
+  state.chancePhase = "idle";
+  state.chanceSpinStartedAt = 0;
+  state.chanceSpinRoomIndex = -1;
+  state.chanceSpinTotalSteps = 20;
+  state.chanceLastSoundStep = -1;
+  state.chanceSelectedRoomId = null;
+  state.chanceFinalCueStartedAt = 0;
+  state.chanceFinalCueUntil = 0;
+  state.chanceFinalCueRoomId = null;
+  state.chanceRoomOutcome = null;
+  state.chanceCompletedRoomIds.clear();
   updateRoundWinLabel();
   state.bonusStars = createBonusStars();
   state.multiPlusToken = multiPlusPlan.valid ? createMultiPlusToken() : null;
-  if (retainedDiamondProximityGlow > 0) {
-    state.bonusStars.forEach((star) => { star.proximityGlowHeld = retainedDiamondProximityGlow; });
-  }
-  if (retainedMultiPlusProximityGlow > 0 && state.multiPlusToken) {
-    state.multiPlusToken.proximityGlowHeld = retainedMultiPlusProximityGlow;
-  }
   updateCrownCounter();
   updateMultiPlusCounter();
+  updateChanceBonusCounter();
   updateBank();
   updateBetButtons();
   render();
@@ -5952,6 +7389,20 @@ function prepareLaunchRound(slot) {
 }
 
 function launchPuck(slot) {
+  if (window.BalloroRoundTapes?.enabled) return window.BalloroRoundTapes.launch(slot);
+  if (window.BalloroSavedPaths?.enabled && !window.BalloroSavedPaths.has(GRID_SIZE)) {
+    if (state.savedPathsLoading) return;
+    state.savedPathsLoading = true;
+    window.BalloroSavedPaths.load(GRID_SIZE).then(() => {
+      state.savedPathsLoading = false;
+      launchPuck(slot);
+    }).catch(error => {
+      state.savedPathsLoading = false;
+      console.error(error);
+      alert('Не удалось загрузить библиотеку путей. Повторите запуск.');
+    });
+    return;
+  }
   stopLaunchPrimeAnimation({ rerender: false });
   if (state.running) {
     updateBetButtons();
@@ -5964,14 +7415,21 @@ function launchPuck(slot) {
 
   const count = state.roundOutcome?.puck_results?.length || state.puckCount;
   state.running = true;
-  clearBonusProximityGlowHolds();
   state.launchPrepared = false;
   state.launchPreparedSlot = null;
   state.roundId += 1;
   const roundId = state.roundId;
   state.lastFrameAt = performance.now();
   state.physicsAccumulator = 0;
-  state.pucks = Array.from({ length: count }, (_, index) => createPuck(index, count, state.roundOutcome.puck_results[index], state.trajectoryPlans[index]));
+  if (state.autoPlay && Number.isFinite(state.autoRoundsRemaining)) {
+    state.autoRoundsRemaining = Math.max(0, state.autoRoundsRemaining - 1);
+  }
+  state.pucks = Array.from({ length: count }, (_, index) => createPuck(
+    index,
+    count,
+    POCKET_TEST_RANDOM_PHYSICS ? null : state.roundOutcome.puck_results[index],
+    state.trajectoryPlans[index]
+  ));
   playLaunchSound();
 
   updateBetButtons();
@@ -6202,10 +7660,12 @@ function createPocketReleasePuck(source, zone, releaseIndex, outcomePlan) {
   return releasePuck;
 }
 
-function preparePocketReleasePuck(puck, zone, releaseIndex = 0, outcomePlan = null) {
+function preparePocketReleasePuck(puck, zone, releaseIndex = 0, outcomePlan = null, trajectoryOverride = null) {
+  window.BalloroQuickTrail?.clear(puck);
+  puck.trailBonusKind = null;
   puck.releaseIndex = releaseIndex;
   puck.authoritativeResult = normalizeAuthoritativeResult(outcomePlan || puck.authoritativeResult);
-  const trajectory = puck.authoritativeResult.release_trajectory
+  const trajectory = trajectoryOverride || puck.authoritativeResult.release_trajectory
     || selectPocketReleaseTrajectory(puck.authoritativeResult, zone.id, releaseIndex);
   puck.replayTrajectory = trajectory;
   puck.replayFrame = 0;
@@ -6229,7 +7689,6 @@ function preparePocketReleasePuck(puck, zone, releaseIndex = 0, outcomePlan = nu
   puck.vx = firstFrame[3] * state.field.half;
   puck.vy = firstFrame[4] * state.field.half;
   puck.speed = Math.hypot(puck.vx, puck.vy);
-  puck.bonusPulseReferenceSpeed = puck.speed * INITIAL_REPLAY_PLAYBACK_RATE;
   puck.stopped = false;
   puck.result = null;
 }
@@ -6243,7 +7702,13 @@ function setSecretRoomPosition(puck, zone, u, v) {
 function parkSecretRoomPuck(puck) {
   const visit = puck.secretRoom;
   if (!visit || visit.phase !== "entry") return;
-  playPocketDropSound();
+  if (usesFieldPocketMechanics()) {
+    const pocket = visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID
+      ? state.bluePocket : state.fieldPocket;
+    if (pocket?.consumed) { puck.secretRoom = null; return; }
+    if (pocket) pocket.consumed = true;
+    if (window.BalloroBonusUI?.isV2) visit.bonusSymbolPending = true;
+  }
   visit.phase = "capturing";
   visit.captureElapsed = 0;
   visit.captureStart = { x: puck.x, y: puck.y };
@@ -6252,7 +7717,8 @@ function parkSecretRoomPuck(puck) {
     const zone = getSecretZoneGeometry(visit.zoneId);
     const captureDistance = Math.hypot(zone.hole.x - puck.x, zone.hole.y - puck.y);
     const entrySpeed = Math.max(0.001, puck.speed);
-    visit.captureDuration = Math.max(FIXED_PHYSICS_STEP, captureDistance / entrySpeed);
+    visit.captureDuration = Math.min(FIELD_POCKET_PULL_MAX_DURATION_SECONDS,
+      Math.max(FIXED_PHYSICS_STEP, captureDistance / entrySpeed));
   } else {
     visit.captureDuration = 0.24;
   }
@@ -6261,8 +7727,50 @@ function parkSecretRoomPuck(puck) {
 
 function beginSecretRoomVisit(puck) {
   const visit = puck.secretRoom;
-  if (!visit || visit.phase !== "pocket_wait") return;
+  if (!visit || visit.phase !== "pocket_wait" || visit.bonusSymbolPending) return;
   const zone = getSecretZoneGeometry(visit.zoneId);
+  if (usesFieldPocketMechanics()) {
+    const pocket = visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID
+      ? state.bluePocket : state.fieldPocket;
+    if (pocket) pocket.finished = true;
+  }
+  if (window.BalloroBonusUI?.isV2 && visit.zoneId !== BLUE_FIELD_POCKET_ZONE_ID) {
+    const releaseStartIndex = state.nextPocketReleaseIndex++;
+    const releaseResult = puck.authoritativeResult?.release_results?.[0] || null;
+    if (POCKET_TEST_RANDOM_PHYSICS) {
+      const startPoint = { x: zone.hole.x / state.field.half, y: zone.hole.y / state.field.half };
+      const trajectory = buildRandomPrototypeTrajectory(startPoint, -135);
+      preparePocketReleasePuck(puck, zone, releaseStartIndex, null, trajectory);
+      puck.authoritativeResult = null;
+    } else {
+      if (!releaseResult) throw new Error("Purple pocket release path is missing");
+      preparePocketReleasePuck(puck, zone, releaseStartIndex, releaseResult);
+    }
+    puck.trailBonusKind = visit.v2BonusActivated ? "diamond" : null;
+    state.openSecretZones.add(visit.zoneId);
+    state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
+    playLaunchSound();
+    return;
+  }
+  if (POCKET_TEST_RANDOM_PHYSICS) {
+    const releaseStartIndex = state.nextPocketReleaseIndex;
+    state.nextPocketReleaseIndex += 3;
+    const startPoint = { x: zone.hole.x / state.field.half, y: zone.hole.y / state.field.half };
+    const released = [puck, ...[1, 2].map((offset) =>
+      createPocketReleasePuck(puck, zone, releaseStartIndex + offset, null))];
+    released.forEach((releasePuck, offset) => {
+      const trajectory = buildRandomPrototypeTrajectory(startPoint, -135);
+      preparePocketReleasePuck(releasePuck, zone, releaseStartIndex + offset, null, trajectory);
+      releasePuck.authoritativeResult = null;
+      releasePuck.bluePocketExitRequired = true;
+      releasePuck.trailBonusKind = visit.v2BonusActivated ? "blue" : null;
+    });
+    state.pucks.push(...released.slice(1));
+    state.openSecretZones.add(visit.zoneId);
+    state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
+    playLaunchSound();
+    return;
+  }
   const releaseResults = puck.authoritativeResult?.release_results || [];
   if (releaseResults.length !== 3) {
     throw new Error(`Pocket ${puck.authoritativeResult?.result_path || "unknown"} must release exactly three balls`);
@@ -6273,9 +7781,11 @@ function beginSecretRoomVisit(puck) {
     const releaseIndex = releaseStartIndex + releaseOffset;
     const releasePuck = createPocketReleasePuck(puck, zone, releaseIndex, releaseResults[releaseOffset]);
     preparePocketReleasePuck(releasePuck, zone, releaseIndex, releaseResults[releaseOffset]);
+    releasePuck.trailBonusKind = visit.v2BonusActivated ? "blue" : null;
     return releasePuck;
   });
   preparePocketReleasePuck(puck, zone, releaseStartIndex, releaseResults[0]);
+  puck.trailBonusKind = visit.v2BonusActivated ? "blue" : null;
   state.pucks.push(...extraPucks);
   state.openSecretZones.add(visit.zoneId);
   state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
@@ -6287,17 +7797,21 @@ function stepSecretRoomPuck(puck) {
   if (!visit) return false;
   if (visit.phase === "capturing") {
     const zone = getSecretZoneGeometry(visit.zoneId);
-    visit.captureElapsed += FIXED_PHYSICS_STEP;
+    const captureStep = window.BalloroQuickPlayTiming
+      ? window.BalloroQuickPlayTiming.preparationStep(FIXED_PHYSICS_STEP, state.quickPlay)
+      : FIXED_PHYSICS_STEP / (state.quickPlay ? 3 : 1);
+    visit.captureElapsed += captureStep;
     const progress = clamp(visit.captureElapsed / visit.captureDuration, 0, 1);
     const eased = visit.preserveEntrySpeed ? progress : progress * progress;
     puck.previousX = puck.x;
     puck.previousY = puck.y;
     puck.x = visit.captureStart.x + (zone.hole.x - visit.captureStart.x) * eased;
     puck.y = visit.captureStart.y + (zone.hole.y - visit.captureStart.y) * eased;
-    puck.vx = (puck.x - puck.previousX) / FIXED_PHYSICS_STEP;
-    puck.vy = (puck.y - puck.previousY) / FIXED_PHYSICS_STEP;
+    puck.vx = (puck.x - puck.previousX) / captureStep;
+    puck.vy = (puck.y - puck.previousY) / captureStep;
     puck.speed = Math.hypot(puck.vx, puck.vy);
     puck.pocketDepth = progress * 0.55;
+    collectBonusStarByTouch(puck);
     if (progress >= 1) {
       visit.phase = "pocket_wait";
       puck.x = zone.hole.x;
@@ -6305,11 +7819,334 @@ function stepSecretRoomPuck(puck) {
       puck.vx = 0;
       puck.vy = 0;
       puck.speed = 0;
+      playPocketDropSound();
+      if (window.BalloroBonusUI?.isV2 && visit.bonusSymbolPending) {
+        if (visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID) {
+          recordV2PocketPickup("blue", zone.hole.x, zone.hole.y, state.field.puckRadius, (activated) => {
+            visit.bonusSymbolPending = false;
+            visit.v2BonusActivated = activated;
+            if (state.bluePocket) state.bluePocket.symbolArrived = true;
+            if (activated) visit.blueLaunchReadyAt = performance.now() + V2_CACTUS_POST_ACTIVATION_HOLD_MS;
+          });
+        } else {
+          recordV2PocketPickup("diamond", zone.hole.x, zone.hole.y, state.field.puckRadius,
+            (activated) => {
+              visit.bonusSymbolPending = false;
+              visit.v2BonusActivated = activated;
+              if (activated) {
+                activateX10Boost();
+                playBonusCompleteSound();
+              } else playBonusStarSound(state.v2BonusProgress.diamond);
+            });
+        }
+      }
     }
     return true;
   }
   if (visit.phase === "pocket_wait") return true;
   return false;
+}
+
+function captureFieldPocketPuckByTouch(puck, atRest = false) {
+  if (!POCKET_TEST_RANDOM_PHYSICS || puck.secretRoom || puck.chance) return false;
+  if (window.BalloroBonusUI?.isV2 && !atRest) return false;
+  const captureRadius = atRest
+    ? Math.max(0, 2 * state.field.puckRadius - 1) / state.field.half
+    : (state.field.puckRadius / state.field.half)
+      * window.PuckLuckTrajectoryPlanner.POCKET_CAPTURE_RADIUS_MULTIPLIER;
+  const current = { x: puck.x / state.field.half, y: puck.y / state.field.half };
+  const previous = {
+    x: (puck.previousX ?? puck.x) / state.field.half,
+    y: (puck.previousY ?? puck.y) / state.field.half
+  };
+  const pockets = [[FIELD_POCKET_ZONE_ID, state.fieldPocket],
+    [BLUE_FIELD_POCKET_ZONE_ID, state.bluePocket]];
+  for (const [zoneId, pocketState] of pockets) {
+    if (!pocketState || pocketState.consumed) continue;
+    const pocket = getFieldPocketNormalized(pocketState);
+    // A ball expelled by the green pocket must leave that pocket before it can
+    // re-enter it. This guard must not suppress capture by the purple pocket.
+    if (puck.bluePocketExitRequired && zoneId === BLUE_FIELD_POCKET_ZONE_ID) {
+      if (Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius) continue;
+      puck.bluePocketExitRequired = false;
+    }
+    const captureProgress = atRest
+      ? (Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius ? 1 : null)
+      : window.PuckLuckTrajectoryPlanner.segmentCircleFirstIntersection(
+        [0, previous.x, previous.y], [0, current.x, current.y], pocket, captureRadius);
+    if (captureProgress === null) continue;
+    const occupied = state.pucks.some((item) => item !== puck
+      && item.secretRoom?.zoneId === zoneId
+      && ["capturing", "pocket_wait"].includes(item.secretRoom.phase));
+    if (occupied) {
+      puck.waitingForPocket = { kind: "blue", zoneId };
+      return false;
+    }
+    puck.x = (previous.x + (current.x - previous.x) * captureProgress) * state.field.half;
+    puck.y = (previous.y + (current.y - previous.y) * captureProgress) * state.field.half;
+    puck.authoritativeResult = null;
+    puck.secretRoom = {
+      zoneId, phase: "entry", pocketCaptureArmed: true, roomCursor: 0, roomFrame: 0
+    };
+    parkSecretRoomPuck(puck);
+    return true;
+  }
+  return false;
+}
+
+function captureChancePuck(puck, allowStationaryOverlap = false) {
+  if (window.BalloroBonusUI?.isV2 && !allowStationaryOverlap) return false;
+  if (!state.chancePocket || state.chancePocket.consumed || state.chanceCapturedPuck
+    || ["capturing", "pocket_wait"].includes(puck.secretRoom?.phase)) return false;
+  const pocket = getChancePocketGeometry();
+  const normalizedX = puck.x / state.field.half;
+  const normalizedY = puck.y / state.field.half;
+  const previousX = (puck.previousX ?? puck.x) / state.field.half;
+  const previousY = (puck.previousY ?? puck.y) / state.field.half;
+  const captureRadius = (window.BalloroBonusUI?.isV2
+    ? Math.max(0, 2 * state.field.puckRadius - 1) / state.field.half
+    : (state.field.puckRadius / state.field.half) * CHANCE_POCKET_CAPTURE_RADIUS_MULTIPLIER);
+  let captured = window.BalloroBonusUI?.isV2 ? false
+    : window.PuckLuckTrajectoryPlanner.segmentCircleFirstIntersection(
+      [0, previousX, previousY],
+      [0, normalizedX, normalizedY],
+      pocket.normalized,
+      captureRadius
+    ) !== null;
+  if (!captured && allowStationaryOverlap) {
+    captured = Math.hypot(normalizedX - pocket.normalized.x, normalizedY - pocket.normalized.y) <= captureRadius;
+  }
+  if (!window.BalloroBonusUI?.isV2 && !captured && state.chancePocket.forced && state.pucks.indexOf(puck) === 0
+    && puck.replayFrame >= state.chancePocket.forceFrameIndex) captured = true;
+  if (!captured) return false;
+
+  state.chancePocket.consumed = true;
+  puck.v2SymbolPending = Boolean(window.BalloroBonusUI?.isV2);
+  puck.v2ChanceActivated = !window.BalloroBonusUI?.isV2;
+
+  const targetX = pocket.normalized.x * state.field.half;
+  const targetY = pocket.normalized.y * state.field.half;
+  puck.chance = {
+    phase: "capturing",
+    capturedAt: performance.now(),
+    waveStartedAt: 0,
+    roomId: null,
+    pocketCapture: createFieldPocketPullCapture(puck, targetX, targetY)
+  };
+  puck.authoritativeResult = null;
+  state.chanceCapturedPuck = puck;
+  state.chancePhase = "capturing";
+  updateChanceBonusCounter();
+  return true;
+}
+
+function stepChanceRoomPuck(puck) {
+  const chance = puck.chance;
+  if (!chance || chance.phase === "settled") return false;
+  if (chance.phase === "capturing") {
+    if (stepFieldPocketPullCapture(puck, chance.pocketCapture)) {
+      chance.pocketCapture = null;
+      chance.phase = "captured";
+      state.chancePhase = "captured";
+      if (window.BalloroBonusUI?.isV2) {
+        const pocket = getChancePocketGeometry();
+        puck.v2ChanceActivated = recordV2PocketPickup("crown",
+          pocket.normalized.x * state.field.half,
+          pocket.normalized.y * state.field.half, state.field.puckRadius,
+          (activated) => {
+            puck.v2ChanceActivated = activated;
+            puck.v2SymbolPending = false;
+          });
+      }
+    }
+    return true;
+  }
+  if (["captured", "spinning", "final_cue"].includes(chance.phase)) return true;
+  if (chance.phase === "sinking") {
+    const progress = clamp((performance.now() - chance.sinkStartedAt) / CHANCE_SINK_DURATION_MS, 0, 1);
+    puck.pocketDepth = 0.55 + progress * 0.45;
+    if (progress >= 1) {
+      if (state.chancePocket) state.chancePocket.finished = true;
+      if (window.BalloroBonusUI?.isV2 && !puck.v2ChanceActivated) {
+        const point = getChancePocketGeometry();
+        const start = point?.normalized || { x: puck.x / state.field.half, y: puck.y / state.field.half };
+        const trajectory = buildRandomPrototypeTrajectory(start, -135);
+        if (!trajectory) throw new Error("Uncharged red-pocket release path is unavailable");
+        puck.chance = null;
+        state.chanceCapturedPuck = null;
+        state.chancePhase = "idle";
+        preparePocketReleasePuck(puck, { id: FIELD_POCKET_ZONE_ID },
+          state.nextPocketReleaseIndex++, null, trajectory);
+        puck.authoritativeResult = null;
+        updateChanceBonusCounter();
+        playLaunchSound();
+      } else {
+        startChanceRoomSpin(puck, performance.now());
+      }
+    }
+    return true;
+  }
+  if (chance.phase !== "inside") return true;
+
+  chance.age += FIXED_PHYSICS_STEP;
+  if (chance.savedFrames) {
+    const frame = chance.savedFrames[Math.min(chance.savedFrame++, chance.savedFrames.length - 1)];
+    [chance.u, chance.v, chance.vu, chance.vv] = frame;
+    if (frame[4]) playWallHitSound(Math.hypot(chance.vu, chance.vv) * state.field.half);
+  } else {
+  chance.u += chance.vu * FIXED_PHYSICS_STEP;
+  chance.v += chance.vv * FIXED_PHYSICS_STEP;
+  const room = getChanceRoomGeometry(chance.roomId);
+  const puckMargin = clamp(state.field.puckRadius / Math.max(1, room.halfSide), 0.08, 0.22);
+  const boundary = 1 - puckMargin;
+  if (chance.u < -boundary || chance.u > boundary) {
+    chance.u = clamp(chance.u, -boundary, boundary);
+    chance.vu *= -0.88;
+    playWallHitSound(Math.abs(chance.vu) * state.field.half);
+  }
+  if (chance.v < -boundary || chance.v > boundary) {
+    chance.v = clamp(chance.v, -boundary, boundary);
+    chance.vv *= -0.88;
+    playWallHitSound(Math.abs(chance.vv) * state.field.half);
+  }
+  chance.vu *= chance.dampingPerStep;
+  chance.vv *= chance.dampingPerStep;
+  }
+  puck.speed = Math.hypot(chance.vu, chance.vv) * state.field.half;
+  if (chance.age < CHANCE_MIN_SETTLE_AGE_SECONDS
+    || Math.hypot(chance.vu, chance.vv) > 0.1) return true;
+
+  const gridSize = getChanceRoomGridSize();
+  const won = isChanceMultiplierHit(chance.u, chance.v, chance.roomId, gridSize);
+  const multiplier = won ? getChanceRoomMultiplier(chance.roomId) : 0;
+  const x10Boosted = won && isX10BoostActive();
+  const basePayout = state.activeBetPerPuck * multiplier;
+  const payout = basePayout * (x10Boosted ? 10 : 1);
+  state.bankroll += payout;
+  state.roundWinAmount += payout;
+  puck.stopped = true;
+  puck.speed = 0;
+  puck.resultRevealStartedAt = performance.now();
+  puck.result = {
+    category: won ? "chance" : "empty",
+    multiplier,
+    payout,
+    basePayout,
+    x10Boosted,
+    secretRoom: true,
+    chanceRoom: true
+  };
+  chance.phase = "settled";
+  state.chanceRoomOutcome = { roomId: chance.roomId, won, multiplier };
+  state.chanceCompletedRoomIds.add(chance.roomId);
+  if (state.chanceCapturedPuck === puck) {
+    state.chanceCapturedPuck = null;
+    state.chancePhase = "idle";
+    updateChanceBonusCounter();
+  }
+  if (won) playMultiplierResultSound(multiplier, x10Boosted);
+  startResultRevealAnimation();
+  return true;
+}
+
+function maybeAdvanceChance(now) {
+  const puck = state.chanceCapturedPuck;
+  if (!puck) return;
+  if (state.chancePhase === "captured") {
+    if (window.BalloroBonusUI?.isV2 && puck.v2SymbolPending) return;
+    const otherActivity = state.pucks.some((item) => item !== puck && !item.stopped);
+    if (otherActivity) return;
+    if (!puck.chance.waveStartedAt) {
+      puck.chance.waveStartedAt = now;
+      return;
+    }
+    if (now - puck.chance.waveStartedAt < CHANCE_READY_WAVE_DURATION_MS) return;
+    state.chancePhase = "sinking";
+    puck.chance.phase = "sinking";
+    puck.chance.sinkStartedAt = now;
+    return;
+  }
+  if (state.chancePhase === "final_cue") {
+    if (now < state.chanceFinalCueUntil) return;
+    state.chanceFinalCueUntil = 0;
+    launchChanceRoomPuck(puck);
+    return;
+  }
+  if (state.chancePhase !== "spinning") return;
+  const progress = clamp((now - state.chanceSpinStartedAt) / CHANCE_SPIN_DURATION_MS, 0, 1);
+  if (progress >= 1) {
+    state.chanceSpinRoomIndex = CHANCE_ROOM_IDS.indexOf(state.chanceSelectedRoomId);
+    state.chancePhase = "final_cue";
+    puck.chance.phase = "final_cue";
+    state.chanceFinalCueStartedAt = now;
+    state.chanceFinalCueUntil = now + CHANCE_FINAL_CUE_DURATION_MS;
+    state.chanceFinalCueRoomId = state.chanceSelectedRoomId;
+    playChanceSpinTick(Math.floor(state.chanceSpinTotalSteps), true);
+    return;
+  }
+  const step = Math.floor((1 - Math.pow(1 - progress, 3)) * state.chanceSpinTotalSteps);
+  state.chanceSpinRoomIndex = step % CHANCE_ROOM_IDS.length;
+  if (step !== state.chanceLastSoundStep) {
+    playChanceSpinTick(step, progress >= 1);
+    state.chanceLastSoundStep = step;
+  }
+}
+
+function startChanceRoomSpin(puck, now) {
+  state.chancePhase = "spinning";
+  puck.chance.phase = "spinning";
+  state.chanceSpinStartedAt = now;
+  const rng = window.PuckLuckMath.createRng(((state.roundOutcome?.seed || 1) ^ 0x57484545) >>> 0);
+  state.chanceSelectedRoomId = CHANCE_ROOM_IDS[rng.int(CHANCE_ROOM_IDS.length)];
+  // Fractional travel reaches the final room before the bell; integer travel
+  // keeps the final jump until the bell. Vary presentation, not the chosen payout.
+  const holdFinalRoom = Math.random() < 0.5;
+  const extraCycles = Math.floor(Math.random() * 3);
+  state.chanceSpinTotalSteps = 20 + extraCycles * CHANCE_ROOM_IDS.length
+    + CHANCE_ROOM_IDS.indexOf(state.chanceSelectedRoomId) + (holdFinalRoom ? 0.45 : 0);
+  state.chanceSpinRoomIndex = 0;
+  state.chanceLastSoundStep = -1;
+  state.chanceFinalCueStartedAt = 0;
+  state.chanceFinalCueUntil = 0;
+  state.chanceFinalCueRoomId = null;
+}
+
+function launchChanceRoomPuck(puck) {
+  window.BalloroQuickTrail?.clear(puck);
+  puck.trailBonusKind = window.BalloroBonusUI?.isV2 && puck.v2ChanceActivated ? "crown" : null;
+  const chance = puck.chance;
+  chance.phase = "inside";
+  state.chanceCapturedPuck = null;
+  state.chancePhase = "idle";
+  state.chanceFinalCueUntil = 0;
+  updateChanceBonusCounter();
+  chance.roomId = state.chanceSelectedRoomId;
+  const sharedEntry = window.BalloroBonusUI?.isV2;
+  const entry = getChanceRoomEntryLocal(chance.roomId, 0.82);
+  chance.u = entry.u;
+  chance.v = entry.v;
+  chance.v2SharedEntryCoordinates = sharedEntry;
+  chance.age = 0;
+  const rng = window.PuckLuckMath.createRng(((state.roundOutcome?.seed || 1) ^ 0x53484f54) >>> 0);
+  const angleJitter = (rng.next() - 0.5) * 0.56;
+  const launchForce = window.PuckLuckTrajectoryPlanner.VISUAL_PHYSICS.visual_launch_force;
+  const normalizedForce = launchForce / window.PuckLuckTrajectoryPlanner.REFERENCE_HALF_PX;
+  const launchAngle = Math.PI * 0.25 + angleJitter;
+  chance.launchForce = launchForce;
+  const velocityU = Math.cos(launchAngle) * normalizedForce;
+  const velocityV = Math.sin(launchAngle) * normalizedForce;
+  chance.vu = sharedEntry && chance.roomId === "bottom-right" ? velocityU : -velocityU;
+  chance.vv = sharedEntry && chance.roomId === "bottom-left" ? velocityV : -velocityV;
+  chance.dampingPerStep = puck.replayTrajectory?.damping_per_step || 0.972;
+  if (window.BalloroSavedPaths?.enabled) {
+    const savedFrames = window.BalloroSavedPaths.room(GRID_SIZE, rng.next());
+    chance.savedFrames = sharedEntry
+      ? savedFrames.map((frame) => mapLegacyChanceFrameToV2(chance.roomId, frame))
+      : savedFrames;
+    chance.savedFrame = 0;
+  }
+  puck.pocketDepth = 0;
+  playLaunchSound();
 }
 
 function getSectorCenter(sector) {
@@ -6320,9 +8157,21 @@ function getSectorCenter(sector) {
   };
 }
 
+function captureStoppedV2Pocket(puck) {
+  if (!window.BalloroBonusUI?.isV2 || !POCKET_TEST_RANDOM_PHYSICS) return false;
+  collectMultiPlusByTouch(puck, 1, false, true);
+  if (puck === state.multiPlusCapturedPuck) return true;
+  if (captureFieldPocketPuckByTouch(puck, true)) return true;
+  return captureChancePuck(puck, true);
+}
+
 function stepReplayPuck(puck) {
   if (puck.stopped) {
     return;
+  }
+  if (puck === state.multiPlusCapturedPuck) {
+    if (stepMultiPlusPocketCapture(puck)) return;
+    if (["captured", "revealing"].includes(state.multiPlusPhase)) return;
   }
   const frames = puck.replayTrajectory?.frames;
   if (!frames?.length) throw new Error("Puck replay trajectory is missing");
@@ -6335,8 +8184,7 @@ function stepReplayPuck(puck) {
   const replayProgress = puck.replayCursor / Math.max(1, frames.length - 1);
   const finishBlend = clamp((replayProgress - 0.75) / 0.25, 0, 1);
   const smoothFinishBlend = finishBlend * finishBlend * (3 - 2 * finishBlend);
-  const playbackRate = INITIAL_REPLAY_PLAYBACK_RATE
-    + (0.82 - INITIAL_REPLAY_PLAYBACK_RATE) * smoothFinishBlend;
+  const playbackRate = 0.64 + (0.82 - 0.64) * smoothFinishBlend;
   puck.replayCursor = Math.min(puck.replayCursor + playbackRate, frames.length - 1);
   puck.replayFrame = Math.floor(puck.replayCursor);
   const frame = frames[puck.replayFrame];
@@ -6351,7 +8199,14 @@ function stepReplayPuck(puck) {
   puck.bounceCount = frame[5];
   puck.speed = Math.hypot(puck.vx, puck.vy);
   if (puck.bounceCount > previousBounces) playWallHitSound(puck.speed);
+  collectBonusStarByTouch(puck);
   if (puck.pocketRelease) collectPocketReleaseSymbolsByTouch(puck);
+  else {
+    collectMultiPlusByTouch(puck);
+    if (puck === state.multiPlusCapturedPuck) return;
+  }
+  if (captureChancePuck(puck)) return;
+  if (captureFieldPocketPuckByTouch(puck)) return;
   if (puck.secretRoom?.phase === "entry") {
     const pocket = getSecretZoneGeometry(puck.secretRoom.zoneId).hole;
     const captureRadius = state.field.puckRadius
@@ -6368,6 +8223,14 @@ function stepReplayPuck(puck) {
         captureRadius
       );
       if (captureProgress !== null) {
+        const occupied = state.pucks.some((item) => item !== puck
+          && item.secretRoom?.zoneId === puck.secretRoom.zoneId
+          && ["capturing", "pocket_wait"].includes(item.secretRoom.phase));
+        if (occupied) {
+          puck.waitingForPocket = { kind: "blue", zoneId: puck.secretRoom.zoneId };
+          puck.secretRoom = null;
+          return;
+        }
         puck.x = puck.previousX + (puck.x - puck.previousX) * captureProgress;
         puck.y = puck.previousY + (puck.y - puck.previousY) * captureProgress;
         parkSecretRoomPuck(puck);
@@ -6379,12 +8242,13 @@ function stepReplayPuck(puck) {
   const remainingDistance = Math.hypot(puck.x - finalFrame[1] * half, puck.y - finalFrame[2] * half);
   const actualCell = getCellFromPoint(puck.x, puck.y);
   const target = puck.authoritativeResult;
-  const insideTarget = target && actualCell.col === target.col && actualCell.row === target.row;
+  const targetCell = target || getCellFromPoint(finalFrame[1] * half, finalFrame[2] * half);
+  const insideTarget = actualCell.col === targetCell.col && actualCell.row === targetCell.row;
   const completedBounces = puck.bounceCount >= puck.replayTrajectory.bounce_count;
   const invisibleTail = remainingDistance <= Math.max(2, state.field.puckRadius * 0.12);
   if ((insideTarget && completedBounces && invisibleTail) || puck.replayFrame === frames.length - 1) {
     if (puck.secretRoom?.phase === "entry") parkSecretRoomPuck(puck);
-    else settlePuck(puck);
+    else if (!captureStoppedV2Pocket(puck)) settlePuck(puck);
   }
 }
 
@@ -6392,7 +8256,7 @@ function getResultCell(puck) {
   const actual = getCellFromPoint(puck.x, puck.y);
   const actualCategory = getCellCategory(actual.col, actual.row);
   const actualMultiplier = getCellMultiplier(actual.col, actual.row);
-  if (puck.authoritativeResult) {
+  if (puck.authoritativeResult && !POCKET_TEST_RANDOM_PHYSICS) {
     return { ...puck.authoritativeResult };
   }
   return { col: actual.col, row: actual.row, category: actualCategory, multiplier: actualMultiplier };
@@ -6401,7 +8265,7 @@ function getResultCell(puck) {
 function getCellCategory(col, row) {
   const config = getMathConfiguration();
   if (isMultiPlusVisualActive()
-    && config?.multi_plus?.sectors?.some((sector) => sector.col === col && sector.row === row)) {
+    && getActiveMultiPlusCells().some((sector) => sector.col === col && sector.row === row)) {
     return "multi_plus";
   }
   for (const [category, sectors] of Object.entries(config?.sector_definitions || {})) {
@@ -6506,17 +8370,26 @@ function settlePuck(puck) {
   if (state.pucks.every((item) => item.stopped)) startResultRevealAnimation();
 }
 
+function getRoundLeaderboardMultiplier(pucks = []) {
+  return pucks.reduce((total, puck) => total
+    + (Number(puck.result?.multiplier) || 0) * (puck.result?.x10Boosted ? 10 : 1), 0);
+}
+
 function settleRound() {
-  const effectiveResultMultiplier = (puck) =>
-    (puck.result?.multiplier || 0) * (puck.result?.x10Boosted ? 10 : 1);
   const requiredStars = getRequiredStars();
-  const authoritativeBonus = state.roundOutcome?.bonus_triggered ?? state.crownsCollected >= requiredStars;
+  const authoritativeBonus = window.BalloroBonusUI?.isV2
+    ? state.x10BoostActivated
+    : state.roundOutcome?.bonus_triggered ?? state.crownsCollected >= requiredStars;
   if (authoritativeBonus && state.roundWinAmount > 0 && !state.crownBonusAwarded) {
     state.x10BoostActivated = true;
     state.pucks.forEach((puck) => upgradeSettledResultToX10(puck, { animate: false, playSound: false }));
     state.crownBonusAwarded = true;
   }
-  const roundMultiplier = state.pucks.reduce((total, puck) => total + effectiveResultMultiplier(puck), 0);
+  const roundMultiplier = getRoundLeaderboardMultiplier(state.pucks);
+  const totalStake = state.activeBetPerPuck * state.puckCount;
+  // The daily board ranks the complete round: add every ball's effective
+  // multiplier instead of averaging the result by the number of purchased balls.
+  const leaderboardMultiplier = roundMultiplier;
   state.wonLines = [];
   if (roundMultiplier > 0) {
     state.resultHistory.unshift({
@@ -6531,20 +8404,49 @@ function settleRound() {
     addPurpleLeaderboardEntry({
       id: `real-${state.roundId}`,
       name: "YOU",
-      multiplier: roundMultiplier,
+      multiplier: leaderboardMultiplier,
+      stake: totalStake,
+      balls: state.puckCount,
+      payout: state.roundWinAmount,
       timestamp: Date.now(),
       isReal: true
     });
   }
+  if (typeof desktopRoundRecord === 'function') desktopRoundRecord({
+    id:state.roundId,timestamp:Date.now(),balls:state.puckCount,
+    stake:state.activeBetPerPuck*state.puckCount,payout:state.roundWinAmount
+  });
   state.running = false;
+  if (window.BalloroBonusUI?.isV2) {
+    // The earned symbols remain visibly full through the bonus shots. Clear
+    // only after every ball in the round has come to rest.
+    state.v2BonusArrivedActive = { diamond: false, crown: false, lemon: false, blue: false };
+    updateCrownCounter();
+    updateChanceBonusCounter();
+    updateMultiPlusCounter();
+    updatePocketBonusCounter();
+  }
   state.activeSlot = null;
   state.activeBetPerPuck = 0;
+  state.roundSettledAt = performance.now();
   updateBank();
   updateBetButtons();
   updateRoundWinLabel();
   renderHistory();
   render();
   startCollectibleIdleAnimation();
+  if (state.winPresentationUnlockTimer !== null) {
+    window.clearTimeout(state.winPresentationUnlockTimer);
+    state.winPresentationUnlockTimer = null;
+  }
+  const unlockDelay = Math.max(0,
+    getAutoPlayReadyAt() - AUTO_PLAY_ROUND_GAP_MS - performance.now());
+  if (unlockDelay > 0) {
+    state.winPresentationUnlockTimer = window.setTimeout(() => {
+      state.winPresentationUnlockTimer = null;
+      if (!state.running) updateBetButtons();
+    }, unlockDelay + 24);
+  }
   scheduleNextAutoPlayRound();
 }
 
@@ -6552,16 +8454,138 @@ function maybeLaunchParkedSecretRooms(now) {
   const parked = state.pucks.filter((puck) => puck.secretRoom?.phase === "pocket_wait");
   if (!parked.length) return;
   const mainFieldStillMoving = state.pucks.some((puck) => !puck.stopped
-    && puck.secretRoom?.phase !== "pocket_wait");
+    && puck.secretRoom?.phase !== "pocket_wait"
+    && puck !== state.chanceCapturedPuck);
   if (mainFieldStillMoving) return;
   if (state.secretRoomLaunchAt === 0) {
     state.secretRoomLaunchAt = now + 1000;
     return;
   }
   if (state.secretRoomLaunchAt > 0 && now >= state.secretRoomLaunchAt) {
+    if (parked.some((puck) => puck.secretRoom?.bonusSymbolPending
+      || (puck.secretRoom?.blueLaunchReadyAt || 0) > now)) return;
     parked.forEach(beginSecretRoomVisit);
     state.secretRoomLaunchAt = -1;
   }
+}
+
+function reopenSettledPuckForPocketCapture(puck) {
+  const puckIndex = state.pucks.indexOf(puck);
+  const payout = Number(puck.result?.payout) || 0;
+  if (payout > 0) {
+    state.bankroll -= payout;
+    state.roundWinAmount -= payout;
+    updateBank();
+    updateRoundWinLabel();
+  }
+  state.settledCells = state.settledCells.filter((cell) => cell.puckIndex !== puckIndex);
+  puck.stopped = false;
+  puck.result = null;
+  puck.resultRevealStartedAt = 0;
+  puck.vx = 0;
+  puck.vy = 0;
+  puck.speed = 0;
+}
+
+function findStoppedPuckInPocketRange(point, radius, predicate = () => true) {
+  return state.pucks
+    .filter((puck) => puck.stopped && !puck.chance && !puck.secretRoom && predicate(puck))
+    .map((puck) => ({ puck, distance: Math.hypot(puck.x - point.x, puck.y - point.y) }))
+    .filter((item) => item.distance <= radius)
+    .sort((first, second) => first.distance - second.distance)[0]?.puck || null;
+}
+
+function captureWaitingPucksForAvailablePockets() {
+  const token = state.multiPlusToken;
+  if (token && !token.consumed && !token.collected && !state.multiPlusCapturedPuck) {
+    const yellowPuck = findStoppedPuckInPocketRange(
+      token,
+      window.BalloroBonusUI?.isV2
+        ? Math.max(0, state.field.puckRadius + token.radius - 1)
+        : state.field.puckRadius + token.radius + 2,
+      (puck) => !puck.multiPlusExitRequired
+    );
+    if (yellowPuck) {
+      reopenSettledPuckForPocketCapture(yellowPuck);
+      collectMultiPlus(yellowPuck, true);
+      return;
+    }
+  }
+
+  const blueOccupied = state.pucks.some((puck) => puck.secretRoom?.zoneId === FIELD_POCKET_ZONE_ID
+    && ["capturing", "pocket_wait"].includes(puck.secretRoom.phase));
+  if (!blueOccupied && !state.fieldPocket?.consumed) {
+    const waitingBluePuck = state.pucks.find((puck) => puck.stopped
+      && puck.waitingForPocket?.kind === "blue");
+    if (waitingBluePuck) {
+      const zoneId = waitingBluePuck.waitingForPocket.zoneId;
+      waitingBluePuck.waitingForPocket = null;
+      reopenSettledPuckForPocketCapture(waitingBluePuck);
+      waitingBluePuck.secretRoom = {
+        zoneId,
+        phase: "entry",
+        pocketCaptureArmed: true,
+        roomCursor: 0,
+        roomFrame: 0
+      };
+      parkSecretRoomPuck(waitingBluePuck);
+      return;
+    }
+  }
+
+  if (state.chancePocket && !state.chancePocket.consumed && !state.chanceCapturedPuck) {
+    const pocket = getChancePocketGeometry();
+    const redPuck = findStoppedPuckInPocketRange(
+      { x: pocket.normalized.x * state.field.half, y: pocket.normalized.y * state.field.half },
+      window.BalloroBonusUI?.isV2
+        ? Math.max(0, 2 * state.field.puckRadius - 1)
+        : state.field.puckRadius * CHANCE_POCKET_CAPTURE_RADIUS_MULTIPLIER,
+      (puck) => !puck.pocketRelease && !puck.waitingForPocket
+    );
+    if (redPuck) {
+      reopenSettledPuckForPocketCapture(redPuck);
+      captureChancePuck(redPuck, true);
+    }
+  }
+}
+
+function finalizeVisuallyStoppedReplayPucks(now) {
+  const visualStopSpeed = state.field.half * 0.075;
+  state.pucks.forEach((puck) => {
+    const controlledByPocket = puck === state.multiPlusCapturedPuck
+      || puck === state.chanceCapturedPuck
+      || ["capturing", "pocket_wait", "inside"].includes(puck.secretRoom?.phase);
+    const frames = puck.replayTrajectory?.frames;
+    if (puck.stopped || controlledByPocket || !frames?.length) {
+      puck.visualStopStartedAt = 0;
+      return;
+    }
+
+    const replayProgress = puck.replayCursor / Math.max(1, frames.length - 1);
+    if (replayProgress < 0.82 || puck.speed > visualStopSpeed) {
+      puck.visualStopStartedAt = 0;
+      return;
+    }
+
+    if (!puck.visualStopStartedAt) {
+      puck.visualStopStartedAt = now;
+      return;
+    }
+    if (now - puck.visualStopStartedAt < 180) return;
+
+    puck.visualStopStartedAt = 0;
+    if (puck.secretRoom?.phase === "entry") {
+      parkSecretRoomPuck(puck);
+      return;
+    }
+
+    const finalFrame = frames[frames.length - 1];
+    puck.x = finalFrame[1] * state.field.half;
+    puck.y = finalFrame[2] * state.field.half;
+    puck.replayCursor = frames.length - 1;
+    puck.replayFrame = frames.length - 1;
+    if (!captureStoppedV2Pocket(puck)) settlePuck(puck);
+  });
 }
 
 function tick(now, roundId) {
@@ -6571,20 +8595,20 @@ function tick(now, roundId) {
 
   const frameTime = Math.min(0.1, Math.max(0, (now - state.lastFrameAt) / 1000));
   state.lastFrameAt = now;
-  state.physicsAccumulator += frameTime;
+  state.physicsAccumulator += frameTime * (state.quickPlay ? 3 : 1);
   while (state.physicsAccumulator >= FIXED_PHYSICS_STEP) {
     state.pucks.forEach((puck) => {
-      stepReplayPuck(puck);
-      if (!puck.stopped && !puck.purpleBoost && !puck.pocketRelease) {
-        collectBonusStarByTouch(puck);
-        collectMultiPlusByTouch(puck);
-      }
+      if (!stepChanceRoomPuck(puck)) stepReplayPuck(puck);
     });
     collectPlannedStars();
     collectPlannedMultiPlus();
     state.physicsAccumulator -= FIXED_PHYSICS_STEP;
   }
+  maybeAdvanceMultiPlus(now);
   maybeLaunchParkedSecretRooms(now);
+  maybeAdvanceChance(now);
+  captureWaitingPucksForAvailablePockets();
+  finalizeVisuallyStoppedReplayPucks(now);
   render();
 
   if (state.pucks.every((puck) => puck.stopped)) {
@@ -6596,6 +8620,7 @@ function tick(now, roundId) {
 }
 
 function openPopup(popup) {
+  if (typeof closeSlotDialogs === "function") closeSlotDialogs();
   popup.classList.remove("hidden");
   els.menuDropdown.classList.add("hidden");
 }
@@ -6618,8 +8643,41 @@ function updateRoundWinLabel() {
   }
 }
 
+function getAutoPlayReadyAt() {
+  if (!state.roundSettledAt) return 0;
+  let endsAt = Math.max(state.roundSettledAt, state.winSoundEndsAt);
+  if (bigWinEffect.roundId === state.roundId && bigWinEffect.winners.size) {
+    endsAt = Math.max(endsAt, bigWinEffect.startedAt + BIG_WIN_DURATION_MS);
+  }
+  for (const puck of state.pucks) {
+    if (!(puck.result?.multiplier > 0)) continue;
+    endsAt = Math.max(endsAt,
+      (puck.resultRevealStartedAt || 0) + RESULT_BOOST_REVEAL_DURATION_MS,
+      (puck.result.boostRevealStartedAt || 0) + RESULT_BOOST_REVEAL_DURATION_MS);
+  }
+  if (state.multiPlusActive) {
+    endsAt = Math.max(endsAt, state.multiPlusActivatedAt + RESULT_BOOST_REVEAL_DURATION_MS);
+  }
+  return endsAt + AUTO_PLAY_ROUND_GAP_MS;
+}
+
+function isWinPresentationActive(now = performance.now()) {
+  if (!(state.roundWinAmount > 0)) return false;
+  return now < getAutoPlayReadyAt() - AUTO_PLAY_ROUND_GAP_MS;
+}
+
 function runAutoPlayTick() {
   if (!state.autoPlay || state.running || state.launchPrepared) {
+    return;
+  }
+  if (state.autoRoundsRemaining === 0) {
+    setAutoPlay(false);
+    updateSlotUi();
+    return;
+  }
+  // Recheck after the timer: another winner can restart the celebration.
+  if (performance.now() < getAutoPlayReadyAt()) {
+    scheduleNextAutoPlayRound();
     return;
   }
 
@@ -6646,7 +8704,7 @@ function scheduleNextAutoPlayRound() {
   state.autoPlayTimer = window.setTimeout(() => {
     state.autoPlayTimer = null;
     runAutoPlayTick();
-  }, AUTO_PLAY_ROUND_GAP_MS);
+  }, Math.max(AUTO_PLAY_ROUND_GAP_MS, getAutoPlayReadyAt() - performance.now()));
 }
 
 function setAutoPlay(enabled) {
@@ -6712,7 +8770,9 @@ function fitLocalizedUiText() {
 }
 
 function updateBetButtons() {
-  const controlsLocked = state.running || state.launchPrepared;
+  if (typeof updateSlotUi === "function") updateSlotUi();
+  const winPresentationActive = isWinPresentationActive();
+  const controlsLocked = state.running || state.launchPrepared || winPresentationActive;
   els.autoPlayToggle.classList.toggle("active", state.autoPlay);
   els.autoPlayToggle.setAttribute("aria-pressed", state.autoPlay ? "true" : "false");
 
@@ -6721,6 +8781,7 @@ function updateBetButtons() {
     const action = slot.querySelector(".bet-action");
     const input = slot.querySelector(".bet-value");
     const betStepButtons = slot.querySelectorAll(".bet-round-button");
+    action.disabled = state.running || winPresentationActive;
     action.classList.remove("waiting", "cashout", "mining");
     slot.querySelector(".bet-box").classList.toggle("is-locked", controlsLocked);
     input.disabled = controlsLocked;
@@ -6740,8 +8801,11 @@ function updateBetButtons() {
   });
 
   els.puckCountButtons.forEach((button) => {
-    button.disabled = controlsLocked;
-    button.classList.toggle("is-locked", controlsLocked);
+    const unavailableInV2 = window.BalloroBonusUI?.isV2
+      && !window.BalloroPocketExperiment
+      && Number.parseInt(button.dataset.puckCount, 10) !== 1;
+    button.disabled = controlsLocked || unavailableInV2;
+    button.classList.toggle("is-locked", controlsLocked || unavailableInV2);
   });
 
   els.gridSizeButtons.forEach((button) => {
@@ -6819,7 +8883,7 @@ function exportGameplayTestCsv() {
 }
 
 function canPrimeLaunch(slot) {
-  if (state.running || !slot) return false;
+  if (state.running || isWinPresentationActive() || !slot) return false;
   if (state.launchPrepared) return state.launchPreparedSlot === slot;
   const bet = parseBet(slot);
   return bet > 0 && state.bankroll >= bet * state.puckCount;
@@ -6858,6 +8922,16 @@ function setupBetControls() {
     const decrease = slot.querySelector(".decrease-bet");
     const increase = slot.querySelector(".increase-bet");
     const action = slot.querySelector(".bet-action");
+    let previousExperimentBet = parseBet(slot);
+
+    function resetProgressIfExperimentBetChanged() {
+      if (!window.BalloroPocketExperiment) return;
+      const currentBet = parseBet(slot);
+      if (currentBet !== previousExperimentBet) {
+        previousExperimentBet = currentBet;
+        resetV2BonusProgressForLineChange();
+      }
+    }
 
     function change(delta) {
       if (state.running || state.launchPrepared) {
@@ -6865,6 +8939,7 @@ function setupBetControls() {
       }
       const current = parseBet(slot);
       input.value = formatStake(getStepValue(current, delta));
+      resetProgressIfExperimentBetChanged();
       updateBetButtons();
     }
 
@@ -6872,25 +8947,30 @@ function setupBetControls() {
     increase.addEventListener("click", () => change(1));
     input.addEventListener("input", () => {
       if (!state.running && !state.launchPrepared) {
+        resetProgressIfExperimentBetChanged();
         updateBetButtons();
       }
     });
     input.addEventListener("blur", () => {
       const value = parseBet(slot);
       input.value = value > 0 ? formatStake(value) : "";
+      resetProgressIfExperimentBetChanged();
       updateBetButtons();
     });
-    action.addEventListener("pointerdown", (event) => {
+    action.addEventListener("pointerdown", async (event) => {
       if (event.button !== undefined && event.button !== 0) {
         return;
       }
       if (!canPrimeLaunch(slot)) {
         return;
       }
-      if (!prepareLaunchRound(slot)) {
+      const prepared = window.BalloroRoundTapes?.enabled
+        ? await window.BalloroRoundTapes.prepare(slot)
+        : prepareLaunchRound(slot);
+      if (!prepared || !canPrimeLaunch(slot)) {
         return;
       }
-      action.setPointerCapture?.(event.pointerId);
+      try { action.setPointerCapture?.(event.pointerId); } catch (_) { /* pointer may already be released */ }
       state.launchButtonPrimed = true;
       action.classList.add("is-pressed");
       render();
@@ -6908,11 +8988,13 @@ function setupBetControls() {
         return;
       }
       const nextPuckCount = Number.parseInt(button.dataset.puckCount, 10);
+      if (window.BalloroBonusUI?.isV2 && !window.BalloroPocketExperiment && nextPuckCount !== 1) return;
       const puckCountChanged = nextPuckCount !== state.puckCount;
       state.puckCount = nextPuckCount;
       els.puckCountButtons.forEach((item) => item.classList.toggle("active", item === button));
       if (puckCountChanged) {
-        resetDiamondBoostAfterPuckCountChange();
+        if (window.BalloroPocketExperiment) resetV2BonusProgressForLineChange();
+        else resetDiamondBoostAfterPuckCountChange();
       } else {
         updateCrownCounter();
       }
@@ -6922,7 +9004,8 @@ function setupBetControls() {
   });
 
   els.autoPlayToggle.addEventListener("click", () => {
-    setAutoPlay(!state.autoPlay);
+    if (state.autoPlay) { setAutoPlay(false); updateSlotUi(); }
+    else showSlotDialog("autoDialog");
   });
 
   els.gridSizeButtons.forEach((button) => {
@@ -6930,7 +9013,9 @@ function setupBetControls() {
       if (state.running || state.launchPrepared) {
         return;
       }
-      GRID_SIZE = Number.parseInt(button.dataset.gridSize, 10);
+      const nextGridSize = Number.parseInt(button.dataset.gridSize, 10);
+      if (nextGridSize !== GRID_SIZE) resetV2BonusProgressForLineChange();
+      GRID_SIZE = nextGridSize;
       state.riskLevel = window.PuckLuckMath?.riskForLines(GRID_SIZE) || "normal";
       setupCanvas();
       resetPucks();
@@ -6971,13 +9056,7 @@ function setupInteractions() {
 
   els.menuButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    els.menuDropdown.classList.toggle("hidden");
-  });
-
-  document.addEventListener("click", (event) => {
-    if (!event.target.closest(".menu-wrap")) {
-      els.menuDropdown.classList.add("hidden");
-    }
+    showSlotDialog("settingsDialog");
   });
 
   els.soundButton.addEventListener("click", () => {
@@ -6992,13 +9071,7 @@ function setupInteractions() {
     setMusicEnabled(els.menuMusicToggle.checked);
   });
 
-  els.menuHapticsToggle.addEventListener("change", () => {
-    setHapticsEnabled(els.menuHapticsToggle.checked);
-  });
 
-  els.menuAnimationToggle.addEventListener("change", () => {
-    setAnimationsEnabled(els.menuAnimationToggle.checked);
-  });
 
   els.menuAvatarButton.addEventListener("click", () => openPopup(els.avatarPopup));
   els.menuLanguageButton.addEventListener("click", () => openPopup(els.languagePopup));
@@ -7057,20 +9130,20 @@ function renderInitialFrame() {
 }
 
 function init() {
-  document.body.classList.toggle("bonus-edge-counter-layout", FIELD_HUD_VISIBILITY_EXPERIMENT.enabled);
+  loadV2BonusProgress();
+  setupSlotUi();
+  if (typeof setupDesktopUi === 'function') setupDesktopUi();
   setupCanvas();
   resetPucks();
   const storedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
   const browserLanguage = (navigator.language || "en").slice(0, 2).toLowerCase();
   const initialLanguage = TRANSLATIONS[storedLanguage] ? storedLanguage : TRANSLATIONS[browserLanguage] ? browserLanguage : "en";
   const soundEffectsEnabled = window.localStorage.getItem(SOUND_EFFECTS_STORAGE_KEY) !== "0";
-  const animationsEnabled = window.localStorage.getItem(ANIMATIONS_STORAGE_KEY) !== "0";
   const musicEnabled = window.localStorage.getItem(MUSIC_STORAGE_KEY) !== "0";
-  const hapticsEnabled = window.localStorage.getItem(HAPTICS_STORAGE_KEY) !== "0";
   setSoundEffectsEnabled(soundEffectsEnabled, false);
-  setAnimationsEnabled(animationsEnabled, false);
+  document.body.classList.remove("effects-disabled");
+  startCollectibleIdleAnimation();
   setMusicEnabled(musicEnabled, false, false);
-  setHapticsEnabled(hapticsEnabled, false);
   applyLocalization(initialLanguage, false);
   renderAvatars();
   syncAvatar();

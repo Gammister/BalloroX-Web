@@ -1,0 +1,387 @@
+/* Mobile Bonus Dock V2. Legacy selectors and markup remain untouched. */
+body:not(.bonus-ui-v2) .v2-counter-symbol { display: none; }
+body:not(.bonus-ui-v2) .v2-lemon-slots { display: none; }
+body:not(.bonus-ui-v2) .v2-crown-slots,
+body:not(.bonus-ui-v2) .crown-counter span:nth-child(n + 4) { display: none; }
+body.bonus-ui-v2 .pocket-bonus-counter { display: flex !important; }
+body.bonus-ui-v2 .puck-count-control { display: none !important; }
+body.bonus-ui-v2.pocket-experiment .slot-dialog .puck-count-control { display: flex !important; }
+body.pocket-experiment .slot-dialog .puck-count-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: min(100%, 310px);
+  gap: 6px;
+}
+body.pocket-experiment .slot-dialog .puck-count-button {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+}
+body.pocket-experiment .pocket-experiment-note { text-align: center; color: #f7cf7b; }
+body.pocket-experiment .crown-counter span { width: 21px !important; height: 21px !important; }
+body.pocket-experiment .v2-crown-slots { width: 44px !important; }
+body.pocket-experiment .v2-crown-slots .v2-crown { width: calc((100% - 3px) / 2) !important; }
+body.pocket-experiment .v2-lemon-slots { width: 22px !important; }
+body.pocket-experiment .v2-lemon-slots .v2-lemon { width: 100% !important; }
+body.bonus-ui-v2 .multi-plus-counter.is-active .multi-plus-icon::after,
+body.bonus-ui-v2 .chance-bonus-counter.is-active .chance-bonus-icon::after,
+body.bonus-ui-v2 .pocket-bonus-counter.is-active .pocket-bonus-icon::after { display: none; }
+body.bonus-ui-v2 .multi-plus-hole,
+body.bonus-ui-v2 .chance-bonus-hole,
+body.bonus-ui-v2 .pocket-bonus-hole { display: none; }
+body.bonus-ui-v2 .v2-counter-symbol { width: 100%; height: 100%; overflow: visible; }
+body.bonus-ui-v2 .v2-crown-slots { display: flex; width: 100%; height: 100%; gap: 1px; }
+body.bonus-ui-v2 .v2-crown-slots .v2-crown { width: calc((100% - 2px) / 3); opacity: 1; filter: none; }
+body.bonus-ui-v2 .v2-crown-slots .v2-crown { transform: scale(1.2); }
+body.bonus-ui-v2 .v2-crown-slots .v2-crown.filled { opacity: 1; filter: drop-shadow(0 0 5px rgba(255, 74, 82, .7)); }
+.counter-flyin-symbol.is-lemon { filter: drop-shadow(0 0 5px rgba(255, 213, 61, .8)); }
+.counter-flyin-symbol.is-crown { filter: drop-shadow(0 0 5px rgba(255, 74, 82, .8)); }
+body.bonus-ui-v2 .v2-lemon-body,
+.counter-flyin-symbol.is-lemon .v2-lemon-body { fill: #ffdc38; stroke: #ae790e; stroke-width: 5; }
+body.bonus-ui-v2 .v2-lemon-leaf,
+.counter-flyin-symbol.is-lemon .v2-lemon-leaf { fill: #80bd3c; }
+body.bonus-ui-v2 .v2-crown-body,
+.counter-flyin-symbol.is-crown .v2-crown-body { fill: #ff5961; stroke: #a91627; stroke-width: 5; stroke-linejoin: round; }
+body.bonus-ui-v2 .v2-lemon { filter: drop-shadow(0 0 6px rgba(255, 213, 61, .6)); }
+body.bonus-ui-v2 .v2-crown { filter: drop-shadow(0 0 6px rgba(255, 74, 82, .6)); }
+body.bonus-ui-v2 .v2-lemon-slots { display: flex; width: 100%; height: 100%; gap: 2px; }
+body.bonus-ui-v2 .v2-lemon-slots .v2-lemon { width: calc((100% - 2px) / 2); height: 100%; opacity: 1; filter: none; }
+body.bonus-ui-v2 .v2-lemon-slots .v2-lemon.filled { opacity: 1; filter: drop-shadow(0 0 5px rgba(255, 213, 61, .7)); }
+body.bonus-ui-v2 .v2-crown:not(.filled) .v2-crown-body { fill: #09080d; stroke: #a43d48; }
+body.bonus-ui-v2 .v2-lemon:not(.filled) .v2-lemon-body { fill: #09080d; stroke: #9c7b28; }
+body.bonus-ui-v2 .v2-lemon:not(.filled) .v2-lemon-leaf { fill: #09080d; stroke: #6f8d43; stroke-width: 5; }
+body.bonus-ui-v2 .v2-blue-symbol,
+.counter-flyin-symbol.is-blue svg { fill: #a4edff; stroke: #319cc5; stroke-width: 5; filter: drop-shadow(0 0 5px rgba(106, 218, 255, .7)); }
+body.bonus-ui-v2 .v2-blue-symbol:not(.filled) { fill: #09080d; stroke: #397e9b; filter: none; }
+.counter-flyin-symbol.is-blue { filter: drop-shadow(0 0 6px rgba(106, 218, 255, .7)); }
+
+@media (max-width: 720px) {
+  body.bonus-ui-v2 .mobile-table-left,
+  body.bonus-ui-v2 .mobile-table-right {
+    display: none !important;
+  }
+
+  body.bonus-ui-v2 .desktop-logo {
+    display: flex;
+    z-index: 9;
+    opacity: .58;
+    top: max(8px, env(safe-area-inset-top, 0px));
+    left: 50%;
+    translate: -50% 0;
+    transform: perspective(220px) rotateX(18deg) scaleY(1.06);
+    transform-origin: 50% 55%;
+    filter: saturate(.82) brightness(.92);
+    text-shadow: 0 3px 0 rgba(45, 17, 62, .62), 0 8px 16px rgba(190, 92, 245, .09);
+    transition: opacity .24s ease, filter .24s ease, text-shadow .24s ease;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  body.bonus-ui-v2.x10-visual-active .desktop-logo {
+    opacity: 1;
+    filter: saturate(1) brightness(1);
+    text-shadow: 0 4px 0 rgba(72, 25, 103, .82), 0 12px 22px rgba(190, 92, 245, .16);
+  }
+
+  body.bonus-ui-v2 .mine-stage::before {
+    content: "";
+    position: absolute;
+    z-index: 7;
+    top: max(64px, calc(env(safe-area-inset-top, 0px) + 56px));
+    left: 5px;
+    right: 5px;
+    height: 62px;
+    border: 0;
+    border-radius: 15px;
+    background: linear-gradient(180deg, rgba(15, 12, 21, .92), rgba(5, 7, 10, .84));
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .28);
+    pointer-events: none;
+  }
+
+  body.bonus-ui-v2 .crown-bonus-counter,
+  body.bonus-ui-v2 .chance-bonus-counter,
+  body.bonus-ui-v2 .multi-plus-counter,
+  body.bonus-ui-v2 .pocket-bonus-counter {
+    top: max(68px, calc(env(safe-area-inset-top, 0px) + 60px)) !important;
+    width: calc((100% - 10px) / 4) !important;
+    height: 54px !important;
+    min-width: 0 !important;
+    padding: 5px 2px !important;
+    gap: 2px !important;
+    justify-content: center !important;
+    flex-direction: column !important;
+    border: 0 !important;
+    border-right: 1px solid rgba(210, 205, 224, .1) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    scale: 1 !important;
+    transform-origin: center !important;
+    opacity: .62;
+    transition: opacity .18s ease, border-color .18s ease, background-color .18s ease;
+  }
+
+  body.bonus-ui-v2 .crown-bonus-counter { left: 5px !important; border-radius: 15px 0 0 15px !important; }
+  body.bonus-ui-v2 .chance-bonus-counter { left: calc(5px + (100% - 10px) / 4) !important; }
+  body.bonus-ui-v2 .multi-plus-counter { left: calc(5px + 2 * (100% - 10px) / 4) !important; }
+  body.bonus-ui-v2 .pocket-bonus-counter {
+    left: calc(5px + 3 * (100% - 10px) / 4) !important;
+    border-right: 0 !important;
+    border-radius: 0 15px 15px 0 !important;
+  }
+
+  body.bonus-ui-v2 .crown-bonus-counter.is-active,
+  body.bonus-ui-v2 .chance-bonus-counter.is-active,
+  body.bonus-ui-v2 .multi-plus-counter.is-active,
+  body.bonus-ui-v2 .pocket-bonus-counter.is-active {
+    opacity: 1;
+    background: rgba(255, 255, 255, .055) !important;
+  }
+
+  body.bonus-ui-v2 .crown-counter { gap: 1px; height: 19px; }
+  body.bonus-ui-v2 .crown-counter span { width: 12px; height: 14px; }
+  body.bonus-ui-v2 .multi-plus-icon,
+  body.bonus-ui-v2 .pocket-bonus-icon,
+  body.bonus-ui-v2 .chance-bonus-icon {
+    width: 19px;
+    height: 19px;
+    flex: 0 0 19px;
+  }
+  body.bonus-ui-v2 .chance-bonus-icon { width: 49px; flex-basis: 49px; }
+  body.bonus-ui-v2 .multi-plus-icon { width: 38px; flex-basis: 38px; }
+  body.bonus-ui-v2 .crown-bonus-counter strong,
+  body.bonus-ui-v2 .chance-bonus-counter strong,
+  body.bonus-ui-v2 .multi-plus-counter strong,
+  body.bonus-ui-v2 .pocket-bonus-counter strong {
+    min-width: 0;
+    padding: 0;
+    font-size: clamp(8px, 2.35vw, 10px);
+    line-height: .9;
+    letter-spacing: -.02em;
+  }
+  body.bonus-ui-v2 .crown-bonus-counter strong span:first-child,
+  body.bonus-ui-v2 .chance-bonus-counter strong span:first-child,
+  body.bonus-ui-v2 .multi-plus-counter strong span:first-child,
+  body.bonus-ui-v2 .pocket-bonus-counter strong span:first-child {
+    font-size: clamp(9px, 2.6vw, 11px);
+  }
+
+  body.bonus-ui-v2 .crown-bonus-counter.bonus-bubble,
+  body.bonus-ui-v2 .chance-bonus-counter.bonus-bubble,
+  body.bonus-ui-v2 .multi-plus-counter.multi-plus-bubble,
+  body.bonus-ui-v2 .pocket-bonus-counter.bonus-bubble {
+    animation-duration: 430ms;
+  }
+
+  body.bonus-ui-v2 .round-win-label { z-index: 10; }
+}
+
+@media (max-width: 340px) {
+  body.bonus-ui-v2 .crown-counter span { width: 11px; height: 12px; }
+  body.bonus-ui-v2 .crown-counter { gap: 0; }
+}
+
+/* Desktop V2 mirrors the mobile information hierarchy without changing the
+   independent side-table layout. */
+@media (min-width: 721px) {
+  body.bonus-ui-v2 .mine-stage {
+    --desktop-bonus-dock-width: clamp(640px, 50vw, 760px);
+  }
+
+  body.bonus-ui-v2 .mine-stage::before {
+    content: "";
+    position: absolute;
+    z-index: 7;
+    top: 86px;
+    left: 50%;
+    width: var(--desktop-bonus-dock-width);
+    height: 62px;
+    translate: -50% 0;
+    border: 0;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(15, 12, 21, .92), rgba(5, 7, 10, .84));
+    box-shadow: 0 9px 26px rgba(0, 0, 0, .3);
+    pointer-events: none;
+  }
+
+  body.bonus-ui-v2 .crown-bonus-counter,
+  body.bonus-ui-v2 .chance-bonus-counter,
+  body.bonus-ui-v2 .multi-plus-counter,
+  body.bonus-ui-v2 .pocket-bonus-counter {
+    top: 90px !important;
+    width: calc(var(--desktop-bonus-dock-width) / 4) !important;
+    height: 54px !important;
+    min-width: 0 !important;
+    padding: 6px 10px !important;
+    gap: 8px !important;
+    justify-content: center !important;
+    flex-direction: row !important;
+    border: 0 !important;
+    border-right: 1px solid rgba(210, 205, 224, .1) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    scale: 1 !important;
+    transform-origin: center !important;
+    opacity: .68;
+    transition: opacity .18s ease, background-color .18s ease;
+  }
+
+  body.bonus-ui-v2 .crown-bonus-counter {
+    left: calc(50% - var(--desktop-bonus-dock-width) / 2) !important;
+    border-radius: 16px 0 0 16px !important;
+  }
+  body.bonus-ui-v2 .chance-bonus-counter {
+    left: calc(50% - var(--desktop-bonus-dock-width) / 4) !important;
+  }
+  body.bonus-ui-v2 .multi-plus-counter { left: 50% !important; }
+  body.bonus-ui-v2 .pocket-bonus-counter {
+    left: calc(50% + var(--desktop-bonus-dock-width) / 4) !important;
+    border-right: 0 !important;
+    border-radius: 0 16px 16px 0 !important;
+  }
+
+  body.bonus-ui-v2 .crown-bonus-counter.is-active,
+  body.bonus-ui-v2 .chance-bonus-counter.is-active,
+  body.bonus-ui-v2 .multi-plus-counter.is-active,
+  body.bonus-ui-v2 .pocket-bonus-counter.is-active {
+    opacity: 1;
+    background: rgba(255, 255, 255, .055) !important;
+  }
+
+  body.bonus-ui-v2 .crown-counter { gap: 3px; height: 24px; }
+  body.bonus-ui-v2 .crown-counter span { width: 17px; height: 19px; }
+  body.bonus-ui-v2 .multi-plus-icon,
+  body.bonus-ui-v2 .pocket-bonus-icon,
+  body.bonus-ui-v2 .chance-bonus-icon {
+    width: 25px;
+    height: 25px;
+    flex: 0 0 25px;
+  }
+  body.bonus-ui-v2 .chance-bonus-icon { width: 66px; flex-basis: 66px; }
+  body.bonus-ui-v2 .multi-plus-icon { width: 44px; flex-basis: 44px; }
+  body.bonus-ui-v2 .crown-bonus-counter strong,
+  body.bonus-ui-v2 .chance-bonus-counter strong,
+  body.bonus-ui-v2 .multi-plus-counter strong,
+  body.bonus-ui-v2 .pocket-bonus-counter strong {
+    min-width: 0;
+    padding: 0;
+    font-size: clamp(11px, .9vw, 15px);
+    line-height: .92;
+    letter-spacing: -.02em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.bonus-ui-v2 .bonus-bubble,
+  body.bonus-ui-v2 .multi-plus-bubble { animation: none !important; }
+}
+
+/* The four meters share one spacing system. Empty silhouettes remain legible
+   instead of looking like reduced-opacity copies of the filled icons. */
+body.bonus-ui-v2 .crown-bonus-counter { --meter-rgb: 205, 111, 255; }
+body.bonus-ui-v2 .chance-bonus-counter { --meter-rgb: 255, 76, 57; }
+body.bonus-ui-v2 .multi-plus-counter { --meter-rgb: 255, 211, 35; }
+body.bonus-ui-v2 .pocket-bonus-counter { --meter-rgb: 52, 239, 68; }
+body.bonus-ui-v2 .v2-lemon-slots,
+body.bonus-ui-v2 .v2-crown-slots { align-items: center; justify-content: center; gap: 3px; }
+body.bonus-ui-v2 .v2-lemon,
+body.bonus-ui-v2 .v2-crown,
+body.bonus-ui-v2 .v2-blue-symbol { object-fit: contain; }
+.counter-flyin-symbol.is-lemon img,
+.counter-flyin-symbol.is-crown img,
+.counter-flyin-symbol.is-blue img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.counter-flyin-symbol.is-blue { filter: drop-shadow(0 0 6px rgba(48, 238, 68, .8)); }
+body.bonus-ui-v2 .v2-lemon:not(.filled) {
+  filter: brightness(0) drop-shadow(1px 0 #947019) drop-shadow(-1px 0 #947019) drop-shadow(0 1px #947019) drop-shadow(0 -1px #947019) !important;
+}
+body.bonus-ui-v2 .v2-crown:not(.filled) {
+  filter: brightness(0) drop-shadow(1px 0 #943c37) drop-shadow(-1px 0 #943c37) drop-shadow(0 1px #943c37) drop-shadow(0 -1px #943c37) !important;
+}
+body.bonus-ui-v2 .v2-blue-symbol:not(.filled) {
+  filter: brightness(0) drop-shadow(1px 0 #308c48) drop-shadow(-1px 0 #308c48) drop-shadow(0 1px #308c48) drop-shadow(0 -1px #308c48) !important;
+}
+/* Let the arrival keyframes briefly override the steady glow. */
+body.bonus-ui-v2 .v2-lemon.filled { filter: drop-shadow(0 0 5px rgba(255, 213, 61, .78)); }
+body.bonus-ui-v2 .v2-crown.filled { filter: drop-shadow(0 0 5px rgba(255, 75, 52, .8)); }
+body.bonus-ui-v2 .v2-blue-symbol.filled { filter: drop-shadow(0 0 6px rgba(48, 238, 68, .85)); }
+body.bonus-ui-v2 .pocket-bonus-counter strong { color: #67ef75; text-shadow: 0 0 10px rgba(27, 224, 62, .5); }
+body.bonus-ui-v2 .crown-bonus-counter strong,
+body.bonus-ui-v2 .chance-bonus-counter strong,
+body.bonus-ui-v2 .multi-plus-counter strong,
+body.bonus-ui-v2 .pocket-bonus-counter strong {
+  flex: 0 0 auto !important;
+  height: 20px;
+  min-height: 20px;
+  display: grid;
+  grid-template-rows: repeat(2, 1fr);
+  align-content: center;
+  place-items: center;
+  margin: 0;
+  text-align: center;
+}
+body.bonus-ui-v2 .v2-meter-arrival .filled {
+  animation: v2SymbolArrivalFlash 420ms ease-out;
+}
+body.bonus-ui-v2 .v2-meter-arrival .v2-crown.filled {
+  animation: v2FireArrivalFlash 420ms ease-out;
+}
+@keyframes v2SymbolArrivalFlash {
+  0% { filter: brightness(2.6) drop-shadow(0 0 12px white); transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+@keyframes v2FireArrivalFlash {
+  0% { filter: brightness(2.6) drop-shadow(0 0 12px white); transform: scale(1.55); }
+  100% { transform: scale(1.2); }
+}
+body.bonus-ui-v2 .crown-bonus-counter.is-active,
+body.bonus-ui-v2 .chance-bonus-counter.is-active,
+body.bonus-ui-v2 .multi-plus-counter.is-active,
+body.bonus-ui-v2 .pocket-bonus-counter.is-active {
+  opacity: 1;
+  background: radial-gradient(ellipse at 50% 38%, rgba(var(--meter-rgb), .32), rgba(var(--meter-rgb), .07) 76%) !important;
+  box-shadow: inset 0 0 0 1px rgba(var(--meter-rgb), .9),
+    0 0 15px rgba(var(--meter-rgb), .65), 0 0 31px rgba(var(--meter-rgb), .3) !important;
+  animation: v2MeterReady 1.3s ease-in-out infinite alternate;
+}
+@keyframes v2MeterReady {
+  from { filter: brightness(1.05); }
+  to { filter: brightness(1.55); }
+}
+@media (max-width: 720px) {
+  body.bonus-ui-v2 .crown-bonus-counter,
+  body.bonus-ui-v2 .chance-bonus-counter,
+  body.bonus-ui-v2 .multi-plus-counter,
+  body.bonus-ui-v2 .pocket-bonus-counter { gap: 3px !important; padding: 3px 2px !important; }
+  body.bonus-ui-v2 .crown-counter { height: 19px; gap: 1px; flex: 0 0 auto; }
+  body.bonus-ui-v2 .crown-counter span { width: 17px; height: 17px; }
+  body.bonus-ui-v2 .chance-bonus-icon,
+  body.bonus-ui-v2 .multi-plus-icon,
+  body.bonus-ui-v2 .pocket-bonus-icon { flex: 0 0 auto !important; }
+  body.bonus-ui-v2 .chance-bonus-icon { width: 55px; height: 19px; }
+  body.bonus-ui-v2 .multi-plus-icon { width: 36px; height: 19px; }
+  body.bonus-ui-v2 .pocket-bonus-icon { width: 19px; height: 19px; }
+  body.bonus-ui-v2 .v2-crown-slots .v2-crown,
+  body.bonus-ui-v2 .v2-lemon-slots .v2-lemon { height: 17px; }
+  body.bonus-ui-v2 .pocket-bonus-icon .v2-blue-symbol { width: 17px; height: 17px; }
+  body.bonus-ui-v2 .crown-bonus-counter strong,
+  body.bonus-ui-v2 .chance-bonus-counter strong,
+  body.bonus-ui-v2 .multi-plus-counter strong,
+  body.bonus-ui-v2 .pocket-bonus-counter strong { line-height: 1; }
+}
+@media (min-width: 721px) {
+  body.bonus-ui-v2 .crown-counter { gap: 2px; height: 25px; }
+  body.bonus-ui-v2 .crown-counter span { width: 23px; height: 23px; }
+  body.bonus-ui-v2 .chance-bonus-icon { width: 75px; flex-basis: 75px; height: 25px; }
+  body.bonus-ui-v2 .multi-plus-icon { width: 50px; flex-basis: 50px; height: 25px; }
+  body.bonus-ui-v2 .pocket-bonus-icon { width: 25px; height: 25px; flex-basis: 25px; }
+  body.bonus-ui-v2 .v2-crown-slots .v2-crown,
+  body.bonus-ui-v2 .v2-lemon-slots .v2-lemon { height: 23px; }
+  body.bonus-ui-v2 .pocket-bonus-icon .v2-blue-symbol { width: 23px; height: 23px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.bonus-ui-v2 .crown-bonus-counter.is-active,
+  body.bonus-ui-v2 .chance-bonus-counter.is-active,
+  body.bonus-ui-v2 .multi-plus-counter.is-active,
+  body.bonus-ui-v2 .pocket-bonus-counter.is-active { animation: none; }
+}
