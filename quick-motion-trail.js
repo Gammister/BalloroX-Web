@@ -3,20 +3,22 @@
 
   const MAX_POINTS=11;
   const LIFETIME_MS=260;
+  const NORMAL_LIFETIME_MS=125;
   const MIN_SAMPLE_MS=14;
   const histories=new WeakMap();
 
-  function trim(points,now){
-    while(points.length&&now-points[0].t>LIFETIME_MS)points.shift();
+  function trim(points,now,lifetime){
+    while(points.length&&now-points[0].t>lifetime)points.shift();
   }
 
   const BONUS_CHANNELS={blue:'41,232,91',diamond:'180,83,236',crown:'255,69,75',lemon:'255,217,58'};
 
-  function draw(ctx,key,point,radius,{active=false,alpha=1,now=performance.now(),bonusKind=null}={}){
+  function draw(ctx,key,point,radius,{active=false,alpha=1,now=performance.now(),bonusKind=null,quick=true}={}){
     if(!key||!point||!Number.isFinite(point.x)||!Number.isFinite(point.y)||!(radius>0))return 0;
     let points=histories.get(key);
     if(!points){points=[];histories.set(key,points);}
-    trim(points,now);
+    const lifetime=quick?LIFETIME_MS:NORMAL_LIFETIME_MS;
+    trim(points,now,lifetime);
 
     if(active){
       const last=points[points.length-1];
@@ -35,14 +37,14 @@
     const channels=BONUS_CHANNELS[bonusKind]||'255,255,255';
     for(let index=1;index<points.length;index+=1){
       const from=points[index-1],to=points[index];
-      const fade=Math.max(0,1-(now-to.t)/LIFETIME_MS);
+      const fade=Math.max(0,1-(now-to.t)/lifetime);
       if(fade<=0)continue;
       const taper=index/(points.length-1);
       ctx.beginPath();
       ctx.moveTo(from.x,from.y);
       ctx.lineTo(to.x,to.y);
       ctx.lineWidth=radius*2;
-      ctx.strokeStyle=`rgba(${channels},${(.16*fade*taper*alpha).toFixed(4)})`;
+      ctx.strokeStyle=`rgba(${channels},${((quick?.16:.11)*fade*taper*alpha).toFixed(4)})`;
       ctx.stroke();
     }
     ctx.restore();

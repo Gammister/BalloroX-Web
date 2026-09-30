@@ -142,7 +142,8 @@ function setupSlotUi() {
   history.append(els.historyPanel);
   els.historyPanel.classList.add('expanded');
   els.historyToggle.classList.add('hidden');
-  auto.innerHTML = '<p class="slot-caption">Количество раундов</p><div id="autoRoundChoices" class="slot-choices auto-choices"></div><p class="slot-hint">Следующий раунд начнётся после анимации выигрыша и паузы 300 мс. Нажмите кнопку автоигры ещё раз, чтобы остановить.</p><button id="startAuto" class="slot-start" type="button">Начать автоигру</button>';
+  auto.innerHTML = '<p class="slot-caption">Количество раундов</p><div id="autoRoundChoices" class="slot-choices auto-choices"></div>'
+    + '<p class="slot-hint">Нажмите кнопку автоигры ещё раз, чтобы остановить её.</p><button id="startAuto" class="slot-start" type="button">Начать автоигру</button>';
   for (const count of [10,25,50,100,250,500,750,1000,Infinity]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = count === Infinity ? '∞' : String(count);
     button.dataset.rounds = String(count);

@@ -6,10 +6,11 @@ body:not(.bonus-ui-v2) .crown-counter span:nth-child(n + 4) { display: none; }
 body.bonus-ui-v2 .pocket-bonus-counter { display: flex !important; }
 body.bonus-ui-v2 .puck-count-control { display: none !important; }
 body.bonus-ui-v2.pocket-experiment .slot-dialog .puck-count-control { display: flex !important; }
+body.bonus-ui-v3.pocket-experiment .slot-dialog .puck-count-control { display: none !important; }
 body.pocket-experiment .slot-dialog .puck-count-buttons {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  width: min(100%, 310px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 220px);
   gap: 6px;
 }
 body.pocket-experiment .slot-dialog .puck-count-button {
@@ -23,6 +24,17 @@ body.pocket-experiment .v2-crown-slots { width: 44px !important; }
 body.pocket-experiment .v2-crown-slots .v2-crown { width: calc((100% - 3px) / 2) !important; }
 body.pocket-experiment .v2-lemon-slots { width: 22px !important; }
 body.pocket-experiment .v2-lemon-slots .v2-lemon { width: 100% !important; }
+button[data-grid-size][hidden] { display: none !important; }
+body.bonus-ui-v2 #crownCounter > span:nth-child(n + 2),
+body.bonus-ui-v2 .v2-crown-slots .v2-crown:nth-child(n + 2),
+body.bonus-ui-v2 .v2-lemon-slots .v2-lemon:nth-child(n + 2) { display: none !important; }
+body.bonus-ui-v2 #crownCounter { justify-content: center; }
+body.bonus-ui-v2 .v2-crown-slots,
+body.bonus-ui-v2 .v2-lemon-slots,
+body.pocket-experiment .v2-crown-slots { width: 24px !important; justify-content: center; }
+body.bonus-ui-v2 .v2-crown-slots .v2-crown,
+body.bonus-ui-v2 .v2-lemon-slots .v2-lemon,
+body.pocket-experiment .v2-crown-slots .v2-crown { width: 100% !important; }
 body.bonus-ui-v2 .multi-plus-counter.is-active .multi-plus-icon::after,
 body.bonus-ui-v2 .chance-bonus-counter.is-active .chance-bonus-icon::after,
 body.bonus-ui-v2 .pocket-bonus-counter.is-active .pocket-bonus-icon::after { display: none; }
@@ -64,7 +76,7 @@ body.bonus-ui-v2 .v2-blue-symbol:not(.filled) { fill: #09080d; stroke: #397e9b; 
   body.bonus-ui-v2 .desktop-logo {
     display: flex;
     z-index: 9;
-    opacity: .58;
+    opacity: 1;
     top: max(8px, env(safe-area-inset-top, 0px));
     left: 50%;
     translate: -50% 0;
@@ -384,4 +396,50 @@ body.bonus-ui-v2 .pocket-bonus-counter.is-active {
   body.bonus-ui-v2 .chance-bonus-counter.is-active,
   body.bonus-ui-v2 .multi-plus-counter.is-active,
   body.bonus-ui-v2 .pocket-bonus-counter.is-active { animation: none; }
+}
+
+/* Local version switch: tucked into the empty upper-left field margin. */
+.version-switcher { display: none; }
+body.bonus-ui-v2 .version-switcher,
+body.bonus-ui-v3 .version-switcher {
+  position: absolute;
+  z-index: 13;
+  top: clamp(22px, 7.5%, 86px);
+  left: clamp(10px, 2vw, 28px);
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid rgba(46, 190, 119, .6);
+  border-radius: 15px;
+  background: rgba(3, 11, 9, .88);
+  box-shadow: 0 0 14px rgba(34, 183, 100, .13);
+}
+body.bonus-ui-v2 .version-switcher button,
+body.bonus-ui-v3 .version-switcher button {
+  width: clamp(42px, 5vw, 56px);
+  height: clamp(38px, 4.5vw, 50px);
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #85b79c;
+  font: 900 clamp(15px, 1.8vw, 20px)/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+body.bonus-ui-v2 .version-switcher button[aria-pressed="true"],
+body.bonus-ui-v3 .version-switcher button[aria-pressed="true"] {
+  background: #168e55;
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 0 12px rgba(47, 221, 125, .4);
+}
+body.bonus-ui-v2 .version-switcher button:focus-visible,
+body.bonus-ui-v3 .version-switcher button:focus-visible {
+  outline: 2px solid #c4ffd9;
+  outline-offset: 2px;
+}
+body.bonus-ui-v2 .version-switcher button:disabled,
+body.bonus-ui-v3 .version-switcher button:disabled {
+  cursor: default;
+  opacity: .55;
 }

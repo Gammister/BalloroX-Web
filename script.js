@@ -253,6 +253,18 @@ const state = {
   roundSettledAt: 0,
   winSoundEndsAt: 0,
   running: false,
+  v3LastLaunchAt: -Infinity,
+  v3BallSerial: 0,
+  v3ShotSerial: 0,
+  v3Shots: new Map(),
+  v3LastWinAmount: 0,
+  v3WinLabelSerial: 0,
+  v3HoldTimer: null,
+  v3CooldownTimer: null,
+  v3BonusLock: null,
+  v3BonusPuck: null,
+  v3BonusQueue: [],
+  v3PocketSymbolCycle: { diamond: false, crown: false, lemon: false, blue: false },
   launchPrepared: false,
   launchPreparedSlot: null,
   launchButtonPrimed: false,
@@ -378,6 +390,8 @@ const els = {
   historyToggle: document.getElementById("historyToggle"),
   canvas: document.getElementById("mineCanvas"),
   counterFlyInLayer: document.getElementById("counterFlyInLayer"),
+  versionSwitcher: document.getElementById("versionSwitcher"),
+  versionButtons: Array.from(document.querySelectorAll("[data-bonus-ui-version]")),
   roundWinLabel: document.getElementById("roundWinLabel"),
   currentLoot: document.getElementById("currentLoot"),
   stageMultiplier: document.getElementById("stageMultiplier"),
@@ -421,6 +435,24 @@ function applyLocalization(language, persist = true) {
   document.querySelectorAll("[data-i18n]").forEach((element) => {
     element.textContent = t(element.dataset.i18n);
   });
+  if (window.BalloroBonusUI?.isV2) {
+    const russian = state.language === "ru";
+    const copy = russian ? {
+      ruleLaunchText: "Выберите ставку, 1–3 шара и 5, 7 или 9 линий. Шары отскакивают от стенок; это локальный тест без откалиброванного RTP.",
+      ruleBoostText: "Попадание в фиолетовую лузу даёт один алмаз. Когда он долетает до каунтера, X10 BOOST окрашивает поле в фиолетовый и умножает выигрыши в десять раз.",
+      ruleFieldText: "Доступны 5, 7 и 9 линий. Они меняют размер ячеек и множители поля.",
+      ruleMultiText: "Попадание в жёлтую лузу даёт одну звезду. Когда она долетает до каунтера, EX MULTI запускает дополнительные множители и затем выпускает шар."
+    } : {
+      ruleLaunchText: "Choose a stake, 1–3 balls, and 5, 7, or 9 lines. Balls bounce off the walls; this local test has no calibrated RTP.",
+      ruleBoostText: "The purple pocket awards one diamond. Once it reaches the counter, X10 BOOST turns the field purple and multiplies wins by ten.",
+      ruleFieldText: "Choose 5, 7, or 9 lines to change cell size and field multipliers.",
+      ruleMultiText: "The yellow pocket awards one star. Once it reaches the counter, EX MULTI starts extra multipliers and then releases the ball."
+    };
+    for (const [key, value] of Object.entries(copy)) {
+      const element = document.querySelector(`[data-i18n="${key}"]`);
+      if (element) element.textContent = value;
+    }
+  }
   document.querySelectorAll(".language-options button").forEach((button) => {
     button.classList.toggle("active", button.dataset.lang === state.language);
   });
@@ -463,6 +495,11 @@ function isX10BoostActive() {
   return Boolean(state.x10BoostActivated)
     || (Boolean(state.roundOutcome?.bonus_triggered) && state.crownsCollected >= getRequiredStars());
 }
+
+let v3FieldTransition = null;
+let v3LastFieldVisualState = null;
+let v3FieldTransitionFrame = null;
+const V3_FIELD_SWEEP_MS = 190;
 
 function isX10VisualActive() {
   if (window.BalloroBonusUI?.isV2) return Boolean(state.x10BoostActivated);
@@ -913,9 +950,47 @@ function playPurpleMultiplierWinSound(multiplier, pitchStep = 0, startDelay = 0)
   shimmer.stop(now + 1.38);
 }
 
-function playMultiplierResultSound(multiplier, bonusActive = false) {
+function playV3SoftMultiplierWinSound(multiplier, startDelay = 0, colorTier = null) {
+  if (state.soundEffectsMuted) return;
+  const audio = getAudioContext();
+  if (!audio) return;
+  if (audio.state === "suspended") audio.resume();
+
+  const maximum = getMainFieldMaximumMultiplier();
+  const tier = colorTier === null
+    ? multiplier < 1 ? 0 : multiplier < maximum * 0.15 ? 1 : 2
+    : colorTier;
+  const frequency = [392, 493.88, 523.25][tier];
+  const now = audio.currentTime + startDelay;
+  const duration = [0.21, 0.27, 0.28][tier];
+  const envelope = audio.createGain();
+  const filter = audio.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime([1150, 1850, 2050][tier], now);
+  filter.Q.setValueAtTime(0.4, now);
+  envelope.gain.setValueAtTime(0.0001, now);
+  envelope.gain.exponentialRampToValueAtTime([0.09, 0.18, 0.2][tier], now + 0.014);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  envelope.connect(filter);
+  filter.connect(getAudioOutput(audio));
+
+  [[1, [0.36, 0.43, 0.46][tier]], [2, [0.045, 0.09, 0.105][tier]]].forEach(([partial, volume]) => {
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency * partial * 1.018, now);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * partial, now + 0.09);
+    gain.gain.value = volume;
+    oscillator.connect(gain);
+    gain.connect(envelope);
+    oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    oscillator.start(now);
+    oscillator.stop(now + duration + 0.015);
+  });
+}
+
+function playMultiplierResultSound(multiplier, bonusActive = false, premium = false, v3ColorTier = null) {
   if (multiplier <= 0) return;
-  if (!state.soundEffectsMuted) duckBackgroundMusic(bonusActive ? 1500 : 800);
   const now = performance.now();
   const soundCount = Math.max(1, Math.min(
     MAX_RESULT_SOUND_LEVELS,
@@ -927,6 +1002,15 @@ function playMultiplierResultSound(multiplier, bonusActive = false) {
   const delayMs = Math.max(0, state.nextMultiplierSoundAt - now);
   state.nextMultiplierSoundAt = now + delayMs + 105;
   state.lastMultiplierSoundAt = now + delayMs;
+  if (window.BalloroBonusUI?.isV3 && !bonusActive && !premium
+    && multiplier < getMainFieldMaximumMultiplier()) {
+    if (!state.soundEffectsMuted) {
+      state.winSoundEndsAt = Math.max(state.winSoundEndsAt, now + delayMs + 300);
+    }
+    playV3SoftMultiplierWinSound(multiplier, delayMs / 1000, v3ColorTier);
+    return;
+  }
+  if (!state.soundEffectsMuted) duckBackgroundMusic(bonusActive ? 1500 : 800);
   if (!state.soundEffectsMuted) {
     state.winSoundEndsAt = Math.max(state.winSoundEndsAt, now + delayMs + (bonusActive ? 1380 : 680));
   }
@@ -1541,11 +1625,11 @@ function getRequiredStars() {
   return window.BalloroBonusUI?.isV2 ? V2_BONUS_THRESHOLDS.diamond : 3;
 }
 
-const V2_BONUS_PROGRESS_KEY = window.BalloroPocketExperiment
-  ? "balloro-x-test-v2-pocket-experiment-progress-1" : "balloro-x-test-v2-bonus-progress-1";
-const V2_BONUS_THRESHOLDS = Object.freeze(window.BalloroPocketExperiment
-  ? { diamond: 3, crown: 2, lemon: 1, blue: 1 }
-  : { diamond: 5, crown: 3, lemon: 2, blue: 1 });
+const V2_BONUS_PROGRESS_KEY = window.BalloroBonusUI?.isV3
+  ? "balloro-x-test-v3-live-progress-1"
+  : window.BalloroPocketExperiment
+    ? "balloro-x-test-v2-pocket-experiment-progress-1" : "balloro-x-test-v2-bonus-progress-1";
+const V2_BONUS_THRESHOLDS = Object.freeze({ diamond: 1, crown: 1, lemon: 1, blue: 1 });
 
 function loadV2BonusProgress() {
   if (!window.BalloroBonusUI?.isV2) return;
@@ -1591,6 +1675,7 @@ function claimV2BonusSymbol(kind) {
   updateChanceBonusCounter();
   updateMultiPlusCounter();
   updatePocketBonusCounter();
+  if (window.BalloroBonusUI?.isV3) updateBetButtons();
   return activated;
 }
 
@@ -1732,6 +1817,10 @@ function setupCanvas() {
   }
   fitBonusCountersToField();
   positionBonusUiV2Logo();
+  if ((window.BalloroBonusUI?.isV2 || window.BalloroBonusUI?.isV3) && els.versionSwitcher) {
+    const apexY = state.field.cy - state.field.half * Math.SQRT2;
+    els.versionSwitcher.style.top = `${Math.max(12, Math.round(apexY + 18))}px`;
+  }
 }
 
 function positionBonusUiV2Logo() {
@@ -1940,6 +2029,9 @@ function drawMergedMultiplierCell(group, fill, stroke = null, strokeWidth = 2) {
 }
 
 function buildMergedMultiplierCells() {
+  if (window.BalloroBonusUI?.isV3) {
+    return { groups: [], covered: new Set(), byKey: new Map() };
+  }
   const groups = [];
   const covered = new Set();
   const byKey = new Map();
@@ -2823,7 +2915,7 @@ function drawV2PocketSymbol(kind, point, radius, bubble) {
 function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, outerGlowColor = null,
   pulseInnerEdge = false) {
   const pocket = zone.id === BLUE_FIELD_POCKET_ZONE_ID ? state.bluePocket : state.fieldPocket;
-  if (usesFieldPocketMechanics() && pocket?.finished) return;
+  if (usesFieldPocketMechanics() && pocket?.finished && !window.BalloroBonusUI?.isV3) return;
   const { puckRadius } = state.field;
   const point = zone.screenHole;
   const pulseSeed = 4.8 + zone.hole.x * 0.007 + zone.hole.y * 0.011;
@@ -2861,7 +2953,8 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
       v2Visual?.palette || BLUE_FIELD_POCKET_PALETTE,
       activePocketStrokeColor, v2Visual?.glow || outerGlowColor || "rgba(117, 217, 255, 0.29)");
     const symbolKind = zone.id === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond";
-    if (!pocket?.consumed && !state.counterFlyIns.some((flyIn) => flyIn.kind === symbolKind)) {
+    if (!pocket?.consumed && !state.v3PocketSymbolCycle[symbolKind]
+      && !state.counterFlyIns.some((flyIn) => flyIn.kind === symbolKind)) {
       drawV2PocketSymbol(symbolKind, point, radius, collectibleBubble);
     }
   } else {
@@ -2882,7 +2975,7 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
 }
 
 function drawSecretPocketRimsOverlay() {
-  if (usesFieldPocketMechanics() && state.fieldPocket?.finished) return;
+  if (usesFieldPocketMechanics() && state.fieldPocket?.finished && !window.BalloroBonusUI?.isV3) return;
   const bonusGridActive = isX10VisualActive();
   const radius = Math.max(6, state.field.puckRadius);
   SECRET_ZONE_IDS.map(getSecretZoneGeometry).forEach((zone) => {
@@ -3025,6 +3118,9 @@ function getChancePuckScreenPoint(puck) {
 }
 
 function getChanceRoomMultiplier(id) {
+  if (window.BalloroBonusUI?.isV3) {
+    return window.BalloroV3Rules.roomMultipliers[GRID_SIZE]?.[id] || 0;
+  }
   return state.chanceRoomMultipliers[id] || getRiskBands().outer;
 }
 
@@ -3233,30 +3329,41 @@ function drawChanceRooms() {
       }
     }
 
-    const multiplierCell = getChanceMultiplierCell(id, gridSize);
-    const multiplierCenter = chanceRoomLocalToScreen(room, multiplierCell.u, multiplierCell.v);
-    const roomMultiplier = getChanceRoomMultiplier(id);
-    const displayedMultiplier = bonusGridActive ? roomMultiplier * 10 : roomMultiplier;
-    const multiplierText = getFieldMultiplierText(displayedMultiplier);
-    const multiplierColor = bonusGridActive
-      ? getBonusMultiplierColor(roomMultiplier)
-      : getMultiplierColor(roomMultiplier);
-    ctx.fillStyle = multiplierColor;
-    const maxTextWidth = room.halfDiagonal * 1.32 / gridSize;
-    let fontSize = Math.max(18, Math.min(78, state.field.grid * 0.41));
-    ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-    while (ctx.measureText(multiplierText).width > maxTextWidth && fontSize > 12) {
-      fontSize -= 1;
+    const isV3Room = Boolean(window.BalloroBonusUI?.isV3);
+    const cells = isV3Room
+      ? Array.from({ length: gridSize * gridSize }, (_, index) => ({ col: index % gridSize, row: Math.floor(index / gridSize) }))
+      : [getChanceMultiplierCell(id, gridSize)];
+    for (const cell of cells) {
+      const u = -1 + (cell.col + 0.5) * 2 / gridSize;
+      const v = -1 + (cell.row + 0.5) * 2 / gridSize;
+      const multiplierCenter = chanceRoomLocalToScreen(room, u, v);
+      const roomMultiplier = isV3Room
+        ? window.BalloroV3Rules.roomCellMultiplier(GRID_SIZE, id, cell.col, cell.row)
+        : getChanceRoomMultiplier(id);
+      const tier = isV3Room ? window.BalloroV3Rules.roomCellTier(GRID_SIZE, id, cell.col, cell.row) : "red";
+      const multiplierText = getFieldMultiplierText(bonusGridActive ? roomMultiplier * 10 : roomMultiplier);
+      const multiplierColor = bonusGridActive ? getBonusMultiplierColor(roomMultiplier)
+        : isV3Room ? ({ red: "#ff4b4b", yellow: "#ffd53d", green: "#64e66d" })[tier]
+          : getMultiplierColor(roomMultiplier);
+      ctx.fillStyle = multiplierColor;
+      const maxTextWidth = room.halfDiagonal * 1.32 / gridSize;
+      let fontSize = Math.max(18, Math.min(78, state.field.grid * 0.41));
       ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
+      while (ctx.measureText(multiplierText).width > maxTextWidth && fontSize > 12) {
+        fontSize -= 1;
+        ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
+      }
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (bonusGridActive) {
+        drawPurpleNeonMultiplierText(multiplierText, multiplierCenter.x, multiplierCenter.y, multiplierColor);
+      } else {
+        ctx.fillText(multiplierText, multiplierCenter.x, multiplierCenter.y);
+      }
+      if (!isV3Room || tier === "red") {
+        drawChanceMultiplierCrown(id, multiplierCenter, fontSize, multiplierColor, bonusGridActive);
+      }
     }
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    if (bonusGridActive) {
-      drawPurpleNeonMultiplierText(multiplierText, multiplierCenter.x, multiplierCenter.y, multiplierColor);
-    } else {
-      ctx.fillText(multiplierText, multiplierCenter.x, multiplierCenter.y);
-    }
-    drawChanceMultiplierCrown(id, multiplierCenter, fontSize, multiplierColor, bonusGridActive);
     ctx.restore();
 
     const finalCueStrength = getChanceFinalCueStrength(id);
@@ -3335,7 +3442,7 @@ function getChancePocketGeometry() {
 }
 
 function drawChancePocket() {
-  if (state.chancePocket?.finished) return;
+  if (state.chancePocket?.finished && !window.BalloroBonusUI?.isV3) return;
   const pocket = getChancePocketGeometry();
   if (!pocket) return;
   const collectibleBubble = getCollectibleIdleBubble(7.4);
@@ -3353,7 +3460,7 @@ function drawChancePocket() {
   drawPulsingFieldPocketSurface(pocket.point, radius, collectibleBubble,
     visual?.palette || RED_FIELD_POCKET_PALETTE,
     visual?.stroke || "rgb(255, 74, 82)", visual?.glow || "rgba(255, 48, 58, 0.29)");
-  if (!state.chancePocket?.consumed
+  if (!state.chancePocket?.consumed && !state.v3PocketSymbolCycle.crown
     && !state.counterFlyIns.some((flyIn) => flyIn.kind === "crown")) {
     drawV2PocketSymbol("crown", pocket.point, radius, collectibleBubble);
   }
@@ -3368,7 +3475,7 @@ function puckIsUsingSecretRoom(puck) {
   return ["capturing", "pocket_wait", "pocket"].includes(phase);
 }
 
-function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid) {
+function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid, sweep = null) {
   mergedMultiplierCells.groups.forEach((group) => {
     const center = toScreen(
       -half + grid * group.col + grid * group.size / 2,
@@ -3383,7 +3490,7 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
     let fontSize = Math.max(18, Math.min(78, grid * group.size * 0.41));
     const multiplierColor = bonusGridActive
       ? getBonusMultiplierColor(group.multiplier)
-      : getMultiplierColor(group.multiplier);
+      : getV3FieldMultiplierColor(group.col, group.row, group.multiplier);
     ctx.fillStyle = multiplierColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -3401,7 +3508,8 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         && puckCell.row >= group.row
         && puckCell.row < group.row + group.size;
     });
-    ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
+    ctx.globalAlpha = (window.BalloroBonusUI?.isV3 ? 0.5
+      : bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
     if (bonusGridActive) {
       drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
     } else {
@@ -3412,6 +3520,10 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
 
   for (let row = 0; row < GRID_SIZE; row += 1) {
     for (let col = 0; col < GRID_SIZE; col += 1) {
+      if (window.BalloroBonusUI?.isV3 && state.multiPlusPhase === "revealing"
+        && state.multiPlusNeonCells.some((cell) => cell.col === col && cell.row === row)) {
+        continue;
+      }
       if (mergedMultiplierCells.covered.has(`${col}_${row}`)) {
         continue;
       }
@@ -3428,11 +3540,13 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
       const reveal = category === "multi_plus"
         ? getMultiplierRevealMotion(state.multiPlusActivatedAt, center.y, col, row)
         : { y: center.y, alpha: 1 };
-      const displayedMultiplier = bonusGridActive ? multiplier * 10 : multiplier;
+      const cellBonusActive = sweep ? getV3CellVisualActive(sweep, col, row) : bonusGridActive;
+      const displayedMultiplier = cellBonusActive ? multiplier * 10 : multiplier;
       const text = getFieldMultiplierText(displayedMultiplier, category);
       const maxTextWidth = grid * 1.02;
       let fontSize = Math.max(10, Math.min(42, grid * 0.42));
-      const multiplierColor = bonusGridActive ? getBonusMultiplierColor(multiplier) : getMultiplierColor(multiplier);
+      const multiplierColor = cellBonusActive ? getBonusMultiplierColor(multiplier)
+        : getV3FieldMultiplierColor(col, row, multiplier);
       ctx.fillStyle = multiplierColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -3447,8 +3561,9 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         const puckCell = getCellFromPoint(puck.x, puck.y);
         return puckCell.col === col && puckCell.row === row;
       });
-      ctx.globalAlpha = (bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
-      if (bonusGridActive) {
+      ctx.globalAlpha = (window.BalloroBonusUI?.isV3 ? 0.5
+        : bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
+      if (cellBonusActive) {
         drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
       } else {
         ctx.fillText(text, center.x, reveal.y);
@@ -3458,7 +3573,7 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
   }
 }
 
-function drawField() {
+function drawField(clearCanvas = true, sweep = null) {
   const { half, grid } = state.field;
   const bonusGridActive = isX10VisualActive();
   const innerGridColor = bonusGridActive ? "rgba(190, 124, 234, 0.46)" : "rgba(27, 184, 102, 0.28)";
@@ -3469,9 +3584,11 @@ function drawField() {
     toScreen(-half, half)
   ];
 
-  ctx.clearRect(0, 0, state.field.width, state.field.height);
-  ctx.fillStyle = document.body.classList.contains('slot-ui') ? "#000000" : "#010205";
-  ctx.fillRect(0, 0, state.field.width, state.field.height);
+  if (clearCanvas) {
+    ctx.clearRect(0, 0, state.field.width, state.field.height);
+    ctx.fillStyle = document.body.classList.contains('slot-ui') ? "#000000" : "#010205";
+    ctx.fillRect(0, 0, state.field.width, state.field.height);
+  }
   drawChanceRooms();
 
   const borderGradient = createFieldBorderGradient(corners, bonusGridActive);
@@ -3497,6 +3614,17 @@ function drawField() {
   const mergedMultiplierCells = buildMergedMultiplierCells();
   const fieldFill = bonusGridActive ? "#14091b" : "#05070c";
   eraseMergedMultiplierInternalLines(mergedMultiplierCells.groups, fieldFill);
+  if (sweep) {
+    const oldFill = sweep.from ? "#14091b" : "#05070c";
+    const oldGrid = sweep.from ? "rgba(190, 124, 234, 0.46)" : "rgba(27, 184, 102, 0.28)";
+    for (let row = 0; row < GRID_SIZE; row += 1) {
+      for (let col = 0; col < GRID_SIZE; col += 1) {
+        if (getV3CellVisualActive(sweep, col, row) === sweep.from) {
+          drawCell(col, row, oldFill, oldGrid, 2.5);
+        }
+      }
+    }
+  }
 
   state.pucks.forEach((puck) => {
     if (puck.stopped || puckIsUsingSecretRoom(puck)) {
@@ -3531,7 +3659,18 @@ function drawField() {
 
   state.settledCells.forEach((cell) => {
     if (!cell.squareWin) return;
+    const settledPuck = state.pucks[cell.puckIndex];
+    const ordinaryV3Win = window.BalloroBonusUI?.isV3 && settledPuck
+      && !cell.purpleBoost && !bigWinEffect.winners.has(settledPuck);
+    const flashElapsed = ordinaryV3Win
+      ? performance.now() - settledPuck.resultRevealStartedAt : 0;
+    const puckFade = ordinaryV3Win
+      ? Math.sin(Math.PI * clamp(flashElapsed / 650, 0, 1))
+      : window.BalloroBonusUI?.isV3
+        ? (settledPuck ? getV3PuckFade(settledPuck) : 0) : 1;
+    if (puckFade <= 0) return;
     ctx.save();
+    ctx.globalAlpha *= puckFade;
     applyBigWinCellFlash("main");
     if (cell.purpleBoost) {
       drawMultiplierCellHighlight(
@@ -3662,6 +3801,14 @@ function getMultiPlusFieldMultiplier() {
 }
 
 function getCellMultiplier(col, row) {
+  if (window.BalloroBonusUI?.isV3) {
+    const base = window.BalloroV3Rules.cellMultiplier(GRID_SIZE, col, row);
+    if (base && isMultiPlusVisualActive()
+      && getActiveMultiPlusCells().some((cell) => cell.col === col && cell.row === row)) {
+      return Math.round(base * window.BalloroV3Rules.yellowMultiplier * 10) / 10;
+    }
+    return base;
+  }
   const config = getMathConfiguration();
   if (!config) return 0;
   if (isMultiPlusVisualActive()
@@ -3677,6 +3824,9 @@ function getCellMultiplier(col, row) {
 }
 
 function getFieldMultiplierText(multiplier, category = null) {
+  if (window.BalloroBonusUI?.isV3) {
+    return `${formatMultiplierValue(multiplier, Number.isInteger(multiplier) ? 0 : 1)}x`;
+  }
   const rounded = Math.round((multiplier + Number.EPSILON) * 100) / 100;
   const digits = category === "center" ? 0
     : category === "middle" || category === "multi_plus" ? 1
@@ -3687,6 +3837,9 @@ function getFieldMultiplierText(multiplier, category = null) {
 
 function getMultiplierText(multiplier) {
   const numericValue = Number(multiplier);
+  if (window.BalloroBonusUI?.isV3) {
+    return `${Number.isFinite(numericValue) ? numericValue.toFixed(Number.isInteger(numericValue) ? 0 : 1) : "0"}x`;
+  }
   return `${Number.isFinite(numericValue) ? numericValue.toFixed(2) : "0.00"}x`;
 }
 
@@ -3733,8 +3886,26 @@ function withColorAlpha(color, alpha) {
 }
 
 function getMultiplierColor(multiplier) {
+  if (window.BalloroBonusUI?.isV3) {
+    return multiplier >= 10 ? "#ff4b4b" : multiplier > 1 ? "#ffd53d" : "#64e66d";
+  }
   const color = interpolateMultiplierColor(multiplier);
   return `hsla(${color.hue.toFixed(1)}, ${color.saturation.toFixed(1)}%, ${color.lightness.toFixed(1)}%, 1)`;
+}
+
+function getV3FieldMultiplierColor(col, row, multiplier) {
+  if (!window.BalloroBonusUI?.isV3) return getMultiplierColor(multiplier);
+  if (isMultiPlusVisualActive() && getActiveMultiPlusCells()
+    .some((cell) => cell.col === col && cell.row === row)) return "#ff4b4b";
+  const mid = (GRID_SIZE - 1) / 2;
+  const ring = Math.max(Math.abs(col - mid), Math.abs(row - mid));
+  return ring === 0 ? "#ff4b4b" : ring === 1 ? "#ffd53d" : "#64e66d";
+}
+
+function getV3WinSoundTier(col, row) {
+  const mid = (GRID_SIZE - 1) / 2;
+  const ring = Math.max(Math.abs(col - mid), Math.abs(row - mid));
+  return ring === 0 ? 2 : ring === 1 ? 1 : 0;
 }
 
 function getBonusMultiplierColor(multiplier) {
@@ -3845,6 +4016,10 @@ function drawPuck(puck, index) {
   const chanceRoomDimmed = puck.chance?.roomId && isChanceRoomDimmed(puck.chance.roomId);
 
   ctx.save();
+  if (window.BalloroBonusUI?.isV3 && puck.stopped) {
+    ctx.globalAlpha *= getV3PuckFade(puck);
+    if (ctx.globalAlpha <= 0) { ctx.restore(); return; }
+  }
   if (chanceRoomDimmed) ctx.globalAlpha *= 0.2;
 
   ctx.beginPath();
@@ -3857,11 +4032,8 @@ function drawPuck(puck, index) {
     point.y + puckRadius * 0.18,
     puckRadius * 1.08
   );
-  ballGradient.addColorStop(0, "#ffffff");
-  ballGradient.addColorStop(0.28, "#fafaf6");
-  ballGradient.addColorStop(0.62, "#e7eae4");
-  ballGradient.addColorStop(0.8, "#c7cdc6");
-  ballGradient.addColorStop(1, "#9ca49e");
+  [0, 0.28, 0.62, 0.8, 1].forEach((stop, index) => ballGradient.addColorStop(stop,
+    ["#ffffff", "#fafaf6", "#e7eae4", "#c7cdc6", "#9ca49e"][index]));
   ctx.fillStyle = ballGradient;
   ctx.fill();
 
@@ -3921,11 +4093,11 @@ function drawPuck(puck, index) {
 }
 
 function isQuickTrailActiveForPuck(puck) {
-  if (!state.animationsEnabled || !state.quickPlay || !state.running || puck.stopped) return false;
+  if (!state.animationsEnabled || !state.running || puck.stopped) return false;
   const playbackSpeed = window.BalloroRoundTapes?.enabled
     ? window.BalloroRoundTapes.playbackSpeed
-    : window.BalloroQuickPlayTiming?.recordedFrameSpeed(state, true) || 1;
-  if (playbackSpeed !== 3) return false;
+    : window.BalloroQuickPlayTiming?.recordedFrameSpeed(state, state.quickPlay) || 1;
+  if (playbackSpeed < 2) return false;
   if (["capturing", "captured", "pocket_wait"].includes(puck.secretRoom?.phase)) return false;
   if (["capturing", "captured", "sinking", "spinning"].includes(puck.chance?.phase)) return false;
   if (puck.multiPlusCapture || ["capturing", "captured", "revealing"].includes(state.multiPlusPhase)) return false;
@@ -3945,6 +4117,7 @@ function drawQuickPuckTrail(puck, now) {
   const alpha = puck.chance?.roomId && isChanceRoomDimmed(puck.chance.roomId) ? 0.2 : 1;
   window.BalloroQuickTrail.draw(ctx, puck, point, radius, {
     active: isQuickTrailActiveForPuck(puck), alpha, now,
+    quick: state.quickPlay,
     bonusKind: puck.trailBonusKind || null
   });
 }
@@ -3957,6 +4130,63 @@ function drawPucks() {
   const now = performance.now();
   state.pucks.forEach((puck) => drawQuickPuckTrail(puck, now));
   state.pucks.forEach((puck, index) => drawPuck(puck, index));
+  if (window.BalloroBonusUI?.isV3) drawV3PocketQueueIndicators();
+}
+
+function drawV3PocketQueueIndicators() {
+  const radius = state.field.puckRadius;
+  const entries = [];
+  for (const [zoneId, pocket] of [[FIELD_POCKET_ZONE_ID, state.fieldPocket],
+    [BLUE_FIELD_POCKET_ZONE_ID, state.bluePocket]]) {
+    if (!pocket?.consumed) continue;
+    const normalized = getFieldPocketNormalized(pocket);
+    const point = { x: normalized.x * state.field.half, y: normalized.y * state.field.half };
+    const count = state.pucks.filter((puck) => puck !== state.v3BonusPuck
+      && !puck.chance && !puck.secretRoom && !puck.pocketRelease
+      && ((puck.waitingForPocket?.kind === "blue" && puck.waitingForPocket.zoneId === zoneId)
+        || (puck.stopped && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2 - 1))).length;
+    if (count) entries.push({ point, count });
+  }
+  if (state.chancePocket?.consumed) {
+    const pocket = getChancePocketGeometry();
+    const point = { x: pocket.normalized.x * state.field.half,
+      y: pocket.normalized.y * state.field.half };
+    const count = state.pucks.filter((puck) => !puck.chance && !puck.secretRoom
+      && !puck.pocketRelease && ((puck.waitingForPocket?.kind === "red")
+        || (puck.stopped && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2 - 1))).length;
+    if (count) entries.push({ point, count });
+  }
+  if (state.multiPlusToken?.consumed && state.multiPlusCapturedPuck) {
+    const point = state.multiPlusToken;
+    const count = state.pucks.filter((puck) => puck !== state.multiPlusCapturedPuck
+      && !puck.chance && !puck.secretRoom
+      && (puck.waitingForPocket?.kind === "yellow" || (puck.stopped
+        && !puck.pocketRelease
+        && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius + point.radius - 1))).length;
+    if (count) entries.push({ point, count });
+  }
+  for (const { point, count } of entries) {
+    const screen = toScreen(point.x, point.y);
+    const hasVisibleBall = state.pucks.some((puck) => !puck.chance && !puck.secretRoom
+      && (!puck.stopped || getV3PuckFade(puck) > 0)
+      && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 0.65);
+    if (!hasVisibleBall) {
+      drawPuck({ x: point.x, y: point.y, pocketDepth: 0, stopped: false }, -1);
+    }
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `900 ${Math.max(17, radius * 1.45)}px Arial, sans-serif`;
+    ctx.lineWidth = Math.max(3, radius * 0.21);
+    ctx.strokeStyle = "rgba(5, 8, 12, 0.96)";
+    ctx.shadowColor = "rgba(255, 255, 255, 0.5)";
+    ctx.shadowBlur = radius * 0.5;
+    const labelY = screen.y - radius * 2;
+    ctx.strokeText(String(count), screen.x, labelY);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(String(count), screen.x, labelY);
+    ctx.restore();
+  }
 }
 
 function getLaunchPrimePuck() {
@@ -4034,7 +4264,7 @@ function drawBonusStar() {
 
 function drawMultiPlusToken() {
   const token = state.multiPlusToken;
-  if (!token || token.finished) return;
+  if (!token || (token.finished && !window.BalloroBonusUI?.isV3)) return;
   const point = toScreen(token.x, token.y);
   const bubble = getCollectibleIdleBubble((token.col ?? 0) * 0.79 + (token.row ?? 0) * 1.13 + 2.4);
   const radius = Math.max(6, state.field.puckRadius);
@@ -4048,7 +4278,7 @@ function drawMultiPlusToken() {
   drawPulsingFieldPocketSurface(point, radius, bubble,
     visual?.palette || YELLOW_FIELD_POCKET_PALETTE,
     visual?.stroke || "rgb(255, 213, 61)", visual?.glow || "rgba(255, 213, 61, 0.29)");
-  if (!token.consumed && !token.collected
+  if (!token.consumed && !token.collected && !state.v3PocketSymbolCycle.lemon
     && !state.counterFlyIns.some((flyIn) => flyIn.kind === "lemon")) {
     drawV2PocketSymbol("lemon", point, radius, bubble);
   }
@@ -4472,11 +4702,18 @@ function startCollectibleIdleAnimation() {
 function animateResultReveal() {
   state.resultRevealFrame = null;
   const now = performance.now();
+  if (window.BalloroBonusUI?.isV3) finishV3ChancePresentation(now);
+  const revealDuration = window.BalloroBonusUI?.isV3
+    ? window.BalloroV3Rules.resultDelayMs + window.BalloroV3Rules.resultFadeMs
+    : RESULT_BOOST_REVEAL_DURATION_MS;
   const fieldRevealActive = state.multiPlusActive
     && state.multiPlusActivatedAt > 0
     && now - state.multiPlusActivatedAt < RESULT_BOOST_REVEAL_DURATION_MS;
-  const revealActive = now - bigWinEffect.startedAt < BIG_WIN_DURATION_MS || fieldRevealActive || state.pucks.some((puck) => puck.result?.multiplier > 0
-    && (now - (puck.resultRevealStartedAt || 0) < RESULT_BOOST_REVEAL_DURATION_MS
+  const revealActive = now - bigWinEffect.startedAt < BIG_WIN_DURATION_MS || fieldRevealActive
+    || (window.BalloroBonusUI?.isV3 && state.pucks.some((puck) => puck.stopped
+      && (getV3PuckFade(puck, now) > 0 || getV3MultiplierFade(puck, now) > 0)))
+    || state.pucks.some((puck) => puck.result?.multiplier > 0
+    && (now - (puck.resultRevealStartedAt || 0) < revealDuration
       || now - (puck.result.boostRevealStartedAt || 0) < RESULT_BOOST_REVEAL_DURATION_MS));
   if (!state.running) render();
   if (revealActive) {
@@ -4516,6 +4753,7 @@ function drawMultiPlusRoomsBlinkVisual(now = performance.now()) {
   state.multiPlusNeonCells.forEach((cell, index) => {
     // Recorded EX MULTI chases can predate the green pocket's placement rule.
     // Never paint a yellow cell underneath a still-visible green pocket.
+    if (window.BalloroBonusUI?.isV3 && getCellMultiplier(cell.col, cell.row) <= 0) return;
     if (isBluePocketCoveringCell(cell)) return;
     const center = toScreen(
       -half + grid * (cell.col + 0.5),
@@ -4536,8 +4774,9 @@ function drawMultiPlusRoomsBlinkVisual(now = performance.now()) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `1000 ${Math.max(11, Math.min(42, grid * 0.42))}px Inter, system-ui, sans-serif`;
-    ctx.fillStyle = flash ? "#ffffff" : "#ffd83d";
-    ctx.shadowColor = flash ? "#ffffff" : "rgba(255, 194, 20, 0.96)";
+    ctx.fillStyle = window.BalloroBonusUI?.isV3 ? "#ff4b4b" : flash ? "#ffffff" : "#ffd83d";
+    ctx.shadowColor = window.BalloroBonusUI?.isV3
+      ? "rgba(255, 65, 68, 0.96)" : flash ? "#ffffff" : "rgba(255, 194, 20, 0.96)";
     ctx.shadowBlur = flash ? 26 : 14 + pulse * 12;
     ctx.fillText(getFieldMultiplierText(cell.multiplier, "multi_plus"), center.x, center.y);
     ctx.restore();
@@ -4566,7 +4805,7 @@ function spawnStarBurst(star, theme = "purple") {
 
 function drawResultOverlay({ glows = true, text = true } = {}) {
   const bonusVisualActive = isX10VisualActive();
-  if (state.roundOutcome?.bonus_triggered && !bonusVisualActive) return;
+  if (!window.BalloroBonusUI?.isV3 && state.roundOutcome?.bonus_triggered && !bonusVisualActive) return;
 
   const getWinningTextMetrics = (text, font) => {
     ctx.save();
@@ -4630,6 +4869,21 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
   ctx.textBaseline = "middle";
   const resultPucks = state.pucks.filter((puck) => puck.result?.multiplier > 0);
   const getRevealMotion = (puck, point) => {
+    if (window.BalloroBonusUI?.isV3) {
+      const now = performance.now();
+      const fade = getV3MultiplierFade(puck);
+      const progress = !state.animationsEnabled || !puck.resultRevealStartedAt ? 1
+        : clamp((now - puck.resultRevealStartedAt)
+          / RESULT_BOOST_REVEAL_DURATION_MS, 0, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const rise = !state.animationsEnabled || !puck.resultRevealStartedAt ? 0
+        : Math.max(0, now - puck.resultRevealStartedAt - window.BalloroV3Rules.resultDelayMs)
+          * 0.012;
+      return {
+        y: point.y - 34 + (1 - eased) * 26 - rise,
+        alpha: progress * fade
+      };
+    }
     const endY = point.y - 34;
     if (!state.animationsEnabled || !puck.resultRevealStartedAt) return { y: endY, alpha: 1 };
     const progress = clamp((performance.now() - puck.resultRevealStartedAt)
@@ -4655,23 +4909,30 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
         : toScreen(puck.x, puck.y);
       const reveal = getRevealMotion(puck, point);
       const boostReveal = getBoostRevealMotion(puck, point);
-      const canUseBonusMultiplier = (bonusVisualActive || puck.result.x10Boosted)
+      const canUseBonusMultiplier = (window.BalloroBonusUI?.isV3
+        ? puck.result.x10Boosted : (bonusVisualActive || puck.result.x10Boosted))
         && (!puck.result.secretRoom || puck.result.chanceRoom);
       const resultMultiplier = puck.result.multiplier * (canUseBonusMultiplier ? 10 : 1);
       const classification = classifyResult(resultMultiplier, puck.result.category);
       const resultText = getMultiplierText(resultMultiplier);
       const resultColor = puck.result.chanceRoom && !canUseBonusMultiplier
-        ? getMultiplierColor(puck.result.multiplier)
+        ? (window.BalloroBonusUI?.isV3
+          ? ({ red: "#ff4b4b", yellow: "#ffd53d", green: "#64e66d" })[puck.result.chanceRoomTier]
+          : getMultiplierColor(puck.result.multiplier))
         : puck.result.purpleBoost
         ? getBonusResultColor(Math.max(1, puck.result.multiplier / PURPLE_POCKET_MULTIPLIER))
         : canUseBonusMultiplier
         ? getBonusResultColor(puck.result.multiplier)
         : puck.result.secretRoom
           ? getBonusResultColor(getSecretRoomBaseMultiplier())
-          : getMultiplierColor(puck.result.multiplier);
+          : window.BalloroBonusUI?.isV3
+            ? getV3FieldMultiplierColor(puck.result.col, puck.result.row, puck.result.multiplier)
+            : getMultiplierColor(puck.result.multiplier);
       const mobileResultScale = state.field.width <= 720 ? 1.16 : 1;
       const baseFontSize = (classification.celebrate ? 30 : 23) * mobileResultScale;
-      const fontSize = (canUseBonusMultiplier || puck.result.secretRoom || puck.result.purpleBoost) ? baseFontSize * 1.2 : baseFontSize;
+      const fontSize = window.BalloroBonusUI?.isV3
+        ? 36 * mobileResultScale
+        : (canUseBonusMultiplier || puck.result.secretRoom || puck.result.purpleBoost) ? baseFontSize * 1.2 : baseFontSize;
       const font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
       const metrics = getWinningTextMetrics(resultText, font);
       return {
@@ -4688,7 +4949,9 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
         boostReveal: boostReveal ? {
           oldText: getMultiplierText(puck.result.multiplier),
           oldColor: getMultiplierColor(puck.result.multiplier),
-          oldFont: `1000 ${(classification.celebrate ? 30 : 23) * mobileResultScale}px Inter, system-ui, sans-serif`,
+          oldFont: window.BalloroBonusUI?.isV3
+            ? font
+            : `1000 ${(classification.celebrate ? 30 : 23) * mobileResultScale}px Inter, system-ui, sans-serif`,
           oldY: boostReveal.oldY,
           alpha: 1 - boostReveal.progress
         } : null,
@@ -4704,6 +4967,7 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
   const placedBounds = [];
   const stackGap = 1;
   resultItems.forEach((item) => {
+    if (window.BalloroBonusUI?.isV3) return;
     let attempts = 0;
     while (attempts < 8) {
       const bounds = {
@@ -4773,7 +5037,61 @@ function classifyResult(multiplier, category = "") {
 }
 
 const BIG_WIN_DURATION_MS = 2600;
-let bigWinEffect = { roundId: null, count: 0, startedAt: -Infinity, winners: new Set(), boostedWinners: new Set(), voices: [] };
+let bigWinEffect = { roundId: null, count: 0, startedAt: -Infinity, winners: new Set(), seenWinners: new Set(), boostedWinners: new Set(), voices: [] };
+
+function getV3ResultFadeElapsed(puck, now) {
+  const rules = window.BalloroV3Rules;
+  const winnerHold = bigWinEffect.winners.has(puck)
+    ? Math.max(0, bigWinEffect.startedAt + BIG_WIN_DURATION_MS - puck.resultRevealStartedAt) : 0;
+  return now - puck.resultRevealStartedAt - Math.max(rules.resultDelayMs, winnerHold);
+}
+
+function getV3ResultFade(puck, now = performance.now()) {
+  if (!puck.stopped || !puck.resultRevealStartedAt) return 1;
+  return 1 - clamp(getV3ResultFadeElapsed(puck, now) / window.BalloroV3Rules.resultFadeMs, 0, 1);
+}
+
+function getV3PuckFade(puck, now = performance.now()) {
+  if (!puck.stopped || !puck.resultRevealStartedAt) return 1;
+  const ordinaryFieldWin = puck.result?.multiplier > 0 && !puck.result.secretRoom
+    && !puck.result.x10Boosted && !bigWinEffect.winners.has(puck);
+  const duration = window.BalloroV3Rules.resultFadeMs / (ordinaryFieldWin ? 4 : 2);
+  return 1 - clamp(getV3ResultFadeElapsed(puck, now) / duration, 0, 1);
+}
+
+function getV3MultiplierFade(puck, now = performance.now()) {
+  if (!puck.stopped || !puck.resultRevealStartedAt) return 1;
+  if (!(puck.result?.multiplier > 0)) return getV3ResultFade(puck, now);
+  const boosted = puck.result.x10Boosted
+    && (!puck.result.secretRoom || puck.result.chanceRoom);
+  const displayedMultiplier = puck.result.multiplier * (boosted ? 10 : 1);
+  const duration = window.BalloroV3Rules.resultFadeMs
+    * (0.9 + 0.13 * Math.log2(1 + displayedMultiplier));
+  return 1 - clamp(getV3ResultFadeElapsed(puck, now) / duration, 0, 1);
+}
+
+function hasUnfinishedV3PurpleReward(now = performance.now()) {
+  return state.pucks.some((puck) => {
+    if (!puck.v3PurpleBonus) return false;
+    if (!puck.stopped || puck.waitingForPocket || puck.v3QueuePull
+      || puck === state.multiPlusCapturedPuck || puck === state.chanceCapturedPuck
+      || (puck.secretRoom && puck.secretRoom.phase !== "settled")
+      || (puck.chance && puck.chance.phase !== "settled")
+      || state.v3BonusQueue.some((entry) => entry.puck === puck)) return true;
+    if (!puck.result) return false;
+    return puck.result.multiplier > 0
+      ? getV3MultiplierFade(puck, now) > 0
+      : getV3PuckFade(puck, now) > 0;
+  });
+}
+
+function finishV3PurplePresentation(now = performance.now()) {
+  if (!window.BalloroBonusUI?.isV3 || !state.x10BoostActivated
+    || hasUnfinishedV3PurpleReward(now)) return;
+  state.x10BoostActivated = false;
+  state.crownBonusAwarded = false;
+  updateBetButtons();
+}
 
 function stopBigWinSound() {
   bigWinEffect.voices.forEach((voice) => { try { voice.stop(); } catch (_) { /* already ended */ } });
@@ -4808,20 +5126,28 @@ function playBigWinFanfare(level) {
 }
 
 function updateBigWinEffect(now = performance.now()) {
-  if (bigWinEffect.roundId !== state.roundId) {
+  if (bigWinEffect.roundId !== state.roundId && !window.BalloroBonusUI?.isV3) {
     stopBigWinSound();
-    bigWinEffect = { roundId: state.roundId, count: 0, startedAt: -Infinity, winners: new Set(), boostedWinners: new Set(), voices: [] };
+    bigWinEffect = { roundId: state.roundId, count: 0, startedAt: -Infinity, winners: new Set(), seenWinners: new Set(), boostedWinners: new Set(), voices: [] };
   }
   state.pucks.forEach((puck) => {
     const result = puck.result;
     if (!puck.stopped || !result || result.multiplier <= 0) return;
-    const previousWinner=bigWinEffect.winners.has(puck);
+    const previousWinner=bigWinEffect.seenWinners.has(puck);
     const boostEncore=previousWinner && result.x10Boosted && !bigWinEffect.boostedWinners.has(puck);
     if(previousWinner && !boostEncore)return;
-    const premium = result.chanceRoom || (["outer", "middle", "center"].includes(result.category)
-      && result.multiplier >= getMainFieldMaximumMultiplier());
+    const premium = (result.chanceRoom && (!window.BalloroBonusUI?.isV3 || result.chanceRoomTier === "red"))
+      || (window.BalloroBonusUI?.isV3
+        && (result.x10Boosted || result.multiPlusBoosted || result.category === "center"))
+      || (["outer", "middle", "center"].includes(result.category)
+        && result.multiplier >= getMainFieldMaximumMultiplier());
     if (!premium && !boostEncore) return;
+    if (window.BalloroBonusUI?.isV3 && now - bigWinEffect.startedAt >= BIG_WIN_DURATION_MS) {
+      bigWinEffect.winners.clear();
+      bigWinEffect.count = 0;
+    }
     bigWinEffect.winners.add(puck);
+    bigWinEffect.seenWinners.add(puck);
     if(result.x10Boosted)bigWinEffect.boostedWinners.add(puck);
     bigWinEffect.count += 1;
     bigWinEffect.startedAt = now;
@@ -4888,16 +5214,52 @@ function drawBigWinWalls() {
   ctx.restore();
 }
 
+function getV3FieldSweep(now) {
+  if (!window.BalloroBonusUI?.isV3) return null;
+  const active = isX10VisualActive();
+  if (v3LastFieldVisualState === null) v3LastFieldVisualState = active;
+  if (active !== v3LastFieldVisualState) {
+    v3FieldTransition = { from: v3LastFieldVisualState, to: active, startedAt: now };
+    v3LastFieldVisualState = active;
+  }
+  if (!v3FieldTransition) return null;
+  const raw = clamp((now - v3FieldTransition.startedAt) / V3_FIELD_SWEEP_MS, 0, 1);
+  if (raw >= 1) {
+    v3FieldTransition = null;
+    return null;
+  }
+  return { ...v3FieldTransition, progress: raw * raw * (3 - 2 * raw) };
+}
+
+function getV3CellVisualActive(sweep, col, row) {
+  if (!sweep) return isX10VisualActive();
+  const mid = (GRID_SIZE - 1) / 2;
+  const ring = Math.max(Math.abs(col - mid), Math.abs(row - mid));
+  const maxRing = Math.ceil(mid);
+  const step = sweep.to ? ring : maxRing - ring;
+  const changed = sweep.progress >= (step + 0.5) / (maxRing + 1);
+  return changed ? sweep.to : sweep.from;
+}
+
 function render() {
-  document.body.classList.toggle("x10-visual-active", isX10VisualActive());
+  const now = performance.now();
+  const bonusGridActive = isX10VisualActive();
+  document.body.classList.toggle("x10-visual-active", bonusGridActive);
   updateBigWinEffect();
   updatePocketBonusCounter();
   updateChanceBonusCounter();
-  drawField();
-  drawBigWinWalls();
   const { half, grid } = state.field;
-  const bonusGridActive = isX10VisualActive();
-  drawMainFieldMultiplierLabels(buildMergedMultiplierCells(), bonusGridActive, half, grid);
+  const mergedMultiplierCells = buildMergedMultiplierCells();
+  const sweep = getV3FieldSweep(now);
+  drawField(true, sweep);
+  drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid, sweep);
+  if (sweep && v3FieldTransitionFrame === null) {
+    v3FieldTransitionFrame = requestAnimationFrame(() => {
+      v3FieldTransitionFrame = null;
+      render();
+    });
+  }
+  drawBigWinWalls();
   drawMultiPlusRoomsBlinkVisual();
   // Collectible symbols stay above field labels; moving pucks are drawn above every field layer.
   drawMultiPlusToken();
@@ -5410,6 +5772,9 @@ function selectRoundFieldPocket(roundOutcome) {
 }
 
 function selectPrototypeFieldPocket() {
+  if (window.BalloroBonusUI?.isV3) {
+    return { ...window.BalloroV3Rules.pocketCells(GRID_SIZE).diamond };
+  }
   const candidates = (getMathConfiguration()?.sector_definitions?.empty || [])
     .filter((sector) => sector.index >= 0
       && !(sector.col === GRID_SIZE - 1 && sector.row === GRID_SIZE - 1));
@@ -5419,6 +5784,9 @@ function selectPrototypeFieldPocket() {
 
 function selectV2BluePocket(roundOutcome) {
   if (!window.BalloroBonusUI?.isV2 || !usesFieldPocketMechanics()) return null;
+  if (window.BalloroBonusUI?.isV3) {
+    return { ...window.BalloroV3Rules.pocketCells(GRID_SIZE).blue };
+  }
   const blocked = new Set([state.fieldPocket, state.chancePocket,
     roundOutcome?.multi_plus_position].filter(Boolean).map(cell => `${cell.col}_${cell.row}`));
   const candidates = [];
@@ -5437,6 +5805,9 @@ function selectV2BluePocket(roundOutcome) {
 
 function selectRoundChancePocket(roundOutcome, trajectories = []) {
   if (!usesFieldPocketMechanics() || !roundOutcome) return null;
+  if (window.BalloroBonusUI?.isV3) {
+    return { ...window.BalloroV3Rules.pocketCells(GRID_SIZE).crown, forced: false };
+  }
   const candidates = [];
   for (let row = 0; row < GRID_SIZE; row += 1) {
     for (let col = 0; col < GRID_SIZE; col += 1) {
@@ -5480,6 +5851,9 @@ function getMainFieldMaximumMultiplier() {
 }
 
 function createChanceRoomMultipliers() {
+  if (window.BalloroBonusUI?.isV3) {
+    return { ...window.BalloroV3Rules.roomMultipliers[GRID_SIZE] };
+  }
   const maximumMultiplier = getMainFieldMaximumMultiplier();
   return Object.fromEntries(CHANCE_ROOM_IDS.map((id) => [
     id,
@@ -5560,6 +5934,11 @@ function randomPrototypeUnit() {
 
 function buildRandomPrototypeTrajectory(startPoint = null, angleCenter = -135) {
   if (window.BalloroSavedPaths?.enabled) {
+    if (window.BalloroBonusUI?.isV3) {
+      return startPoint
+        ? window.BalloroSavedPaths.fieldV3Release(GRID_SIZE,startPoint,randomPrototypeUnit())
+        : window.BalloroSavedPaths.fieldV3(GRID_SIZE,randomPrototypeUnit(),randomPrototypeUnit());
+    }
     return window.BalloroSavedPaths.field(GRID_SIZE, startPoint, randomPrototypeUnit());
   }
   const planner = window.PuckLuckTrajectoryPlanner;
@@ -5596,6 +5975,30 @@ function buildRandomPrototypeTrajectory(startPoint = null, angleCenter = -135) {
   return fallback;
 }
 
+function selectV3RepeatedPurpleRelease(startPoint, puck) {
+  const previous = puck.v3LastPurpleReleaseDirection;
+  let mostDifferent = null;
+  let widestTurn = -1;
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const trajectory = buildRandomPrototypeTrajectory(startPoint, -135);
+    if (!trajectory || !Number.isFinite(previous)) return trajectory;
+    const first = trajectory.frames[0];
+    const direction = Math.atan2(first[4], first[3]);
+    const turn = Math.abs(Math.atan2(Math.sin(direction - previous),
+      Math.cos(direction - previous)));
+    if (turn > widestTurn) {
+      mostDifferent = trajectory;
+      widestTurn = turn;
+    }
+    if (turn >= Math.PI / 9) return trajectory;
+  }
+  return mostDifferent;
+}
+
+function isV3BonusLaunchBlocked() {
+  return Boolean(state.v3BonusLock || state.x10BoostActivated);
+}
+
 function applyPocketTestPrototypePlan(roundOutcome, trajectoryResult) {
   if (!POCKET_TEST_RANDOM_PHYSICS) return;
   trajectoryResult.valid = true;
@@ -5621,6 +6024,15 @@ function applyPocketTestPrototypePlan(roundOutcome, trajectoryResult) {
 
 function placePrototypeMultiPlusPosition(roundOutcome) {
   if (!POCKET_TEST_RANDOM_PHYSICS) return;
+  if (window.BalloroBonusUI?.isV3) {
+    const { col, row } = window.BalloroV3Rules.pocketCells(GRID_SIZE).lemon;
+    roundOutcome.multi_plus_position = {
+      index: row * GRID_SIZE + col, col, row, collected: true,
+      assigned_puck: -1, assigned_result_path: null, collect_time: null,
+      pickup_phase: "physical"
+    };
+    return;
+  }
   const blocked = new Set([
     state.fieldPocket && `${state.fieldPocket.col}_${state.fieldPocket.row}`,
     state.chancePocket && `${state.chancePocket.col}_${state.chancePocket.row}`,
@@ -6703,6 +7115,7 @@ function activateX10Boost() {
   if (state.x10BoostActivated) return;
   state.x10BoostActivated = true;
   state.crownBonusAwarded = true;
+  if (window.BalloroBonusUI?.isV3) return;
   const upgradedResults = state.pucks.filter((puck) => upgradeSettledResultToX10(puck));
   if (upgradedResults.length) {
     updateBank();
@@ -6816,7 +7229,8 @@ function upgradeSettledResultToMultiPlus(puck) {
     return false;
   }
   const basePayout = state.activeBetPerPuck * multiplier;
-  const x10Boosted = isX10BoostActive();
+  const x10Boosted = window.BalloroBonusUI?.isV3
+    ? Boolean(puck.v3PurpleBonus) : isX10BoostActive();
   const payout = basePayout * (x10Boosted ? 10 : 1);
   result.category = "multi_plus";
   result.multiplier = multiplier;
@@ -6842,7 +7256,7 @@ function upgradeSettledResultToMultiPlus(puck) {
   }
   settledCell.squareWin = true;
   settledCell.purpleBoost = x10Boosted;
-  playMultiplierResultSound(multiplier, x10Boosted);
+  playMultiplierResultSound(multiplier, x10Boosted, window.BalloroBonusUI?.isV3);
   updateBank();
   updateRoundWinLabel();
   startResultRevealAnimation();
@@ -6853,10 +7267,13 @@ function collectMultiPlus(puck = null, allowUnplanned = false) {
   const token = state.multiPlusToken;
   if (!token || token.consumed || token.collected || (!token.shouldCollect && !allowUnplanned)) return;
   if (!puck || state.multiPlusCapturedPuck) return;
+  const firstV3Symbol = window.BalloroBonusUI?.isV3
+    ? claimV3ExclusiveBonus("lemon", puck) : false;
   token.consumed = true;
   token.captured = true;
-  token.v2SymbolPending = Boolean(window.BalloroBonusUI?.isV2);
-  token.v2Activated = false;
+  token.v2SymbolPending = Boolean(window.BalloroBonusUI?.isV2)
+    && (!window.BalloroBonusUI?.isV3 || firstV3Symbol);
+  token.v2Activated = window.BalloroBonusUI?.isV3 && !firstV3Symbol;
   puck.multiPlusCapture = createFieldPocketPullCapture(puck, token.x, token.y);
   state.multiPlusCapturedPuck = puck;
   state.multiPlusPhase = "capturing";
@@ -6865,7 +7282,18 @@ function collectMultiPlus(puck = null, allowUnplanned = false) {
     bounce_count: puck?.bounceCount ?? token.pickupBounceCount ?? 0,
     collector_result_path: puck?.authoritativeResult?.result_path || "main"
   };
+  if (window.BalloroBonusUI?.isV3 && firstV3Symbol) startMultiPlusPocketSymbolPickup();
   updateMultiPlusCounter();
+}
+
+function startMultiPlusPocketSymbolPickup() {
+  const token = state.multiPlusToken;
+  if (!token?.v2SymbolPending) return;
+  token.v2Activated = recordV2PocketPickup("lemon", token.x, token.y, token.radius,
+    (activated) => {
+      token.v2Activated = activated;
+      token.v2SymbolPending = false;
+    });
 }
 
 function createFieldPocketPullCapture(puck, targetX, targetY) {
@@ -6880,6 +7308,17 @@ function createFieldPocketPullCapture(puck, targetX, targetY) {
     targetX,
     targetY
   };
+}
+
+function queueV3PocketPuck(puck, kind, point, zoneId = null) {
+  if (!window.BalloroBonusUI?.isV3 || puck.waitingForPocket || puck.v3QueuePull) return false;
+  puck.authoritativeResult = null;
+  puck.waitingForPocket = { kind, zoneId, enteredAt: performance.now() };
+  puck.v3QueuePull = createFieldPocketPullCapture(puck, point.x, point.y);
+  claimV3ExclusiveBonus(kind === "blue"
+    ? zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond"
+    : kind === "yellow" ? "lemon" : "crown", puck);
+  return true;
 }
 
 function stepFieldPocketPullCapture(puck, capture) {
@@ -6912,13 +7351,8 @@ function stepMultiPlusPocketCapture(puck) {
   if (stepFieldPocketPullCapture(puck, puck.multiPlusCapture)) {
     puck.multiPlusCapture = null;
     state.multiPlusPhase = "captured";
-    if (window.BalloroBonusUI?.isV2) {
-      const token = state.multiPlusToken;
-      token.v2Activated = recordV2PocketPickup("lemon", token.x, token.y, token.radius,
-        (activated) => {
-          token.v2Activated = activated;
-          token.v2SymbolPending = false;
-        });
+    if (window.BalloroBonusUI?.isV2 && !window.BalloroBonusUI?.isV3) {
+      startMultiPlusPocketSymbolPickup();
     }
   }
   return true;
@@ -6936,6 +7370,15 @@ function collectPlannedMultiPlus() {
 }
 
 function getMultiPlusNeonCandidateCells() {
+  if (window.BalloroBonusUI?.isV3) {
+    const cells = [];
+    for (let row = 0; row < GRID_SIZE; row++) for (let col = 0; col < GRID_SIZE; col++) {
+      if (!window.BalloroV3Rules.pocketKindAt(GRID_SIZE, col, row)) {
+        cells.push({ col, row });
+      }
+    }
+    return cells;
+  }
   const config = getMathConfiguration();
   const launchKey = `${GRID_SIZE - 1}_${GRID_SIZE - 1}`;
   const blockedKeys = new Set([
@@ -6970,7 +7413,7 @@ function moveMultiPlusNeonCells(now, final = false) {
     return;
   }
   const candidates = getMultiPlusNeonCandidateCells();
-  const count = Math.min(finalSectors.length, candidates.length);
+  const count = Math.min(window.BalloroBonusUI?.isV3 ? GRID_SIZE : finalSectors.length, candidates.length);
   const step = Math.floor((now - state.multiPlusRevealStartedAt) / MULTI_PLUS_NEON_STEP_MS);
   const rng = window.PuckLuckMath.createRng(
     ((state.roundOutcome?.seed || 1) ^ Math.imul(step + 1, 0x9e3779b1)) >>> 0
@@ -7008,7 +7451,10 @@ function moveMultiPlusNeonCells(now, final = false) {
   state.multiPlusNeonCells = selected.map((cell, index) => {
     return {
       ...cell,
-      multiplier: getMultiPlusFieldMultiplier()
+      multiplier: window.BalloroBonusUI?.isV3
+        ? Math.round(window.BalloroV3Rules.cellMultiplier(GRID_SIZE, cell.col, cell.row)
+          * window.BalloroV3Rules.yellowMultiplier * 10) / 10
+        : getMultiPlusFieldMultiplier()
     };
   });
 }
@@ -7016,13 +7462,14 @@ function moveMultiPlusNeonCells(now, final = false) {
 function maybeAdvanceMultiPlus(now) {
   const puck = state.multiPlusCapturedPuck;
   if (!puck) return;
+  if (window.BalloroBonusUI?.isV3 && state.v3BonusLock !== "lemon") return;
   if (state.multiPlusPhase === "captured") {
     if (window.BalloroBonusUI?.isV2 && state.multiPlusToken?.v2SymbolPending) return;
     const visualStopSpeed = state.field.half * 0.075;
     const otherActivity = state.pucks.some((item) => item !== puck && !item.stopped
       && item.speed > visualStopSpeed
       && item.secretRoom?.phase !== "pocket_wait"
-      && item !== state.chanceCapturedPuck);
+      && (window.BalloroBonusUI?.isV3 || item !== state.chanceCapturedPuck));
     if (otherActivity) return;
     if (window.BalloroBonusUI?.isV2 && !state.multiPlusToken?.v2Activated) {
       releaseMultiPlusCapturedPuck(puck);
@@ -7048,7 +7495,9 @@ function maybeAdvanceMultiPlus(now) {
     moveMultiPlusNeonCells(now, true);
     // A locked EX MULTI cell pays every ball already resting in that formerly
     // empty cell, not only balls that were released from the EX MULTI pocket.
-    state.pucks.filter((item) => item.result).forEach(upgradeSettledResultToMultiPlus);
+    if (!window.BalloroBonusUI?.isV3) {
+      state.pucks.filter((item) => item.result).forEach(upgradeSettledResultToMultiPlus);
+    }
     state.multiPlusNeonFlashUntil = now + MULTI_PLUS_NEON_STOP_FLASH_MS;
     playMultiPlusNeonCue("stop");
   } else if (revealElapsed < MULTI_PLUS_NEON_DURATION_MS
@@ -7096,6 +7545,7 @@ function releaseMultiPlusCapturedPuck(puck) {
     releaseTrajectory
   );
   puck.trailBonusKind = activatedBonus ? "lemon" : null;
+  if (window.BalloroBonusUI?.isV3) puck.pocketBallKind = "lemon";
   if (POCKET_TEST_RANDOM_PHYSICS) puck.authoritativeResult = null;
   puck.multiPlusExitRequired = true;
   state.multiPlusCapturedPuck = null;
@@ -7105,6 +7555,14 @@ function releaseMultiPlusCapturedPuck(puck) {
 
 function resetPucks({ force = false } = {}) {
   if (window.BalloroRoundTapes?.busy && !force) return;
+  if (state.v3HoldTimer) window.clearTimeout(state.v3HoldTimer);
+  state.v3HoldTimer = null;
+  state.v3BonusLock = null;
+  state.v3BonusPuck = null;
+  state.v3BonusQueue = [];
+  state.v3PocketSymbolCycle = { diamond: false, crown: false, lemon: false, blue: false };
+  state.v3Shots.clear();
+  state.v3LastWinAmount = 0;
   if (state.winPresentationUnlockTimer !== null) {
     window.clearTimeout(state.winPresentationUnlockTimer);
     state.winPresentationUnlockTimer = null;
@@ -7183,9 +7641,10 @@ function resetPucks({ force = false } = {}) {
   updateRoundWinLabel();
 }
 
-function prepareLaunchRound(slot) {
-  if (window.BalloroRoundTapes?.enabled) return false;
-  if (window.BalloroSavedPaths?.enabled && !window.BalloroSavedPaths.has(GRID_SIZE)) return false;
+function prepareLaunchRound(slot, { debit = true } = {}) {
+  if (!window.BalloroBonusUI?.isV3 && window.BalloroRoundTapes?.enabled) return false;
+  if (!window.BalloroBonusUI?.isV3 && window.BalloroSavedPaths?.enabled
+    && !window.BalloroSavedPaths.has(GRID_SIZE)) return false;
   if (state.running) {
     return false;
   }
@@ -7306,7 +7765,7 @@ function prepareLaunchRound(slot) {
   }
   state.lastCollectibleIdleRenderAt = 0;
 
-  state.bankroll -= totalBet;
+  if (debit) state.bankroll -= totalBet;
   state.activeSlot = slot;
   state.activeBetPerPuck = bet;
   state.launchPrepared = true;
@@ -7388,7 +7847,30 @@ function prepareLaunchRound(slot) {
   return true;
 }
 
+function prepareV3StaticField() {
+  if (!window.BalloroBonusUI?.isV3 || state.roundOutcome) return;
+  if (window.BalloroSavedPaths?.enabled && !window.BalloroSavedPaths.has(GRID_SIZE)) {
+    if (state.v3StaticFieldLoading) return;
+    state.v3StaticFieldLoading = true;
+    window.BalloroSavedPaths.load(GRID_SIZE).then(() => {
+      state.v3StaticFieldLoading = false;
+      prepareV3StaticField();
+    }).catch((error) => {
+      state.v3StaticFieldLoading = false;
+      console.error('V3 saved paths unavailable', error);
+    });
+    return;
+  }
+  const slot = els.betSlots[0];
+  if (!slot || !prepareLaunchRound(slot, { debit: false })) return;
+  state.launchPrepared = false;
+  state.launchPreparedSlot = null;
+  state.activeSlot = null;
+  updateBetButtons();
+}
+
 function launchPuck(slot) {
+  if (window.BalloroBonusUI?.isV3) return launchV3Pucks(slot);
   if (window.BalloroRoundTapes?.enabled) return window.BalloroRoundTapes.launch(slot);
   if (window.BalloroSavedPaths?.enabled && !window.BalloroSavedPaths.has(GRID_SIZE)) {
     if (state.savedPathsLoading) return;
@@ -7435,6 +7917,88 @@ function launchPuck(slot) {
   updateBetButtons();
   render();
   requestAnimationFrame((time) => tick(time, roundId));
+}
+
+function launchV3Pucks(slot) {
+  const now = performance.now();
+  const interval = getV3LaunchIntervalMs();
+  if (!slot || isV3BonusLaunchBlocked()
+    || (state.v3LastLaunchAt > 0 && now - state.v3LastLaunchAt < interval)) return false;
+  const bet = parseBet(slot);
+  // V3 offers one paid ball per launch, including autoplay and held spin.
+  state.puckCount = 1;
+  const count = 1;
+  const totalBet = bet * count;
+  if (!(bet > 0)) return false;
+  if (state.bankroll < totalBet) {
+    openPopup(els.topUpPopup);
+    return false;
+  }
+  // Prepare the field only once. A subsequent launch is another paid bet on
+  // the same live board; it must not clear moving balls or bonus pockets.
+  if (!state.roundOutcome) {
+    prepareV3StaticField();
+    if (!state.roundOutcome) return false;
+    state.bankroll -= totalBet;
+    updateBank();
+  } else {
+    state.bankroll -= totalBet;
+    updateBank();
+  }
+  const wasRunning = state.running;
+  state.activeSlot = slot;
+  state.activeBetPerPuck = bet;
+  state.v3LastWinAmount = 0;
+  updateRoundWinLabel();
+  state.launchPrepared = false;
+  state.launchPreparedSlot = null;
+  state.v3LastLaunchAt = now;
+  if (state.v3CooldownTimer) window.clearTimeout(state.v3CooldownTimer);
+  state.v3CooldownTimer = window.setTimeout(() => {
+    state.v3CooldownTimer = null;
+    updateBetButtons();
+  }, interval);
+  const retained = state.pucks.filter((puck) => !puck.stopped
+    || getV3PuckFade(puck, now) > 0 || getV3MultiplierFade(puck, now) > 0
+    || state.v3BonusPuck === puck);
+  const oldIndices = new Map(retained.map((puck, index) => [puck, index]));
+  state.settledCells = state.settledCells.flatMap((cell) => {
+    const puck = state.pucks[cell.puckIndex];
+    const index = oldIndices.get(puck);
+    return index === undefined ? [] : [{ ...cell, puckIndex: index }];
+  });
+  state.pucks = retained;
+  const fresh = Array.from({ length: count }, (_, index) => {
+    const puck = createPuck(state.v3BallSerial++, count, null,
+      buildRandomPrototypeTrajectory());
+    puck.v3BetPerPuck = bet;
+    puck.v3ShotAt = now;
+    puck.v3ShotId = state.v3ShotSerial + 1;
+    return puck;
+  });
+  const shotId = ++state.v3ShotSerial;
+  state.v3Shots.set(shotId, { stake: totalBet, count, launchedAt: Date.now() });
+  state.pucks.push(...fresh);
+  if (state.autoPlay && Number.isFinite(state.autoRoundsRemaining)) {
+    state.autoRoundsRemaining = Math.max(0, state.autoRoundsRemaining - 1);
+  }
+  playLaunchSound();
+  if (!wasRunning) {
+    state.running = true;
+    state.roundId += 1;
+    state.lastFrameAt = now;
+    state.physicsAccumulator = 0;
+    requestAnimationFrame((time) => tick(time, state.roundId));
+  }
+  updateBetButtons();
+  render();
+  return true;
+}
+
+function getV3LaunchIntervalMs() {
+  return state.quickPlay
+    ? window.BalloroV3Rules.quickLaunchIntervalMs
+    : window.BalloroV3Rules.launchIntervalMs;
 }
 
 function nudgeVelocity(puck) {
@@ -7707,7 +8271,12 @@ function parkSecretRoomPuck(puck) {
       ? state.bluePocket : state.fieldPocket;
     if (pocket?.consumed) { puck.secretRoom = null; return; }
     if (pocket) pocket.consumed = true;
-    if (window.BalloroBonusUI?.isV2) visit.bonusSymbolPending = true;
+    if (window.BalloroBonusUI?.isV2 && !window.BalloroBonusUI?.isV3) visit.bonusSymbolPending = true;
+  }
+  if (window.BalloroBonusUI?.isV3) {
+    visit.bonusSymbolPending = claimV3ExclusiveBonus(
+      visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond", puck);
+    visit.v2BonusActivated = !visit.bonusSymbolPending;
   }
   visit.phase = "capturing";
   visit.captureElapsed = 0;
@@ -7722,12 +8291,44 @@ function parkSecretRoomPuck(puck) {
   } else {
     visit.captureDuration = 0.24;
   }
+  if (window.BalloroBonusUI?.isV3 && visit.bonusSymbolPending) {
+    startSecretRoomPocketSymbolPickup(visit, getSecretZoneGeometry(visit.zoneId));
+  }
   if (state.secretRoomLaunchAt < 0) state.secretRoomLaunchAt = 0;
+}
+
+function startSecretRoomPocketSymbolPickup(visit, zone) {
+  if (!visit.bonusSymbolPending) return;
+  if (visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID) {
+    recordV2PocketPickup("blue", zone.hole.x, zone.hole.y, state.field.puckRadius, (activated) => {
+      visit.bonusSymbolPending = false;
+      visit.v2BonusActivated = activated;
+      if (state.bluePocket) state.bluePocket.symbolArrived = true;
+      if (activated) visit.blueLaunchReadyAt = performance.now() + V2_CACTUS_POST_ACTIVATION_HOLD_MS;
+    });
+  } else {
+    recordV2PocketPickup("diamond", zone.hole.x, zone.hole.y, state.field.puckRadius,
+      (activated) => {
+        visit.bonusSymbolPending = false;
+        visit.v2BonusActivated = activated;
+        if (activated) {
+          if (!window.BalloroBonusUI?.isV3) activateX10Boost();
+          playBonusCompleteSound();
+        } else playBonusStarSound(state.v2BonusProgress.diamond);
+      });
+  }
 }
 
 function beginSecretRoomVisit(puck) {
   const visit = puck.secretRoom;
   if (!visit || visit.phase !== "pocket_wait" || visit.bonusSymbolPending) return;
+  const repeatedPurpleVisit = Boolean(window.BalloroBonusUI?.isV3
+    && visit.zoneId !== BLUE_FIELD_POCKET_ZONE_ID && puck.v3PurpleBonus);
+  if (window.BalloroBonusUI?.isV3 && visit.zoneId !== BLUE_FIELD_POCKET_ZONE_ID
+    && visit.v2BonusActivated) {
+    activateX10Boost();
+    puck.v3PurpleBonus = true;
+  }
   const zone = getSecretZoneGeometry(visit.zoneId);
   if (usesFieldPocketMechanics()) {
     const pocket = visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID
@@ -7739,7 +8340,13 @@ function beginSecretRoomVisit(puck) {
     const releaseResult = puck.authoritativeResult?.release_results?.[0] || null;
     if (POCKET_TEST_RANDOM_PHYSICS) {
       const startPoint = { x: zone.hole.x / state.field.half, y: zone.hole.y / state.field.half };
-      const trajectory = buildRandomPrototypeTrajectory(startPoint, -135);
+      const trajectory = repeatedPurpleVisit
+        ? selectV3RepeatedPurpleRelease(startPoint, puck)
+        : buildRandomPrototypeTrajectory(startPoint, -135);
+      if (window.BalloroBonusUI?.isV3) {
+        const first = trajectory.frames[0];
+        puck.v3LastPurpleReleaseDirection = Math.atan2(first[4], first[3]);
+      }
       preparePocketReleasePuck(puck, zone, releaseStartIndex, null, trajectory);
       puck.authoritativeResult = null;
     } else {
@@ -7747,6 +8354,8 @@ function beginSecretRoomVisit(puck) {
       preparePocketReleasePuck(puck, zone, releaseStartIndex, releaseResult);
     }
     puck.trailBonusKind = visit.v2BonusActivated ? "diamond" : null;
+    if (window.BalloroBonusUI?.isV3) puck.pocketBallKind = "diamond";
+    if (window.BalloroBonusUI?.isV3) puck.purplePocketExitRequired = true;
     state.openSecretZones.add(visit.zoneId);
     state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
     playLaunchSound();
@@ -7764,8 +8373,13 @@ function beginSecretRoomVisit(puck) {
       releasePuck.authoritativeResult = null;
       releasePuck.bluePocketExitRequired = true;
       releasePuck.trailBonusKind = visit.v2BonusActivated ? "blue" : null;
+      if (window.BalloroBonusUI?.isV3) releasePuck.pocketBallKind = "blue";
     });
     state.pucks.push(...released.slice(1));
+    if (window.BalloroBonusUI?.isV3) released.forEach((releasePuck) => {
+      releasePuck.pocketBallKind = "blue";
+    });
+    // V3 leaves the green pocket occupied until all three released balls finish.
     state.openSecretZones.add(visit.zoneId);
     state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
     playLaunchSound();
@@ -7786,6 +8400,7 @@ function beginSecretRoomVisit(puck) {
   });
   preparePocketReleasePuck(puck, zone, releaseStartIndex, releaseResults[0]);
   puck.trailBonusKind = visit.v2BonusActivated ? "blue" : null;
+  if (window.BalloroBonusUI?.isV3) puck.pocketBallKind = "blue";
   state.pucks.push(...extraPucks);
   state.openSecretZones.add(visit.zoneId);
   state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
@@ -7820,25 +8435,8 @@ function stepSecretRoomPuck(puck) {
       puck.vy = 0;
       puck.speed = 0;
       playPocketDropSound();
-      if (window.BalloroBonusUI?.isV2 && visit.bonusSymbolPending) {
-        if (visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID) {
-          recordV2PocketPickup("blue", zone.hole.x, zone.hole.y, state.field.puckRadius, (activated) => {
-            visit.bonusSymbolPending = false;
-            visit.v2BonusActivated = activated;
-            if (state.bluePocket) state.bluePocket.symbolArrived = true;
-            if (activated) visit.blueLaunchReadyAt = performance.now() + V2_CACTUS_POST_ACTIVATION_HOLD_MS;
-          });
-        } else {
-          recordV2PocketPickup("diamond", zone.hole.x, zone.hole.y, state.field.puckRadius,
-            (activated) => {
-              visit.bonusSymbolPending = false;
-              visit.v2BonusActivated = activated;
-              if (activated) {
-                activateX10Boost();
-                playBonusCompleteSound();
-              } else playBonusStarSound(state.v2BonusProgress.diamond);
-            });
-        }
+      if (window.BalloroBonusUI?.isV2 && !window.BalloroBonusUI?.isV3) {
+        startSecretRoomPocketSymbolPickup(visit, zone);
       }
     }
     return true;
@@ -7870,6 +8468,10 @@ function captureFieldPocketPuckByTouch(puck, atRest = false) {
       if (Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius) continue;
       puck.bluePocketExitRequired = false;
     }
+    if (puck.purplePocketExitRequired && zoneId === FIELD_POCKET_ZONE_ID) {
+      if (Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius) continue;
+      puck.purplePocketExitRequired = false;
+    }
     const captureProgress = atRest
       ? (Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius ? 1 : null)
       : window.PuckLuckTrajectoryPlanner.segmentCircleFirstIntersection(
@@ -7879,6 +8481,9 @@ function captureFieldPocketPuckByTouch(puck, atRest = false) {
       && item.secretRoom?.zoneId === zoneId
       && ["capturing", "pocket_wait"].includes(item.secretRoom.phase));
     if (occupied) {
+      if (window.BalloroBonusUI?.isV3) return queueV3PocketPuck(puck, "blue", {
+        x: pocket.x * state.field.half, y: pocket.y * state.field.half
+      }, zoneId);
       puck.waitingForPocket = { kind: "blue", zoneId };
       return false;
     }
@@ -7894,7 +8499,7 @@ function captureFieldPocketPuckByTouch(puck, atRest = false) {
   return false;
 }
 
-function captureChancePuck(puck, allowStationaryOverlap = false) {
+function captureChancePuck(puck, allowStationaryOverlap = false, slowApproach = false) {
   if (window.BalloroBonusUI?.isV2 && !allowStationaryOverlap) return false;
   if (!state.chancePocket || state.chancePocket.consumed || state.chanceCapturedPuck
     || ["capturing", "pocket_wait"].includes(puck.secretRoom?.phase)) return false;
@@ -7914,15 +8519,19 @@ function captureChancePuck(puck, allowStationaryOverlap = false) {
       captureRadius
     ) !== null;
   if (!captured && allowStationaryOverlap) {
-    captured = Math.hypot(normalizedX - pocket.normalized.x, normalizedY - pocket.normalized.y) <= captureRadius;
+    captured = slowApproach || Math.hypot(normalizedX - pocket.normalized.x, normalizedY - pocket.normalized.y) <= captureRadius;
   }
   if (!window.BalloroBonusUI?.isV2 && !captured && state.chancePocket.forced && state.pucks.indexOf(puck) === 0
     && puck.replayFrame >= state.chancePocket.forceFrameIndex) captured = true;
   if (!captured) return false;
 
   state.chancePocket.consumed = true;
-  puck.v2SymbolPending = Boolean(window.BalloroBonusUI?.isV2);
-  puck.v2ChanceActivated = !window.BalloroBonusUI?.isV2;
+  const firstV3Symbol = window.BalloroBonusUI?.isV3
+    ? claimV3ExclusiveBonus("crown", puck) : false;
+  puck.v2SymbolPending = Boolean(window.BalloroBonusUI?.isV2)
+    && (!window.BalloroBonusUI?.isV3 || firstV3Symbol);
+  puck.v2ChanceActivated = !window.BalloroBonusUI?.isV2
+    || (window.BalloroBonusUI?.isV3 && !firstV3Symbol);
 
   const targetX = pocket.normalized.x * state.field.half;
   const targetY = pocket.normalized.y * state.field.half;
@@ -7936,8 +8545,23 @@ function captureChancePuck(puck, allowStationaryOverlap = false) {
   puck.authoritativeResult = null;
   state.chanceCapturedPuck = puck;
   state.chancePhase = "capturing";
+  if (window.BalloroBonusUI?.isV3) {
+    if (firstV3Symbol) startChancePocketSymbolPickup(puck);
+  }
   updateChanceBonusCounter();
   return true;
+}
+
+function startChancePocketSymbolPickup(puck) {
+  if (!puck.v2SymbolPending) return;
+  const pocket = getChancePocketGeometry();
+  puck.v2ChanceActivated = recordV2PocketPickup("crown",
+    pocket.normalized.x * state.field.half,
+    pocket.normalized.y * state.field.half, state.field.puckRadius,
+    (activated) => {
+      puck.v2ChanceActivated = activated;
+      puck.v2SymbolPending = false;
+    });
 }
 
 function stepChanceRoomPuck(puck) {
@@ -7948,15 +8572,8 @@ function stepChanceRoomPuck(puck) {
       chance.pocketCapture = null;
       chance.phase = "captured";
       state.chancePhase = "captured";
-      if (window.BalloroBonusUI?.isV2) {
-        const pocket = getChancePocketGeometry();
-        puck.v2ChanceActivated = recordV2PocketPickup("crown",
-          pocket.normalized.x * state.field.half,
-          pocket.normalized.y * state.field.half, state.field.puckRadius,
-          (activated) => {
-            puck.v2ChanceActivated = activated;
-            puck.v2SymbolPending = false;
-          });
+      if (window.BalloroBonusUI?.isV2 && !window.BalloroBonusUI?.isV3) {
+        startChancePocketSymbolPickup(puck);
       }
     }
     return true;
@@ -8017,10 +8634,18 @@ function stepChanceRoomPuck(puck) {
     || Math.hypot(chance.vu, chance.vv) > 0.1) return true;
 
   const gridSize = getChanceRoomGridSize();
-  const won = isChanceMultiplierHit(chance.u, chance.v, chance.roomId, gridSize);
-  const multiplier = won ? getChanceRoomMultiplier(chance.roomId) : 0;
-  const x10Boosted = won && isX10BoostActive();
-  const basePayout = state.activeBetPerPuck * multiplier;
+  const roomCol = clamp(Math.floor((chance.u + 1) * gridSize / 2), 0, gridSize - 1);
+  const roomRow = clamp(Math.floor((chance.v + 1) * gridSize / 2), 0, gridSize - 1);
+  const chanceRoomTier = window.BalloroBonusUI?.isV3
+    ? window.BalloroV3Rules.roomCellTier(GRID_SIZE, chance.roomId, roomCol, roomRow) : null;
+  const won = window.BalloroBonusUI?.isV3
+    ? Boolean(chanceRoomTier) : isChanceMultiplierHit(chance.u, chance.v, chance.roomId, gridSize);
+  const multiplier = window.BalloroBonusUI?.isV3
+    ? (won ? window.BalloroV3Rules.roomCellMultiplier(GRID_SIZE, chance.roomId, roomCol, roomRow) : 0)
+    : won ? getChanceRoomMultiplier(chance.roomId) : 0;
+  const x10Boosted = won && (window.BalloroBonusUI?.isV3
+    ? Boolean(puck.v3PurpleBonus) : isX10BoostActive());
+  const basePayout = (puck.v3BetPerPuck || state.activeBetPerPuck) * multiplier;
   const payout = basePayout * (x10Boosted ? 10 : 1);
   state.bankroll += payout;
   state.roundWinAmount += payout;
@@ -8034,17 +8659,22 @@ function stepChanceRoomPuck(puck) {
     basePayout,
     x10Boosted,
     secretRoom: true,
-    chanceRoom: true
+    chanceRoom: true,
+    chanceRoomTier
   };
   chance.phase = "settled";
-  state.chanceRoomOutcome = { roomId: chance.roomId, won, multiplier };
+  state.chanceRoomOutcome = { roomId: chance.roomId, won, multiplier, chanceRoomTier };
   state.chanceCompletedRoomIds.add(chance.roomId);
   if (state.chanceCapturedPuck === puck) {
     state.chanceCapturedPuck = null;
     state.chancePhase = "idle";
-    updateChanceBonusCounter();
   }
-  if (won) playMultiplierResultSound(multiplier, x10Boosted);
+  // V3 clears chanceCapturedPuck when the room shot launches, before it settles.
+  // Release the red pocket here so the next shot can activate it again.
+  updateChanceBonusCounter();
+  if (won) playMultiplierResultSound(multiplier, x10Boosted,
+    !window.BalloroBonusUI?.isV3 || chanceRoomTier === "red",
+    chanceRoomTier === "red" ? 2 : chanceRoomTier === "yellow" ? 1 : 0);
   startResultRevealAnimation();
   return true;
 }
@@ -8052,10 +8682,11 @@ function stepChanceRoomPuck(puck) {
 function maybeAdvanceChance(now) {
   const puck = state.chanceCapturedPuck;
   if (!puck) return;
+  if (window.BalloroBonusUI?.isV3 && state.v3BonusLock !== "crown") return;
   if (state.chancePhase === "captured") {
     if (window.BalloroBonusUI?.isV2 && puck.v2SymbolPending) return;
     const otherActivity = state.pucks.some((item) => item !== puck && !item.stopped);
-    if (otherActivity) return;
+    if (otherActivity && !window.BalloroBonusUI?.isV3) return;
     if (!puck.chance.waveStartedAt) {
       puck.chance.waveStartedAt = now;
       return;
@@ -8114,6 +8745,7 @@ function startChanceRoomSpin(puck, now) {
 function launchChanceRoomPuck(puck) {
   window.BalloroQuickTrail?.clear(puck);
   puck.trailBonusKind = window.BalloroBonusUI?.isV2 && puck.v2ChanceActivated ? "crown" : null;
+  if (window.BalloroBonusUI?.isV3) puck.pocketBallKind = "crown";
   const chance = puck.chance;
   chance.phase = "inside";
   state.chanceCapturedPuck = null;
@@ -8139,7 +8771,9 @@ function launchChanceRoomPuck(puck) {
   chance.vv = sharedEntry && chance.roomId === "bottom-left" ? velocityV : -velocityV;
   chance.dampingPerStep = puck.replayTrajectory?.damping_per_step || 0.972;
   if (window.BalloroSavedPaths?.enabled) {
-    const savedFrames = window.BalloroSavedPaths.room(GRID_SIZE, rng.next());
+    const savedFrames = window.BalloroBonusUI?.isV3
+      ? window.BalloroSavedPaths.roomV3(GRID_SIZE,chance.roomId,rng.next())
+      : window.BalloroSavedPaths.room(GRID_SIZE,rng.next());
     chance.savedFrames = sharedEntry
       ? savedFrames.map((frame) => mapLegacyChanceFrameToV2(chance.roomId, frame))
       : savedFrames;
@@ -8162,11 +8796,102 @@ function captureStoppedV2Pocket(puck) {
   collectMultiPlusByTouch(puck, 1, false, true);
   if (puck === state.multiPlusCapturedPuck) return true;
   if (captureFieldPocketPuckByTouch(puck, true)) return true;
-  return captureChancePuck(puck, true);
+  if (captureChancePuck(puck, true)) return true;
+  if (window.BalloroBonusUI?.isV3 && state.chancePocket?.consumed) {
+    const pocket = getChancePocketGeometry();
+    const distance = Math.hypot(puck.x - pocket.normalized.x * state.field.half,
+      puck.y - pocket.normalized.y * state.field.half);
+    if (distance <= Math.max(0, 2 * state.field.puckRadius - 1)) {
+      return queueV3PocketPuck(puck, "red", {
+        x: pocket.normalized.x * state.field.half,
+        y: pocket.normalized.y * state.field.half
+      });
+    }
+  }
+  if (window.BalloroBonusUI?.isV3) {
+    for (const [zoneId, pocket] of [[FIELD_POCKET_ZONE_ID, state.fieldPocket],
+      [BLUE_FIELD_POCKET_ZONE_ID, state.bluePocket]]) {
+      if (!pocket?.consumed || (zoneId === FIELD_POCKET_ZONE_ID && puck.purplePocketExitRequired)
+        || (zoneId === BLUE_FIELD_POCKET_ZONE_ID && puck.bluePocketExitRequired)) continue;
+      const normalized = getFieldPocketNormalized(pocket);
+      const point = { x: normalized.x * state.field.half,
+        y: normalized.y * state.field.half };
+      if (Math.hypot(puck.x - point.x, puck.y - point.y) <= state.field.puckRadius * 2 - 1) {
+        return queueV3PocketPuck(puck, "blue", point, zoneId);
+      }
+    }
+    const token = state.multiPlusToken;
+    if (token?.consumed && !puck.multiPlusExitRequired
+      && Math.hypot(puck.x - token.x, puck.y - token.y)
+        <= state.field.puckRadius + token.radius - 1) {
+      return queueV3PocketPuck(puck, "yellow", token);
+    }
+  }
+  return false;
+}
+
+function pullSlowV3PuckIntoPocket(puck, frames) {
+  if (!window.BalloroBonusUI?.isV3 || puck.secretRoom
+    || puck.chance || puck === state.multiPlusCapturedPuck) return false;
+  const progress = puck.replayCursor / Math.max(1, frames.length - 1);
+  if (progress < 0.78 || puck.speed > state.field.half * 0.1) return false;
+  const last = frames[frames.length - 1];
+  const end = { x: last[1] * state.field.half, y: last[2] * state.field.half };
+  const radius = state.field.puckRadius;
+  const near = (point, captureRadius) => Math.hypot(end.x - point.x, end.y - point.y) <= captureRadius
+    && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2.6;
+
+  for (const [zoneId, pocket] of [[FIELD_POCKET_ZONE_ID, state.fieldPocket],
+    [BLUE_FIELD_POCKET_ZONE_ID, state.bluePocket]]) {
+    if (!pocket
+      || (zoneId === FIELD_POCKET_ZONE_ID && puck.purplePocketExitRequired)
+      || (zoneId === BLUE_FIELD_POCKET_ZONE_ID && puck.bluePocketExitRequired)) continue;
+    const normalized = getFieldPocketNormalized(pocket);
+    const point = { x: normalized.x * state.field.half, y: normalized.y * state.field.half };
+    if (!near(point, Math.max(0, radius * 2 - 1))) continue;
+    if (pocket.consumed || pocket.finished) {
+      return queueV3PocketPuck(puck, "blue", point, zoneId);
+    }
+    puck.authoritativeResult = null;
+    puck.secretRoom = { zoneId, phase: "entry", pocketCaptureArmed: true, roomCursor: 0, roomFrame: 0 };
+    parkSecretRoomPuck(puck);
+    return true;
+  }
+
+  const token = state.multiPlusToken;
+  if (token && !puck.multiPlusExitRequired && near(token, radius + token.radius - 1)) {
+    if (token.consumed || token.collected) return queueV3PocketPuck(puck, "yellow", token);
+    collectMultiPlus(puck, true);
+    return puck === state.multiPlusCapturedPuck;
+  }
+
+  if (state.chancePocket) {
+    const pocket = getChancePocketGeometry();
+    const point = { x: pocket.normalized.x * state.field.half,
+      y: pocket.normalized.y * state.field.half };
+    if (near(point, Math.max(0, radius * 2 - 1))) {
+      if (state.chancePocket.consumed || state.chanceCapturedPuck) {
+        return queueV3PocketPuck(puck, "red", point);
+      }
+      return captureChancePuck(puck, true, true);
+    }
+  }
+  return false;
 }
 
 function stepReplayPuck(puck) {
   if (puck.stopped) {
+    return;
+  }
+  if (puck.v3QueuePull) {
+    if (stepFieldPocketPullCapture(puck, puck.v3QueuePull)) {
+      puck.v3QueuePull = null;
+      puck.stopped = true;
+      puck.pocketDepth = 0;
+      puck.vx = 0;
+      puck.vy = 0;
+      puck.speed = 0;
+    }
     return;
   }
   if (puck === state.multiPlusCapturedPuck) {
@@ -8205,6 +8930,7 @@ function stepReplayPuck(puck) {
     collectMultiPlusByTouch(puck);
     if (puck === state.multiPlusCapturedPuck) return;
   }
+  if (pullSlowV3PuckIntoPocket(puck, frames)) return;
   if (captureChancePuck(puck)) return;
   if (captureFieldPocketPuckByTouch(puck)) return;
   if (puck.secretRoom?.phase === "entry") {
@@ -8227,8 +8953,13 @@ function stepReplayPuck(puck) {
           && item.secretRoom?.zoneId === puck.secretRoom.zoneId
           && ["capturing", "pocket_wait"].includes(item.secretRoom.phase));
         if (occupied) {
-          puck.waitingForPocket = { kind: "blue", zoneId: puck.secretRoom.zoneId };
+          const zoneId = puck.secretRoom.zoneId;
           puck.secretRoom = null;
+          if (window.BalloroBonusUI?.isV3) {
+            queueV3PocketPuck(puck, "blue", pocket, zoneId);
+          } else {
+            puck.waitingForPocket = { kind: "blue", zoneId };
+          }
           return;
         }
         puck.x = puck.previousX + (puck.x - puck.previousX) * captureProgress;
@@ -8263,6 +8994,14 @@ function getResultCell(puck) {
 }
 
 function getCellCategory(col, row) {
+  if (window.BalloroBonusUI?.isV3) {
+    if (window.BalloroV3Rules.pocketKindAt(GRID_SIZE, col, row)) return "empty";
+    if (isMultiPlusVisualActive()
+      && getActiveMultiPlusCells().some((cell) => cell.col === col && cell.row === row)) return "multi_plus";
+    const mid = (GRID_SIZE - 1) / 2;
+    const ring = Math.max(Math.abs(col - mid), Math.abs(row - mid));
+    return ring === 0 ? "center" : ring === 1 ? "middle" : "outer";
+  }
   const config = getMathConfiguration();
   if (isMultiPlusVisualActive()
     && getActiveMultiPlusCells().some((sector) => sector.col === col && sector.row === row)) {
@@ -8289,9 +9028,9 @@ function settleSecretPuck(puck) {
     const center = getSectorCenter(actual);
     diagnostic.final_distance_to_center_px = Number(Math.hypot(puck.x - center.x, puck.y - center.y).toFixed(2));
   }
-  const bonusActive = isX10BoostActive();
+  const bonusActive = window.BalloroBonusUI?.isV3 ? Boolean(puck.v3PurpleBonus) : isX10BoostActive();
   const x10Boosted = bonusActive && multiplier > 0;
-  const basePayout = state.activeBetPerPuck * multiplier;
+  const basePayout = (puck.v3BetPerPuck || state.activeBetPerPuck) * multiplier;
   const payout = basePayout * (x10Boosted ? 10 : 1);
   state.bankroll += payout;
   state.roundWinAmount += payout;
@@ -8325,7 +9064,7 @@ function settleSecretPuck(puck) {
     });
   }
   playMultiplierResultSound(multiplier, x10Boosted);
-  if (state.pucks.every((item) => item.stopped)) startResultRevealAnimation();
+  if (window.BalloroBonusUI?.isV3 || state.pucks.every((item) => item.stopped)) startResultRevealAnimation();
 }
 
 function settlePuck(puck) {
@@ -8346,9 +9085,11 @@ function settlePuck(puck) {
     console.error("BalloroX replay landed in the wrong sector", { expected: result, actual, puck });
   }
   const multiplier = result.multiplier;
-  const bonusActive = isX10BoostActive();
+  const bonusActive = window.BalloroBonusUI?.isV3 ? Boolean(puck.v3PurpleBonus) : isX10BoostActive();
   const x10Boosted = bonusActive && !result.secretRoom && multiplier > 0;
-  const basePayout = state.activeBetPerPuck * multiplier;
+  const multiPlusBoosted = Boolean(window.BalloroBonusUI?.isV3
+    && result.category === "multi_plus" && multiplier > 0);
+  const basePayout = (puck.v3BetPerPuck || state.activeBetPerPuck) * multiplier;
   const payout = basePayout * (x10Boosted ? 10 : 1);
   state.bankroll += payout;
   state.roundWinAmount += payout;
@@ -8357,8 +9098,11 @@ function settlePuck(puck) {
   puck.vy = 0;
   puck.speed = 0;
   puck.resultRevealStartedAt = performance.now();
-  puck.result = { ...result, multiplier, payout, basePayout, x10Boosted };
-  playMultiplierResultSound(multiplier, x10Boosted);
+  puck.result = { ...result, multiplier, payout, basePayout, x10Boosted, multiPlusBoosted };
+  const v3SoundTier = window.BalloroBonusUI?.isV3
+    ? getV3WinSoundTier(result.col, result.row) : null;
+  playMultiplierResultSound(multiplier, x10Boosted,
+    multiPlusBoosted || v3SoundTier === 2, v3SoundTier);
   state.settledCells.push({
     col: result.col,
     row: result.row,
@@ -8367,7 +9111,7 @@ function settlePuck(puck) {
     squareWin: multiplier > 0,
     lineWin: false
   });
-  if (state.pucks.every((item) => item.stopped)) startResultRevealAnimation();
+  if (window.BalloroBonusUI?.isV3 || state.pucks.every((item) => item.stopped)) startResultRevealAnimation();
 }
 
 function getRoundLeaderboardMultiplier(pucks = []) {
@@ -8451,21 +9195,37 @@ function settleRound() {
 }
 
 function maybeLaunchParkedSecretRooms(now) {
-  const parked = state.pucks.filter((puck) => puck.secretRoom?.phase === "pocket_wait");
+  const parked = state.pucks.filter((puck) => puck.secretRoom?.phase === "pocket_wait"
+    && (!window.BalloroBonusUI?.isV3 || (state.v3BonusLock === "blue"
+      ? puck.secretRoom.zoneId === BLUE_FIELD_POCKET_ZONE_ID && puck === state.v3BonusPuck
+      : state.v3BonusLock === "diamond" && puck === state.v3BonusPuck)));
   if (!parked.length) return;
+  const v3GreenWaiting = window.BalloroBonusUI?.isV3
+    ? parked.filter((puck) => puck.secretRoom.zoneId === BLUE_FIELD_POCKET_ZONE_ID) : [];
+  if (window.BalloroBonusUI?.isV3
+    && !["blue", "diamond"].includes(state.v3BonusLock)) return;
   const mainFieldStillMoving = state.pucks.some((puck) => !puck.stopped
     && puck.secretRoom?.phase !== "pocket_wait"
-    && puck !== state.chanceCapturedPuck);
-  if (mainFieldStillMoving) return;
+    && !(window.BalloroBonusUI?.isV3 && state.v3BonusLock === "diamond"
+      && puck === state.multiPlusCapturedPuck)
+    && (window.BalloroBonusUI?.isV3 || puck !== state.chanceCapturedPuck));
+  if (mainFieldStillMoving && !v3GreenWaiting.length && !window.BalloroBonusUI?.isV3) return;
   if (state.secretRoomLaunchAt === 0) {
-    state.secretRoomLaunchAt = now + 1000;
+    state.secretRoomLaunchAt = now + (window.BalloroBonusUI?.isV3
+      && state.v3BonusLock === "diamond" ? 240 : 1000);
     return;
   }
   if (state.secretRoomLaunchAt > 0 && now >= state.secretRoomLaunchAt) {
     if (parked.some((puck) => puck.secretRoom?.bonusSymbolPending
       || (puck.secretRoom?.blueLaunchReadyAt || 0) > now)) return;
-    parked.forEach(beginSecretRoomVisit);
-    state.secretRoomLaunchAt = -1;
+    const ready = v3GreenWaiting.length ? v3GreenWaiting : parked;
+    if (window.BalloroBonusUI?.isV3) {
+      beginSecretRoomVisit(ready[0]);
+      state.secretRoomLaunchAt = 0;
+    } else {
+      ready.forEach(beginSecretRoomVisit);
+      state.secretRoomLaunchAt = -1;
+    }
   }
 }
 
@@ -8496,9 +9256,40 @@ function findStoppedPuckInPocketRange(point, radius, predicate = () => true) {
 }
 
 function captureWaitingPucksForAvailablePockets() {
+  if (window.BalloroBonusUI?.isV3) {
+    for (const [zoneId, pocketState] of [[FIELD_POCKET_ZONE_ID, state.fieldPocket],
+      [BLUE_FIELD_POCKET_ZONE_ID, state.bluePocket]]) {
+      const selectedKind = zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond";
+      if (state.v3BonusLock && state.v3BonusLock !== selectedKind) continue;
+      if (!pocketState || pocketState.consumed || pocketState.finished) continue;
+      const point = getFieldPocketNormalized(pocketState);
+      const queued = state.pucks.filter((puck) => puck.stopped
+        && puck.waitingForPocket?.kind === "blue"
+        && puck.waitingForPocket.zoneId === zoneId)
+        .sort((a, b) => a.waitingForPocket.enteredAt - b.waitingForPocket.enteredAt)[0];
+      const waiting = queued || findStoppedPuckInPocketRange(
+        { x: point.x * state.field.half, y: point.y * state.field.half },
+        Math.max(0, 2 * state.field.puckRadius - 1),
+        (puck) => !puck.pocketRelease && !puck.purplePocketExitRequired
+          && !puck.bluePocketExitRequired
+      );
+      if (waiting) {
+        reopenSettledPuckForPocketCapture(waiting);
+        waiting.waitingForPocket = null;
+        waiting.pocketDepth = 0;
+        captureFieldPocketPuckByTouch(waiting, true);
+        return;
+      }
+    }
+  }
   const token = state.multiPlusToken;
-  if (token && !token.consumed && !token.collected && !state.multiPlusCapturedPuck) {
-    const yellowPuck = findStoppedPuckInPocketRange(
+  if (token && !token.consumed && !token.collected && !state.multiPlusCapturedPuck
+    && (!window.BalloroBonusUI?.isV3 || !state.v3BonusLock || state.v3BonusLock === "lemon")) {
+    const queuedYellow = window.BalloroBonusUI?.isV3
+      ? state.pucks.filter((puck) => puck.stopped
+        && puck.waitingForPocket?.kind === "yellow")
+        .sort((a, b) => a.waitingForPocket.enteredAt - b.waitingForPocket.enteredAt)[0] : null;
+    const yellowPuck = queuedYellow || findStoppedPuckInPocketRange(
       token,
       window.BalloroBonusUI?.isV2
         ? Math.max(0, state.field.puckRadius + token.radius - 1)
@@ -8507,43 +9298,32 @@ function captureWaitingPucksForAvailablePockets() {
     );
     if (yellowPuck) {
       reopenSettledPuckForPocketCapture(yellowPuck);
+      yellowPuck.waitingForPocket = null;
+      yellowPuck.pocketDepth = 0;
       collectMultiPlus(yellowPuck, true);
       return;
     }
   }
 
-  const blueOccupied = state.pucks.some((puck) => puck.secretRoom?.zoneId === FIELD_POCKET_ZONE_ID
-    && ["capturing", "pocket_wait"].includes(puck.secretRoom.phase));
-  if (!blueOccupied && !state.fieldPocket?.consumed) {
-    const waitingBluePuck = state.pucks.find((puck) => puck.stopped
-      && puck.waitingForPocket?.kind === "blue");
-    if (waitingBluePuck) {
-      const zoneId = waitingBluePuck.waitingForPocket.zoneId;
-      waitingBluePuck.waitingForPocket = null;
-      reopenSettledPuckForPocketCapture(waitingBluePuck);
-      waitingBluePuck.secretRoom = {
-        zoneId,
-        phase: "entry",
-        pocketCaptureArmed: true,
-        roomCursor: 0,
-        roomFrame: 0
-      };
-      parkSecretRoomPuck(waitingBluePuck);
-      return;
-    }
-  }
-
-  if (state.chancePocket && !state.chancePocket.consumed && !state.chanceCapturedPuck) {
+  if (state.chancePocket && !state.chancePocket.consumed && !state.chanceCapturedPuck
+    && (!window.BalloroBonusUI?.isV3 || !state.v3BonusLock || state.v3BonusLock === "crown")) {
     const pocket = getChancePocketGeometry();
-    const redPuck = findStoppedPuckInPocketRange(
+    const queuedRedPuck = state.pucks.filter((puck) => puck.stopped
+      && puck.waitingForPocket?.kind === "red")
+      .sort((first, second) => first.waitingForPocket.enteredAt
+        - second.waitingForPocket.enteredAt)[0];
+    const redPuck = queuedRedPuck || findStoppedPuckInPocketRange(
       { x: pocket.normalized.x * state.field.half, y: pocket.normalized.y * state.field.half },
       window.BalloroBonusUI?.isV2
         ? Math.max(0, 2 * state.field.puckRadius - 1)
         : state.field.puckRadius * CHANCE_POCKET_CAPTURE_RADIUS_MULTIPLIER,
-      (puck) => !puck.pocketRelease && !puck.waitingForPocket
+      (puck) => !puck.pocketRelease
+        && (!puck.waitingForPocket || puck.waitingForPocket.kind === "red")
     );
     if (redPuck) {
       reopenSettledPuckForPocketCapture(redPuck);
+      redPuck.waitingForPocket = null;
+      redPuck.pocketDepth = 0;
       captureChancePuck(redPuck, true);
     }
   }
@@ -8604,19 +9384,184 @@ function tick(now, roundId) {
     collectPlannedMultiPlus();
     state.physicsAccumulator -= FIXED_PHYSICS_STEP;
   }
+  if (window.BalloroBonusUI?.isV3) advanceV3BonusQueue();
   maybeAdvanceMultiPlus(now);
   maybeLaunchParkedSecretRooms(now);
   maybeAdvanceChance(now);
   captureWaitingPucksForAvailablePockets();
   finalizeVisuallyStoppedReplayPucks(now);
+  if (window.BalloroBonusUI?.isV3) {
+    finishV3ExclusiveBonus(now);
+    finishV3PurplePresentation(now);
+    finalizeV3Shots();
+    finishV3ChancePresentation(now);
+  }
   render();
 
   if (state.pucks.every((puck) => puck.stopped)) {
+    if (window.BalloroBonusUI?.isV3) {
+      if (state.v3BonusLock || state.x10BoostActivated
+        || state.chanceSelectedRoomId || state.chanceCapturedPuck) {
+        requestAnimationFrame((time) => tick(time, roundId));
+        return;
+      }
+      state.running = false;
+      state.roundSettledAt = now;
+      updateBetButtons();
+      startResultRevealAnimation();
+      startCollectibleIdleAnimation();
+      scheduleNextAutoPlayRound();
+      return;
+    }
     settleRound();
     return;
   }
 
   requestAnimationFrame((time) => tick(time, roundId));
+}
+
+function finishV3ExclusiveBonus(now) {
+  if (!state.v3BonusLock || state.v3BonusLock === "pending" || !state.v3BonusPuck) return;
+  const transferred = state.v3BonusPuck.waitingForPocket
+    || state.v3BonusQueue.some((entry) => entry.puck === state.v3BonusPuck
+      && entry.kind !== state.v3BonusLock);
+  if (state.v3BonusLock === "blue") {
+    const released = state.pucks.filter((puck) => puck.v3ShotId === state.v3BonusPuck.v3ShotId
+      && puck.pocketBallKind === "blue");
+    if (!released.length || released.some((puck) => !puck.stopped
+      && !puck.waitingForPocket && !puck.chance
+      && !["capturing", "pocket_wait"].includes(puck.secretRoom?.phase)
+      && puck !== state.multiPlusCapturedPuck)) return;
+    if (released.some((puck) => puck.stopped && puck.result
+      && getV3ResultFadeElapsed(puck, now) < 0)) return;
+  } else if (!state.v3BonusPuck.stopped && !transferred) {
+    return;
+  }
+  // Yellow can release the launch lock as the result starts fading. Purple
+  // holds through the victory cue and the ball's fade, but not the much longer
+  // floating multiplier tail.
+  if (state.v3BonusLock !== "blue" && !transferred) {
+    const fadeElapsed = getV3ResultFadeElapsed(state.v3BonusPuck, now);
+    if (fadeElapsed < (state.v3BonusLock === "diamond"
+      ? window.BalloroV3Rules.resultFadeMs / 2 : 0)) return;
+  }
+  if (state.v3BonusLock === "diamond") {
+    if (state.fieldPocket) {
+      state.fieldPocket.consumed = false;
+      state.fieldPocket.finished = false;
+    }
+  } else if (state.v3BonusLock === "lemon") {
+    state.multiPlusActive = false;
+    state.multiPlusFinalCells = null;
+    if (state.multiPlusToken) {
+      state.multiPlusToken.consumed = false;
+      state.multiPlusToken.finished = false;
+    }
+  } else if (state.v3BonusLock === "blue") {
+    if (state.bluePocket) {
+      state.bluePocket.consumed = false;
+      state.bluePocket.finished = false;
+    }
+  } else if (state.v3BonusLock === "crown") {
+    state.chanceSelectedRoomId = null;
+    state.chanceRoomOutcome = null;
+    state.chanceCompletedRoomIds.clear();
+    if (state.chancePocket) {
+      state.chancePocket.consumed = false;
+      state.chancePocket.finished = false;
+    }
+  }
+  const finishedKind = state.v3BonusLock;
+  const moreOfThisPocket = state.v3BonusQueue.some((entry) => entry.kind === finishedKind);
+  if (!moreOfThisPocket) {
+    state.v3PocketSymbolCycle[finishedKind] = false;
+    state.v2BonusArrivedActive[finishedKind] = false;
+  }
+  state.v3BonusLock = state.v3BonusQueue.length ? "pending" : null;
+  state.v3BonusPuck = null;
+  updateCrownCounter();
+  updateMultiPlusCounter();
+  updateChanceBonusCounter();
+  updatePocketBonusCounter();
+  updateBetButtons();
+  captureWaitingPucksForAvailablePockets();
+}
+
+function finishV3ChancePresentation(now) {
+  if (state.chanceCapturedPuck || !state.chanceSelectedRoomId) return;
+  if (state.pucks.some((puck) => puck.chance && puck.chance.phase !== "settled")) return;
+  const latest = [...state.pucks].reverse().find((puck) => puck.chance?.roomId
+    && puck.chance.phase === "settled");
+  if (!latest || getV3ResultFadeElapsed(latest, now) < 0) return;
+  state.chanceSelectedRoomId = null;
+  state.chanceRoomOutcome = null;
+  state.chanceCompletedRoomIds.clear();
+  if (!state.v3PocketSymbolCycle.crown) state.v2BonusArrivedActive.crown = false;
+  if (state.chancePocket) {
+    state.chancePocket.consumed = false;
+    state.chancePocket.finished = false;
+  }
+  updateChanceBonusCounter();
+}
+
+function finalizeV3Shots() {
+  for (const [shotId, shot] of state.v3Shots) {
+    const pucks = state.pucks.filter((puck) => puck.v3ShotId === shotId);
+    if (!pucks.length || pucks.some((puck) => !puck.stopped || puck.waitingForPocket)) continue;
+    const payout = pucks.reduce((sum, puck) => sum + (puck.result?.payout || 0), 0);
+    const multiplier = getRoundLeaderboardMultiplier(pucks);
+    state.v3LastWinAmount = payout;
+    if (payout > 0) state.v3WinLabelSerial += 1;
+    updateRoundWinLabel();
+    if (multiplier > 0) {
+      state.resultHistory.unshift({
+        value: multiplier,
+        baseValue: multiplier,
+        bonus: pucks.some((puck) => puck.result?.x10Boosted),
+        puckCount: shot.count
+      });
+      state.resultHistory = state.resultHistory.slice(0, 60);
+      addPurpleLeaderboardEntry({
+        id: `v3-${shotId}`, name: "YOU", multiplier, stake: shot.stake,
+        balls: shot.count, payout, timestamp: shot.launchedAt, isReal: true
+      });
+    }
+    if (typeof desktopRoundRecord === "function") {
+      desktopRoundRecord({ id: `v3-${shotId}`, timestamp: shot.launchedAt,
+        balls: shot.count, stake: shot.stake, payout });
+    }
+    state.v3Shots.delete(shotId);
+    renderHistory();
+  }
+}
+
+function claimV3ExclusiveBonus(kind, puck) {
+  // A released ball can enter the same pocket again: that is a new visit,
+  // even though the previous visit is still the active bonus for this puck.
+  if ((state.v3BonusPuck === puck && state.v3BonusLock === kind && !puck.waitingForPocket)
+    || state.v3BonusQueue.some((entry) => entry.puck === puck && entry.kind === kind)) return false;
+  const firstSymbol = !state.v3PocketSymbolCycle[kind];
+  state.v3PocketSymbolCycle[kind] = true;
+  state.v3BonusQueue.push({ kind, puck, enteredAt: performance.now() });
+  if (!state.v3BonusLock) state.v3BonusLock = "pending";
+  updateBetButtons();
+  return firstSymbol;
+}
+
+function advanceV3BonusQueue() {
+  if (state.v3BonusLock !== "pending" || !state.v3BonusQueue.length) return;
+  const otherBallMoving = state.pucks.some((puck) => !puck.stopped
+    && puck !== state.multiPlusCapturedPuck && puck !== state.chanceCapturedPuck
+    && !["capturing", "pocket_wait"].includes(puck.secretRoom?.phase));
+  if (otherBallMoving) return;
+  const priority = { blue: 0, lemon: 1, crown: 2, diamond: 3 };
+  state.v3BonusQueue.sort((a, b) => priority[a.kind] - priority[b.kind]
+    || a.enteredAt - b.enteredAt);
+  const next = state.v3BonusQueue.shift();
+  state.v3BonusLock = next.kind;
+  state.v3BonusPuck = next.puck;
+  state.secretRoomLaunchAt = 0;
+  updateBetButtons();
 }
 
 function openPopup(popup) {
@@ -8634,10 +9579,23 @@ function updateBank() {
 }
 
 function updateRoundWinLabel() {
-  if (state.roundWinAmount > 0) {
-    els.roundWinLabel.textContent = `${t("win")} ${state.roundWinAmount.toFixed(2)} USD`;
+  const v3 = Boolean(window.BalloroBonusUI?.isV3);
+  const amount = v3 ? state.v3LastWinAmount : state.roundWinAmount;
+  if (amount > 0) {
+    const nextText = `${t("win")} ${amount.toFixed(2)} USD`;
+    const serial = String(state.v3WinLabelSerial);
+    if (v3 && (els.roundWinLabel.textContent !== nextText
+      || els.roundWinLabel.dataset.winSerial !== serial)) {
+      els.roundWinLabel.classList.remove("win-pop");
+      els.roundWinLabel.textContent = nextText;
+      els.roundWinLabel.dataset.winSerial = serial;
+      void els.roundWinLabel.offsetWidth;
+      els.roundWinLabel.classList.add("win-pop");
+    } else {
+      els.roundWinLabel.textContent = nextText;
+    }
     els.roundWinLabel.classList.remove("hidden");
-  } else {
+  } else if (!v3 || !els.roundWinLabel.textContent) {
     els.roundWinLabel.textContent = "";
     els.roundWinLabel.classList.add("hidden");
   }
@@ -8667,6 +9625,23 @@ function isWinPresentationActive(now = performance.now()) {
 }
 
 function runAutoPlayTick() {
+  if (window.BalloroBonusUI?.isV3) {
+    if (!state.autoPlay) return;
+    if (state.autoRoundsRemaining === 0) {
+      setAutoPlay(false);
+      updateSlotUi();
+      return;
+    }
+    const slot = els.betSlots[0];
+    if (!slot || state.bankroll < parseBet(slot) * state.puckCount) {
+      setAutoPlay(false);
+      openPopup(els.topUpPopup);
+      return;
+    }
+    if (slot && !isV3BonusLaunchBlocked()) launchV3Pucks(slot);
+    scheduleNextAutoPlayRound();
+    return;
+  }
   if (!state.autoPlay || state.running || state.launchPrepared) {
     return;
   }
@@ -8699,6 +9674,17 @@ function runAutoPlayTick() {
 }
 
 function scheduleNextAutoPlayRound() {
+  if (window.BalloroBonusUI?.isV3) {
+    if (!state.autoPlay) return;
+    if (state.autoPlayTimer) window.clearTimeout(state.autoPlayTimer);
+    const wait = isV3BonusLaunchBlocked() ? 50
+      : Math.max(0, state.v3LastLaunchAt + getV3LaunchIntervalMs() - performance.now());
+    state.autoPlayTimer = window.setTimeout(() => {
+      state.autoPlayTimer = null;
+      runAutoPlayTick();
+    }, wait);
+    return;
+  }
   if (!state.autoPlay || state.running || state.launchPrepared) return;
   if (state.autoPlayTimer) window.clearTimeout(state.autoPlayTimer);
   state.autoPlayTimer = window.setTimeout(() => {
@@ -8711,6 +9697,7 @@ function setAutoPlay(enabled) {
   state.autoPlay = enabled;
   els.autoPlayToggle.classList.toggle("active", enabled);
   els.autoPlayToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
+  if (window.BalloroBonusUI?.isV3) updateBetButtons();
 
   if (state.autoPlayTimer) {
     window.clearTimeout(state.autoPlayTimer);
@@ -8718,6 +9705,10 @@ function setAutoPlay(enabled) {
   }
 
   if (enabled) {
+    if (window.BalloroBonusUI?.isV3) {
+      runAutoPlayTick();
+      return;
+    }
     if (state.running || state.launchPrepared) return;
     runAutoPlayTick();
   }
@@ -8772,7 +9763,8 @@ function fitLocalizedUiText() {
 function updateBetButtons() {
   if (typeof updateSlotUi === "function") updateSlotUi();
   const winPresentationActive = isWinPresentationActive();
-  const controlsLocked = state.running || state.launchPrepared || winPresentationActive;
+  const v3 = Boolean(window.BalloroBonusUI?.isV3);
+  const controlsLocked = state.running || state.launchPrepared || (v3 ? isV3BonusLaunchBlocked() : winPresentationActive);
   els.autoPlayToggle.classList.toggle("active", state.autoPlay);
   els.autoPlayToggle.setAttribute("aria-pressed", state.autoPlay ? "true" : "false");
 
@@ -8781,7 +9773,14 @@ function updateBetButtons() {
     const action = slot.querySelector(".bet-action");
     const input = slot.querySelector(".bet-value");
     const betStepButtons = slot.querySelectorAll(".bet-round-button");
-    action.disabled = state.running || winPresentationActive;
+    const unableToBet = !(value > 0) || state.bankroll < value * state.puckCount;
+    action.disabled = v3 ? isV3BonusLaunchBlocked() || unableToBet
+      : state.running || winPresentationActive;
+    action.setAttribute("aria-label", "Запустить шары");
+    action.classList.toggle("is-auto-firing", v3 && (state.autoPlay || Boolean(state.v3HoldTimer)));
+    action.classList.toggle("is-held", v3 && Boolean(state.v3HoldTimer));
+    action.classList.toggle("is-cooling-down", v3 && !state.autoPlay && !state.v3HoldTimer
+      && performance.now() - state.v3LastLaunchAt < getV3LaunchIntervalMs());
     action.classList.remove("waiting", "cashout", "mining");
     slot.querySelector(".bet-box").classList.toggle("is-locked", controlsLocked);
     input.disabled = controlsLocked;
@@ -8789,7 +9788,7 @@ function updateBetButtons() {
       button.disabled = controlsLocked;
     });
 
-    if (state.running) {
+    if (state.running && !v3) {
       action.classList.add("waiting");
       action.querySelector("span").textContent = t("wait");
       action.querySelector("small").textContent = t("round");
@@ -8802,7 +9801,7 @@ function updateBetButtons() {
 
   els.puckCountButtons.forEach((button) => {
     const unavailableInV2 = window.BalloroBonusUI?.isV2
-      && !window.BalloroPocketExperiment
+      && (window.BalloroBonusUI?.isV3 || !window.BalloroPocketExperiment)
       && Number.parseInt(button.dataset.puckCount, 10) !== 1;
     button.disabled = controlsLocked || unavailableInV2;
     button.classList.toggle("is-locked", controlsLocked || unavailableInV2);
@@ -8813,6 +9812,11 @@ function updateBetButtons() {
     button.classList.toggle("active", Number.parseInt(button.dataset.gridSize, 10) === GRID_SIZE);
   });
   if (els.layoutModeButton) els.layoutModeButton.disabled = controlsLocked;
+  const versionLocked = controlsLocked || state.autoPlay || state.v3BonusQueue.length > 0;
+  els.versionButtons.forEach((button) => {
+    button.disabled = versionLocked;
+    button.setAttribute("aria-pressed", String(button.dataset.bonusUiVersion === (window.BalloroBonusUI?.isV3 ? "v3" : "v2")));
+  });
 }
 
 const LAYOUT_BUTTON_LABELS = {
@@ -8883,6 +9887,10 @@ function exportGameplayTestCsv() {
 }
 
 function canPrimeLaunch(slot) {
+  if (window.BalloroBonusUI?.isV3) {
+    return Boolean(slot && !isV3BonusLaunchBlocked() && parseBet(slot) > 0
+      && state.bankroll >= parseBet(slot) * state.puckCount);
+  }
   if (state.running || isWinPresentationActive() || !slot) return false;
   if (state.launchPrepared) return state.launchPreparedSlot === slot;
   const bet = parseBet(slot);
@@ -8958,6 +9966,24 @@ function setupBetControls() {
       updateBetButtons();
     });
     action.addEventListener("pointerdown", async (event) => {
+      if (window.BalloroBonusUI?.isV3) {
+        if (event.button !== undefined && event.button !== 0) return;
+        if (!canPrimeLaunch(slot)) return;
+        try { action.setPointerCapture?.(event.pointerId); } catch (_) { /* ignore */ }
+        launchV3Pucks(slot);
+        if (state.v3HoldTimer) window.clearTimeout(state.v3HoldTimer);
+        const repeatHeldLaunch = () => {
+          if (!state.v3HoldTimer) return;
+          if (!isV3BonusLaunchBlocked() && canPrimeLaunch(slot)) launchV3Pucks(slot);
+          const delay = isV3BonusLaunchBlocked() || !canPrimeLaunch(slot) ? 50
+            : Math.max(1, state.v3LastLaunchAt + getV3LaunchIntervalMs() - performance.now());
+          state.v3HoldTimer = window.setTimeout(repeatHeldLaunch, delay);
+        };
+        state.v3HoldTimer = window.setTimeout(repeatHeldLaunch,
+          Math.max(0, state.v3LastLaunchAt + getV3LaunchIntervalMs() - performance.now()));
+        updateBetButtons();
+        return;
+      }
       if (event.button !== undefined && event.button !== 0) {
         return;
       }
@@ -8976,10 +10002,31 @@ function setupBetControls() {
       render();
       startLaunchPrimeAnimation();
     });
-    action.addEventListener("pointerup", () => launchPuck(slot));
-    action.addEventListener("pointercancel", () => launchPuck(slot));
-    action.addEventListener("lostpointercapture", () => stopLaunchPrimeAnimation({ rerender: false }));
-    action.addEventListener("click", () => launchPuck(slot));
+    const endV3Hold = () => {
+      if (state.v3HoldTimer) window.clearTimeout(state.v3HoldTimer);
+      state.v3HoldTimer = null;
+      updateBetButtons();
+    };
+    action.addEventListener("pointerup", () => {
+      if (window.BalloroBonusUI?.isV3) return endV3Hold();
+      launchPuck(slot);
+    });
+    action.addEventListener("pointercancel", () => {
+      if (window.BalloroBonusUI?.isV3) return endV3Hold();
+      launchPuck(slot);
+    });
+    action.addEventListener("lostpointercapture", () => {
+      if (window.BalloroBonusUI?.isV3) endV3Hold();
+      else stopLaunchPrimeAnimation({ rerender: false });
+    });
+    action.addEventListener("click", (event) => {
+      if (window.BalloroBonusUI?.isV3) {
+        if (event.detail !== 0) return;
+        launchV3Pucks(slot);
+        return;
+      }
+      launchPuck(slot);
+    });
   });
 
   els.puckCountButtons.forEach((button) => {
@@ -8988,6 +10035,7 @@ function setupBetControls() {
         return;
       }
       const nextPuckCount = Number.parseInt(button.dataset.puckCount, 10);
+      if (window.BalloroBonusUI?.isV3 && nextPuckCount !== 1) return;
       if (window.BalloroBonusUI?.isV2 && !window.BalloroPocketExperiment && nextPuckCount !== 1) return;
       const puckCountChanged = nextPuckCount !== state.puckCount;
       state.puckCount = nextPuckCount;
@@ -9019,6 +10067,7 @@ function setupBetControls() {
       state.riskLevel = window.PuckLuckMath?.riskForLines(GRID_SIZE) || "normal";
       setupCanvas();
       resetPucks();
+      prepareV3StaticField();
       updateBetButtons();
       render();
     });
@@ -9028,6 +10077,14 @@ function setupBetControls() {
 
 function setupInteractions() {
   els.layoutModeButton?.addEventListener("click", cycleLayoutMode);
+  els.versionButtons.forEach((button) => button.addEventListener("click", () => {
+    if (button.disabled || state.running || state.autoPlay) return;
+    const version = button.dataset.bonusUiVersion;
+    if ((version !== "v2" && version !== "v3") || version === (window.BalloroBonusUI?.isV3 ? "v3" : "v2")) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("bonusUI", version);
+    window.location.assign(url.toString());
+  }));
   const toggleTodayWinners = () => {
     state.purpleLeaderboardExpanded = !state.purpleLeaderboardExpanded;
     updatePurpleLeaderboardExpansion();
@@ -9108,6 +10165,7 @@ function setupInteractions() {
     fitBrandTitle();
     fitLocalizedUiText();
     resetPucks();
+    prepareV3StaticField();
     render();
   });
 }
@@ -9153,9 +10211,18 @@ function init() {
   updatePurpleLeaderboardExpansion();
   setupBetControls();
   setupInteractions();
+  prepareV3StaticField();
   updateBetButtons();
   updateLayoutModeButton();
   renderInitialFrame();
+  Promise.all([
+    document.fonts?.ready || Promise.resolve(),
+    document.readyState === "complete" ? Promise.resolve() : new Promise(resolve => window.addEventListener("load", resolve, { once: true }))
+  ]).then(() => requestAnimationFrame(() => {
+    renderInitialFrame();
+    document.documentElement.classList.add("game-ready");
+    setTimeout(() => document.getElementById("loadingSplash")?.remove(), 300);
+  }));
 }
 
 init();

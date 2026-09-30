@@ -50,6 +50,32 @@
 .slot-ui .bet-action>span,.slot-ui .bet-action>small {display:none}
 .slot-ui .bet-action.waiting {background:linear-gradient(145deg,#227743,#124324);border-color:#388358;box-shadow:none}
 .slot-ui .bet-action.waiting svg,.slot-ui .bet-action:disabled svg {opacity:.35;animation:none}
+.slot-ui .bet-action:disabled {background:linear-gradient(145deg,#23663d,#173d2b);border-color:#43815b;box-shadow:none;filter:saturate(.55);transform:none;animation:none;cursor:not-allowed}
+body.bonus-ui-v3.slot-ui .bet-action:disabled,
+body.bonus-ui-v3.slot-ui .bet-action.is-cooling-down:not(.is-auto-firing) {
+ background:linear-gradient(145deg,#38d713,#0f9301);border-color:#8de957;
+ box-shadow:inset 0 2px 8px #e1ffa95c,inset 0 -7px 0 #065e5466,0 0 22px #40ed1530;
+ opacity:.5;filter:none;transform:none;animation:none;transition:none;
+}
+body.bonus-ui-v3.slot-ui .bet-action:disabled>svg,
+body.bonus-ui-v3.slot-ui .bet-action.is-cooling-down:not(.is-auto-firing)>svg {
+ opacity:1;animation-play-state:paused !important;
+}
+body.bonus-ui-v3.slot-ui .bet-action>svg {
+ animation:slotActionArrowsRotate 2.4s linear infinite;
+ animation-play-state:running;
+}
+body.bonus-ui-v3.slot-ui .bet-action.is-auto-firing:not(:disabled)>svg {
+ animation-duration:1.2s;
+}
+body.bonus-ui-v3.slot-ui .bet-action.is-held:not(:disabled)>svg {
+ animation-duration:.8s;
+}
+body.bonus-ui-v3.slot-ui .bet-action.is-held:not(:disabled) {
+ background:linear-gradient(145deg,#18a90c,#0f7e08);
+ box-shadow:inset 0 5px 16px rgba(0,0,0,.38),0 0 18px rgba(73,255,100,.24);
+ transform:translateY(3px) scale(.985);
+}
 .slot-ui .bet-action:focus-visible,.slot-circle:focus-visible,.slot-dialog button:focus-visible {outline:3px solid white;outline-offset:3px}
 .slot-dialog {position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.8);backdrop-filter:none;-webkit-backdrop-filter:none;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}
 .slot-dialog-card {width:min(100%,480px);max-height:calc(100dvh - 36px);overflow:auto;padding:22px;border:1px solid #43535c;border-radius:24px;background:linear-gradient(155deg,#1b242c,#10151d);box-shadow:0 24px 90px #0008}
