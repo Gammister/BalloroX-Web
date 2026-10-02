@@ -23,7 +23,7 @@ function desktopCounterCascade(sizes, {cx,cy,radius,leftLimit}) {
   return null; // Very short/narrow desktop: retain the compact vertical layout.
 }
 function desktopMoney(value, signed=false) {
-  return `${signed && value>0 ? '+' : ''}${value.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  return `${signed && value>0 ? '+' : ''}${value.toLocaleString(LOCALES[state.language],{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 }
 function desktopRoundRecord({id, timestamp, balls, stake, payout}) {
   if (!desktopUi.enabled || desktopUi.rounds.some(row=>row.id===id)) return;
@@ -43,11 +43,11 @@ function renderDesktopRounds() {
   body.replaceChildren();
   for(const entry of desktopUi.rounds.slice(0,desktopUi.visibleRounds)) {
     const row=document.createElement('tr');
-    desktopCell(row,new Date(entry.timestamp).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),'desk-time');
+    desktopCell(row,new Date(entry.timestamp).toLocaleTimeString(LOCALES[state.language],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),'desk-time');
     desktopCell(row,String(entry.balls),'desk-balls');
     desktopCell(row,desktopMoney(entry.stake));
     desktopCell(row,desktopMoney(entry.profit,true),entry.profit>0?'desk-positive':entry.profit<0?'desk-negative':'desk-neutral');
-    row.title=`Выигрыш: ${desktopMoney(entry.payout)} USD. Профит = выигрыш − общая ставка.`;
+    row.title=`${t('win')}: ${desktopMoney(entry.payout)} USD · ${t('profit')}: ${desktopMoney(entry.profit,true)} USD`;
     body.append(row);
   }
   document.getElementById('desktopRoundsEmpty').hidden=desktopUi.rounds.length>0;
@@ -93,7 +93,7 @@ function desktopRandom() {
 function addDesktopDemoWin() {
   const names=['Luna742','Mateo081','Sofi309','Kiro503','Mina202','Diego417','Zara615','Noah274'];
   const pick=items=>items[Math.floor(desktopRandom()*items.length)];
-  const balls=pick([1,2,3]),stake=pick([.2,.5,1,2,3])*balls;
+  const balls=1,stake=pick([.2,.5,1,2,3]);
   desktopUi.demo.unshift({name:pick(names),balls,stake,payout:stake*pick([1.5,2,3.6,6,15,20,30])});
   desktopUi.demo.length=Math.min(desktopUi.demo.length,18);
   const body=document.getElementById('desktopDemoRows');body.replaceChildren();
@@ -117,7 +117,7 @@ function makeDesktopPanel(id,title,side,content) {
     const closed=panel.classList.toggle('is-collapsed');
     panel.firstElementChild.inert=closed;
     button.setAttribute('aria-expanded',String(!closed));
-    button.setAttribute('aria-label',`${closed?'Развернуть':'Свернуть'}: ${title}`);
+    button.setAttribute('aria-label',`${t(closed?'expand':'collapse')}: ${panel.querySelector('h2').textContent}`);
     button.textContent=(side==='left')!==closed?'‹':'›';
   });
   document.querySelector('.game-shell').append(panel);
@@ -155,6 +155,18 @@ function setupDesktopUi() {
   media.addEventListener('change',updateDemo);document.addEventListener('visibilitychange',updateDemo);updateDemo();
 }
 
+function localizeDesktopUi() {
+  for(const [id,key,columns] of [['desktopRounds','openHistory',['time','pucks','bet','profit']],['desktopTop','todayTopWins',[]],['desktopWins','demoWins',['player','bet','pucks','win']]]) {
+    const panel=document.getElementById(id);if(!panel)continue;
+    panel.querySelector('h2').textContent=t(key);panel.setAttribute('aria-label',t(key));
+    panel.querySelectorAll('th').forEach((node,i)=>{node.textContent=t(columns[i]);});
+    const button=panel.querySelector('.desktop-panel-tab');button.setAttribute('aria-label',`${t(panel.classList.contains('is-collapsed')?'expand':'collapse')}: ${t(key)}`);
+  }
+  const empty=document.getElementById('desktopRoundsEmpty');if(empty)empty.textContent=t('noHistory');
+  for(const [selector,key] of [['.mobile-table-left','openHistory'],['.mobile-table-right','openTop'],['.mobile-table-back','backToGame']])
+    document.querySelector(selector)?.setAttribute('aria-label',t(key));
+  renderDesktopRounds();
+}
 function mobileSwipeDestination(page,dx,dy) {
   if(Math.abs(dx)<55 || Math.abs(dx)<Math.abs(dy)*1.4)return page;
   return Math.max(-1,Math.min(1,page+(dx<0?1:-1)));
@@ -216,7 +228,7 @@ function setupMobileTables() {
       panel.classList.remove('is-collapsed');panel.inert=false;panel.firstElementChild.inert=false;
       const tab=panel.querySelector('.desktop-panel-tab');
       tab.textContent='›';tab.setAttribute('aria-expanded','true');
-      tab.setAttribute('aria-label','Свернуть: '+panel.getAttribute('aria-label'));
+      tab.setAttribute('aria-label',t('collapse')+': '+panel.getAttribute('aria-label'));
     });
   };
   desktopUi.openRounds=()=>{

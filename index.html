@@ -17,10 +17,11 @@
     #loadingSplash .splash-progress { width: 40%; height: 100%; border-radius: inherit; background: #b752e7; animation: splash-loading 1.1s ease-in-out infinite alternate; }
     @keyframes splash-loading { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
   </style>
-  <link rel="stylesheet" href="style.css?v=20260929-2">
-  <link rel="stylesheet" href="slot-ui.css?v=20260930-2">
-  <link rel="stylesheet" href="desktop-ui.css">
-  <link rel="stylesheet" href="bonus-ui-v2.css?v=20260930-2">
+  <link rel="stylesheet" href="style.css?v=5f02b3dadccc">
+  <link rel="stylesheet" href="slot-ui.css?v=e35c6e05903e">
+  <link rel="stylesheet" href="desktop-ui.css?v=63cf882e95ed">
+  <link rel="stylesheet" href="bonus-ui-v2.css?v=cc4e47315e56">
+  <link rel="stylesheet" href="player-panels.css?v=bfe5b510c02b">
 </head>
 <body>
   <div id="loadingSplash" role="status" aria-label="Загрузка Balloro X"><div class="splash-logo">Balloro<span>X</span></div><div class="splash-track"><div class="splash-progress"></div></div></div>
@@ -65,79 +66,28 @@
     <section id="rulesScreen" class="rules-screen hidden">
       <div class="rules-card panel">
         <div class="rules-header">
-          <div>
-            <h2 class="rules-game-logo" aria-label="Balloro X"><span class="brand-ball">Balloro</span><span class="brand-x">X</span></h2>
-            <p class="eyebrow" data-i18n="gameRules">Game Rules</p>
-          </div>
-          <button id="closeRulesButton" class="icon-button" type="button" aria-label="Back">×</button>
+          <div><h2 class="rules-game-logo" aria-label="Balloro X"><span class="brand-ball">Balloro</span><span class="brand-x">X</span></h2><p class="eyebrow" data-i18n="gameRules">Game rules</p></div>
+          <button id="closeRulesButton" class="icon-button" type="button" aria-label="Close">×</button>
         </div>
         <div class="rules-body">
           <div class="rules-grid">
-            <article class="rule-card">
-              <div class="rule-art puck-rule-art" aria-hidden="true"><i></i></div>
-              <h3 data-i18n="ruleLaunchTitle">Launch and physics</h3>
-              <p data-i18n="ruleLaunchText">Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.</p>
-            </article>
-            <article class="rule-card">
-              <div class="rule-art loot-art" aria-hidden="true">5x</div>
-              <h3 data-i18n="ruleWinsTitle">Winning cells</h3>
-              <p data-i18n="ruleWinsText">A ball wins when it stops in a multiplier cell. The value applies to that ball's stake.</p>
-            </article>
-            <article class="rule-card">
-              <div class="rule-art pocket-rule-art" aria-hidden="true"><i></i></div>
-              <h3 data-i18n="rulePocketTitle">X3 BALLS · blue pocket</h3>
-              <p data-i18n="rulePocketFieldText">The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.</p>
-            </article>
-            <article class="rule-card">
-              <div class="rule-art boost-art" aria-hidden="true">
-                <svg class="rule-boost-diamond" viewBox="0 0 100 100">
-                  <path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/>
-                  <path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/>
-                  <path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/>
-                </svg>
-              </div>
-              <h3 data-i18n="ruleBoostTitle">x10 BOOST</h3>
-              <p data-i18n="ruleBoostText">Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.</p>
-            </article>
-            <article class="rule-card">
-              <div class="rule-art pocket-rule-art" aria-hidden="true" style="filter: hue-rotate(185deg)"><i></i></div>
-              <h3 data-i18n="ruleMultiTitle">EX MULTI</h3>
-              <p data-i18n="ruleMultiText">The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.</p>
-            </article>
-            <article class="rule-card">
-              <div class="rule-art field-rule-art" aria-hidden="true">5–10</div>
-              <h3 data-i18n="ruleLuckyTitle">LUCKY SHOT · red pocket</h3>
-              <p data-i18n="ruleLuckyText">The red pocket selects a lower room after the other balls and bonuses finish. Stop on its top multiplier to win. The right room pays ten times the left room; X10 BOOST applies to both.</p>
-            </article>
-            <article class="rule-card">
-              <h3 data-i18n="ruleFieldTitle">Lines</h3>
-              <p data-i18n="ruleFieldText">Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.</p>
-            </article>
-            <article class="rule-card">
-              <div class="rule-art auto-rule-art" aria-hidden="true">AUTO</div>
-              <h3 data-i18n="ruleAutoTitle">Autoplay</h3>
-              <p data-i18n="ruleAutoText">Autoplay repeats the current stake and ball count after each round until switched off.</p>
-            </article>
+            <article class="rule-card"><h3 data-i18n="ruleLaunchTitle">One stake — one ball</h3><p data-i18n="ruleLaunchText">Choose your stake and 5, 7 or 9 lines. Tap Spin to launch one ball. Hold it for new launches every second; every 0.5 seconds in Quick Play.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleWinsTitle">Stopping on a multiplier</h3><p data-i18n="ruleWinsText">The payout is the original stake × the stopping cell multiplier. A return below your stake is a partial return, not a net win. Red and purple results play celebration music and flashing walls.</p></article>
+            <article class="rule-card"><h3 data-i18n="rulePocketTitle">X3 BALLS · green pocket</h3><p data-i18n="rulePocketFieldText">A ball is pulled into the green pocket on the left. The cactus rises and flies to its counter. One symbol is enough: after preparation, the pocket releases three white balls. Their payouts are added together.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleBoostTitle">X10 BOOST · purple pocket</h3><p data-i18n="ruleBoostText">The top pocket collects one diamond. After it reaches the counter and other balls stop, the field and both rooms turn purple. Then the ball launches; its wins and those of its bonus descendants are multiplied by 10. The effect lasts until the whole chain finishes.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleMultiTitle">EX MULTI · yellow pocket</h3><p data-i18n="ruleMultiText">The right pocket collects one star. After it reaches the counter and other balls stop, moving highlights select cells and temporarily multiply their values by 10. The pocket releases the ball; a boosted payout requires stopping on an enhanced cell.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleLuckyTitle">LUCKY SHOT · red pocket</h3><p data-i18n="ruleLuckyText">The bottom pocket collects one flame. The ball blinks in the pocket while preparing, then sinks and appears between the two secret rooms without blinking. The rooms flash, one is selected and the ball launches into it. Every cell in both rooms pays; X10 BOOST also applies there.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleFieldTitle">5, 7 or 9 lines</h3><p data-i18n="ruleFieldText">Lines change the cells and their multipliers, not the stake per ball. See the current table below. Configuration can only change after active play finishes.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleAutoTitle">Autoplay</h3><p data-i18n="ruleAutoText">Choose the number of paid shots and start autoplay. Balls launch every 1 s, or every 0.5 s in Quick Play. Bonus preparation and play pause new bets. Bonus launches do not charge a new stake.</p></article>
           </div>
           <section class="rules-about" aria-labelledby="rulesAboutTitle">
-            <h3 id="rulesAboutTitle" data-i18n="rulesAboutTitle">ABOUT THE GAME</h3>
-              <p data-i18n="rulesAboutIntro">Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.</p>
-            <div class="rules-about-block">
-              <h4 data-i18n="rulesHowToWinTitle">How wins are paid</h4>
-              <p data-i18n="rulesHowToWinText">Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.</p>
-            </div>
-            <div class="rules-about-block rules-about-plain">
-              <p data-i18n="rulesRtpText">RTP has not been established for this version.</p>
-              <p data-i18n="rulesMaxWinText">Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.</p>
-            </div>
-            <div class="rules-about-block">
-              <h4 data-i18n="rulesVolatilityTitle">Bonus order</h4>
-              <p data-i18n="rulesVolatilityText">When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.</p>
-            </div>
-            <div class="rules-about-block">
-              <h4 data-i18n="rulesDisclosureTitle">Player information</h4>
-              <p data-i18n="rulesDisclosureText">This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.</p>
-            </div>
+            <h3 id="rulesAboutTitle" data-i18n="rulesAboutTitle">Good to know</h3>
+            <p data-i18n="rulesAboutIntro">Field values show the payout as a multiple of the original stake. Colour identifies the multiplier tier; it does not change the payout.</p>
+            <div class="rules-about-block"><h4 data-i18n="rulesHowToWinTitle">Payouts and colours</h4><p data-i18n="rulesHowToWinText">Green: up to 1x. Yellow: above 1x but below 10x. Red: 10x or more. Purple: active X10 BOOST. Only red and purple results trigger a big-win celebration. All bonus descendants belong to their original paid stake.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesRtpTitle">Theoretical RTP</h4><p data-i18n="rulesRtpText">This MVP has a theoretical RTP of 97.45% at 5, 7 and 9 lines, including bonus chains. It is an average over many stakes, not a promise for a session. Probabilities do not adapt to your balance or previous wins.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesMaxWinTitle">Field and secret rooms</h4><p data-i18n="rulesMaxWinText">The table shows normal values without boosts. X10 BOOST multiplies values by 10; EX MULTI temporarily boosts selected cells by another 10. A single-cell multiplier is not a cap on the total payout of a bonus chain.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesVolatilityTitle">Bonus queues</h4><p data-i18n="rulesVolatilityText">New bets lock when bonus collection begins. Already launched balls finish moving. Bonuses resolve in order: green → yellow → red → purple. The number above a pocket counts waiting balls, excluding the current ball. A continuous queue sends its symbol to the counter only once.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesDisclosureTitle">Test build</h4><p data-i18n="rulesDisclosureText">This is a local MVP with a demo balance, not real-money play. Outcomes use fixed probabilities, followed by an existing physically computed trajectory. Animation and speed do not change payouts. Other-player tables are labelled as demo.</p></div>
           </section>
         </div>
       </div>
@@ -198,10 +148,6 @@
       <section class="mine-stage panel">
         <canvas id="mineCanvas" width="960" height="600" aria-label="Top-down BalloroX diamond field"></canvas>
         <div id="counterFlyInLayer" class="counter-flyin-layer" aria-hidden="true"></div>
-        <div id="versionSwitcher" class="version-switcher" role="group" aria-label="Версия игры">
-          <button type="button" data-bonus-ui-version="v2" aria-label="Версия V2" aria-pressed="false">V2</button>
-          <button type="button" data-bonus-ui-version="v3" aria-label="Версия V3" aria-pressed="true">V3</button>
-        </div>
         <button id="layoutModeButton" class="layout-mode-button hidden" type="button" title="Layout: Dynamic Diagonal Width" aria-label="Switch multiplier layout">
           <span>DIA</span>
         </button>
@@ -324,27 +270,32 @@
     </section>
   </main>
 
-  <script src="math/field-configuration-1.js?v=20260715-13"></script>
-  <script src="math/field-configuration-2.js?v=20260715-13"></script>
-  <script src="math/field-configuration-3.js?v=20260715-13"></script>
-  <script src="math/field-configuration-4.js?v=20260716-17"></script>
-  <script src="math/field-configuration-5.js?v=20260716-18"></script>
-  <script>window.BalloroPocketExperiment = new URLSearchParams(location.search).get('pocketExperiment') === '1' || new URLSearchParams(location.search).get('bonusUI') === 'v3';</script>
-  <script src="math/puck-luck-layout-modes.js?v=20260716-19"></script>
-  <script src="math/trajectory-planner.js?v=20260717-2"></script>
-  <script src="math/trajectory-library-standard.js"></script>
-  <script src="math/secret-room-trajectories.js"></script>
-  <script src="math/layout-gameplay-test.js"></script>
-  <script src="bonus-ui-v2.js?v=20260928-1"></script>
-  <script src="balloro-v3-rules.js?v=20260930-3"></script>
-  <script src="slot-ui.js?v=20260930-2"></script>
-  <script src="bonus-help.js"></script>
-  <script src="desktop-ui.js"></script>
-  <script src="saved-paths.js?v=20260929-2"></script>
-  <script src="quick-play-timing.js?v=20260928-2"></script>
-  <script src="quick-motion-trail.js?v=20260928-1"></script>
-  <script src="script.js?v=20260930-6"></script>
-  <script src="round-tape-codec.js"></script>
-  <script src="round-tape-player.js"></script>
+  <script src="math/field-configuration-1.js?v=8424852d036b"></script>
+  <script src="math/field-configuration-2.js?v=187bb8353f7a"></script>
+  <script src="math/field-configuration-3.js?v=d6f2cbed92e5"></script>
+  <script src="math/field-configuration-4.js?v=f6d46a5ad479"></script>
+  <script src="math/field-configuration-5.js?v=d2a50ff58e61"></script>
+  <script>window.BalloroPocketExperiment = true;</script>
+  <script src="math/puck-luck-layout-modes.js?v=d14626f3ba95"></script>
+  <script src="math/trajectory-planner.js?v=48b05743e419"></script>
+  <script src="bonus-ui-v2.js?v=65f69a1910e5"></script>
+  <script src="balloro-v3-rules.js?v=529199880ee5"></script>
+  <script src="balloro-v4-rules.js?v=1b355eaba78a"></script>
+  <script src="balloro-mvp-math.js?v=03947b9bd9d2"></script>
+  <script src="v4-room-paths.js?v=8edf5bce38c9"></script>
+  <script src="player-copy.js?v=1b8b1646d260"></script>
+  <script src="player-panels.js?v=cfb6d84dcc71"></script>
+  <script src="multiplier-presentation.js?v=022555e15643"></script>
+  <script src="slot-ui.js?v=149d058ccab3"></script>
+  <script src="bonus-help.js?v=7b40c9ee4968"></script>
+  <script src="desktop-ui.js?v=74b0a11c76d7"></script>
+  <script>if (location.protocol === 'file:') document.write('<script src="v4-local-catalogs.js?v=15a4f389dccc"><\/script>');</script>
+  <script src="saved-paths.js?v=7f5795b6062f"></script>
+  <script src="quick-play-timing.js?v=109712471393"></script>
+  <script src="quick-motion-trail.js?v=9f26aced2c28"></script>
+  <script src="multiplier-style.js?v=feac334aa0a9"></script>
+  <script src="pocket-ready-blink.js?v=85b37063edbb"></script>
+  <script src="bonus-presentation-sound.js?v=0deb714306a9"></script>
+  <script src="script.js?v=b56a2492d076"></script>
 </body>
 </html>

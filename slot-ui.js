@@ -44,7 +44,7 @@ function makeSlotDialog(id, title, parent = document.querySelector('.game-shell'
   node.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); closeSlotDialogs(); }
     if (event.key !== 'Tab') return;
-    const focusable = [...node.querySelectorAll('button:not(:disabled),input:not(:disabled)')].filter(el => el.getClientRects().length);
+    const focusable = [...node.querySelectorAll('button:not(:disabled),input:not(:disabled),a,summary')].filter(el => el.getClientRects().length);
     const first = focusable[0], last = focusable.at(-1);
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -116,7 +116,7 @@ function setupSlotUi() {
   nicknameDialog.querySelector('form').onsubmit=event=>{
     event.preventDefault();
     const value=nicknameInput.value.trim();
-    if(!value){nicknameInput.setCustomValidity('Введите ник');nicknameInput.reportValidity();return;}
+    if(!value){nicknameInput.setCustomValidity(t('nicknameRequired'));nicknameInput.reportValidity();return;}
     playerNickname=value;
     try {localStorage.setItem('balloro-x-test-nickname',value);} catch {}
     renderPurpleLeaderboard();
@@ -166,9 +166,6 @@ function setupSlotUi() {
     document.getElementById('stakeChoices').append(button);
   }
   bets.insertAdjacentHTML('beforeend', '<button class="slot-start" id="confirmStake" type="button">Готово</button>');
-  if (window.BalloroPocketExperiment) {
-    bets.insertAdjacentHTML('afterbegin', '<p class="slot-hint pocket-experiment-note">Тестовые правила · RTP ещё не рассчитан</p>');
-  }
   document.getElementById('confirmStake').onclick = closeSlotDialogs;
   document.querySelector('.topbar').classList.add('hidden');
 }

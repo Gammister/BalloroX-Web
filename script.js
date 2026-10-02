@@ -47,6 +47,8 @@ const CHANCE_ROOM_CORNER_X_SHARE = 0.42;
 const CHANCE_ROOM_CORNER_Y_SHARE = 0.58;
 const CHANCE_ROOM_VIEWPORT_MARGIN_PX = 10;
 const MULTI_PLUS_NEON_DURATION_MS = 2000;
+const V4_PURPLE_FIELD_ENTER_MS = MULTI_PLUS_NEON_DURATION_MS / 2;
+const V4_PURPLE_FIELD_EXIT_MS = MULTI_PLUS_NEON_DURATION_MS / 2;
 const MULTI_PLUS_NEON_STEP_MS = 250;
 const MULTI_PLUS_NEON_STOP_FLASH_MS = 320;
 const FIELD_POCKET_PULL_MAX_DURATION_SECONDS = 0.32;
@@ -55,176 +57,7 @@ const MAX_RESULT_SOUND_LEVELS = 9;
 const WIN_SOUND_PITCH_RATIOS = [1, 1.12, 1.26, 1.42, 1.6, 1.81, 2.04, 2.28, 2.55];
 const PURPLE_WIN_SOUND_PITCH_RATIOS = [1, 1.08, 1.16, 1.27, 1.4, 1.54, 1.7, 1.88, 2.08];
 const LOCALES = { en: "en-US", ru: "ru-RU", es: "es-419", pt: "pt-BR", de: "de-DE", fr: "fr-FR" };
-const TRANSLATIONS = {
-  en: {
-    balance: "Balance", changeAvatar: "Change Avatar", sound: "Game SFX", music: "Music", animations: "Animations", language: "Language", rules: "Rules", gameRules: "Game Rules",
-    ruleLaunchTitle: "Launch and physics", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
-    ruleWinsTitle: "Winning cells", ruleWinsText: "A ball wins when it stops in a multiplier cell. The value applies to that ball's stake.",
-    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "A ball entering a corner pocket releases three white balls. Released balls can rarely enter a pocket again; the chance decreases with each generation.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
-    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
-    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
-    ruleAutoTitle: "Autoplay", ruleAutoText: "Autoplay repeats the current stake and ball count after each round until switched off.",
-    rulesAboutTitle: "ABOUT THE GAME",
-    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
-    rulesHowToWinTitle: "How wins are paid",
-    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
-    rulesRtpTitle: "RTP",
-    rulesRtpText: "RTP has not been established for this version.",
-    rulesMaxWinTitle: "Maximum win",
-    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
-    rulesVolatilityTitle: "Bonus order",
-    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
-    rulesDisclosureTitle: "Player information",
-    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
-    topUpTitle: "Top Up Balance", topUpText: "Add any amount to continue playing.", amount: "Amount", topUp: "TOP UP", cancel: "CANCEL",
-    totalHistory: "HISTORY:", roundHistory: "Round History", todayTopWins: "TODAY TOP WINS", riskLevel: "RISK", lines: "LINES", low: "Low", normal: "Normal", high: "High",
-    pucks: "BALLS", auto: "AUTO", bet: "BET", wait: "WAIT", round: "ROUND", livePlayers: "LIVE PROTOTYPE PLAYERS", liveSubtitle: "LOCAL SIMULATION · SHARED GAME MATH",
-    player: "Player", type: "Type", riskLines: "Risk / Lines", result: "Result", payout: "Payout", status: "Status", lost: "Lost", win: "Win", avatar: "Avatar",
-    showFullWinners: "Show full today top wins", showTopWinner: "Show only today's top win"
-  },
-  ru: {
-    balance: "Баланс", changeAvatar: "Сменить аватар", sound: "Звуки игры", music: "Музыка", animations: "Анимации", language: "Язык", rules: "Правила", gameRules: "Правила игры",
-    ruleLaunchTitle: "Запуск и физика", ruleLaunchText: "Выберите ставку, 1–3 шара и 5–10 линий. Шары запускаются под случайными углами и отскакивают от стенок. В тестовой версии используются реальные столкновения, а не пути, подобранные под RTP.",
-    ruleWinsTitle: "Выигрышные ячейки", ruleWinsText: "Шар выигрывает, остановившись в ячейке с множителем. Значение применяется к ставке этого шара.",
-    rulePocketTitle: "X3 BALLS · голубая луза", rulePocketFieldText: "Голубая луза захватывает один шар и выпускает три шара в основной ромб. Каждая луза срабатывает один раз за раунд. Занятая луза не захватывает второй шар. Голубая и жёлтая исчезают после выстрела, красная — когда шар полностью провалился внутрь.", rulePocketBilliardText: "Попавший в угловую лузу шар выпускает три белых шара. Выпущенные шары могут редко снова попасть в лузу; шанс снижается с каждым поколением.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Всегда соберите три фиолетовых алмаза — независимо от количества шаров и линий. X10 BOOST умножает на десять выигрыши основного ромба и обеих СК, включая уже полученные выигрыши этого раунда. Стенки и множители становятся фиолетовыми.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "Жёлтая луза удерживает шар, пока по полю мигают дополнительные множители, затем выпускает этот шар. Число дополнительных ячеек равно числу линий. Ячейки остаются там, где закончилось мигание. Значения EX MULTI для 5–10 линий: 1,5x, 1,8x, 2,2x, 2,7x, 3,2x, 3,6x. Для выигрыша шар должен остановиться в такой ячейке.",
-    ruleLuckyTitle: "LUCKY SHOT · красная луза", ruleLuckyText: "Красная луза удерживает шар до завершения движения остальных шаров и бонусов. Затем выбирается одна из двух нижних секретных комнат (СК), и шар выстреливает из её нижнего угла. Выигрыш даёт остановка на множителе в верхней ячейке. В левой СК стоит максимальный множитель основного поля, в правой — в десять раз больше. X10 BOOST дополнительно умножает оба значения.",
-    ruleFieldTitle: "Линии", ruleFieldText: "Выбор 5–10 линий меняет размер ячеек и множители поля. Ориентируйтесь на значения, отображаемые в текущем ромбе.",
-    ruleAutoTitle: "Автоигра", ruleAutoText: "Автоигра повторяет ставку и число шаров после каждого раунда, пока её не отключат.",
-    rulesAboutTitle: "ОБ ИГРЕ",
-    rulesAboutIntro: "Запускайте шары, собирайте бонусы и останавливайтесь на ячейках с множителями. Результат зависит от столкновений и ячейки остановки каждого шара.",
-    rulesHowToWinTitle: "Как выплачиваются выигрыши",
-    rulesHowToWinText: "Каждый выигравший шар приносит ставку на один шар × множитель ячейки остановки, с учётом активного X10 BOOST. Выигрыш раунда — сумма выплат всех шаров, включая бонусные шары и СК. Пустая ячейка не даёт выигрыша. Крупный выигрыш в центре или в СК запускает победный эффект; следующие крупные выигрыши перезапускают его, повышая тон звука до третьего уровня.",
-    rulesRtpTitle: "RTP",
-    rulesRtpText: "RTP для текущей версии не установлен.",
-    rulesMaxWinTitle: "Максимальный выигрыш",
-    rulesMaxWinText: "Выплата зависит от множителей и активных бонусов. Подтверждённый максимальный выигрыш пока не установлен.",
-    rulesVolatilityTitle: "Порядок бонусов",
-    rulesVolatilityText: "Если шары находятся в нескольких лузах, первой отрабатывает жёлтая EX MULTI, затем голубая X3 BALLS, затем красная LUCKY SHOT. Красная ждёт завершения всей остальной активности. Каунтеры сработавших бонусов остаются включёнными до следующего раунда.",
-    rulesDisclosureTitle: "Информация для игрока",
-    rulesDisclosureText: "Это экспериментальная тестовая сборка. Анимации бонусов показывают текущий результат, но не задают и не гарантируют RTP. Автоигра повторяет выбранную ставку и число шаров до отключения.",
-    topUpTitle: "Пополнить баланс", topUpText: "Добавьте любую сумму, чтобы продолжить игру.", amount: "Сумма", topUp: "ПОПОЛНИТЬ", cancel: "ОТМЕНА",
-    totalHistory: "ИСТОРИЯ:", roundHistory: "История раундов", todayTopWins: "ТОП ДНЯ", riskLevel: "РИСК", lines: "ЛИНИИ", low: "Низкий", normal: "Средний", high: "Высокий",
-    pucks: "ШАРЫ", auto: "АВТО", bet: "СТАВКА", wait: "ЖДАТЬ", round: "РАУНД", livePlayers: "ИГРОКИ ПРОТОТИПА", liveSubtitle: "ЛОКАЛЬНАЯ СИМУЛЯЦИЯ · ОБЩАЯ МАТЕМАТИКА",
-    player: "Игрок", type: "Тип", riskLines: "Риск / Линии", result: "Результат", payout: "Выплата", status: "Статус", lost: "Проигрыш", win: "Выигрыш", avatar: "Аватар",
-    showFullWinners: "Показать 10 лучших выигрышей сегодня", showTopWinner: "Показать только лучший выигрыш сегодня"
-  },
-  es: {
-    balance: "Saldo", changeAvatar: "Cambiar avatar", sound: "Efectos", music: "Música", animations: "Animaciones", language: "Idioma", rules: "Reglas", gameRules: "Reglas del juego",
-    ruleLaunchTitle: "Lanzamiento y física", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
-    ruleWinsTitle: "Casillas ganadoras", ruleWinsText: "La bola gana al parar en un multiplicador. El valor se aplica a su apuesta.",
-    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Una bola que entra en una tronera de esquina libera tres bolas blancas. Estas pueden volver a entrar raramente; la probabilidad disminuye con cada generación.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
-    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
-    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
-    ruleAutoTitle: "Juego automático", ruleAutoText: "Repite la apuesta y cantidad de bolas tras cada ronda hasta desactivarlo.",
-    rulesAboutTitle: "SOBRE EL JUEGO",
-    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
-    rulesHowToWinTitle: "Cómo se pagan los premios",
-    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
-    rulesRtpTitle: "RTP",
-    rulesRtpText: "RTP has not been established for this version.",
-    rulesMaxWinTitle: "Premio máximo",
-    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
-    rulesVolatilityTitle: "Bonus order",
-    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
-    rulesDisclosureTitle: "Información para el jugador",
-    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
-    topUpTitle: "Recargar saldo", topUpText: "Añade cualquier importe para seguir jugando.", amount: "Importe", topUp: "RECARGAR", cancel: "CANCELAR",
-    totalHistory: "HISTORIAL:", roundHistory: "Historial de rondas", todayTopWins: "TOP DE HOY", riskLevel: "RIESGO", lines: "LÍNEAS", low: "Bajo", normal: "Normal", high: "Alto",
-    pucks: "BOLAS", auto: "AUTO", bet: "APOSTAR", wait: "ESPERA", round: "RONDA", livePlayers: "JUGADORES DEL PROTOTIPO", liveSubtitle: "SIMULACIÓN LOCAL · MISMA MATEMÁTICA",
-    player: "Jugador", type: "Tipo", riskLines: "Riesgo / Líneas", result: "Resultado", payout: "Premio", status: "Estado", lost: "Perdió", win: "Premio", avatar: "Avatar",
-    showFullWinners: "Mostrar los 10 mejores premios de hoy", showTopWinner: "Mostrar solo el mejor premio de hoy"
-  },
-  pt: {
-    balance: "Saldo", changeAvatar: "Trocar avatar", sound: "Efeitos", music: "Música", animations: "Animações", language: "Idioma", rules: "Regras", gameRules: "Regras do jogo",
-    ruleLaunchTitle: "Lançamento e física", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
-    ruleWinsTitle: "Células premiadas", ruleWinsText: "A bola ganha ao parar em um multiplicador. O valor é aplicado à aposta dela.",
-    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Uma bola que entra em uma caçapa de canto libera três bolas brancas. Elas podem raramente entrar de novo; a chance diminui a cada geração.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
-    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
-    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
-    ruleAutoTitle: "Jogo automático", ruleAutoText: "Repete a aposta e a quantidade de bolas após cada rodada até ser desligado.",
-    rulesAboutTitle: "SOBRE O JOGO",
-    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
-    rulesHowToWinTitle: "Como os ganhos são pagos",
-    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
-    rulesRtpTitle: "RTP",
-    rulesRtpText: "RTP has not been established for this version.",
-    rulesMaxWinTitle: "Ganho máximo",
-    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
-    rulesVolatilityTitle: "Bonus order",
-    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
-    rulesDisclosureTitle: "Informação ao jogador",
-    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
-    topUpTitle: "Adicionar saldo", topUpText: "Adicione qualquer valor para continuar jogando.", amount: "Valor", topUp: "ADICIONAR", cancel: "CANCELAR",
-    totalHistory: "HISTÓRICO:", roundHistory: "Histórico de rodadas", todayTopWins: "TOP DE HOJE", riskLevel: "RISCO", lines: "LINHAS", low: "Baixo", normal: "Normal", high: "Alto",
-    pucks: "BOLAS", auto: "AUTO", bet: "APOSTAR", wait: "AGUARDE", round: "RODADA", livePlayers: "JOGADORES DO PROTÓTIPO", liveSubtitle: "SIMULAÇÃO LOCAL · MESMA MATEMÁTICA",
-    player: "Jogador", type: "Tipo", riskLines: "Risco / Linhas", result: "Resultado", payout: "Prêmio", status: "Status", lost: "Perdeu", win: "Ganho", avatar: "Avatar",
-    showFullWinners: "Mostrar os 10 maiores ganhos de hoje", showTopWinner: "Mostrar apenas o maior ganho de hoje"
-  },
-  de: {
-    balance: "Guthaben", changeAvatar: "Avatar ändern", sound: "Soundeffekte", music: "Musik", animations: "Animationen", language: "Sprache", rules: "Regeln", gameRules: "Spielregeln",
-    ruleLaunchTitle: "Start und Physik", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
-    ruleWinsTitle: "Gewinnfelder", ruleWinsText: "Ein Ball gewinnt auf einem Multiplikatorfeld. Der Wert gilt für seinen Einsatz.",
-    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Ein Ball in einer Ecktasche gibt drei weiße Bälle frei. Diese können selten erneut in eine Tasche fallen; die Chance sinkt mit jeder Generation.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
-    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
-    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
-    ruleAutoTitle: "Autoplay", ruleAutoText: "Wiederholt Einsatz und Ballanzahl nach jeder Runde, bis es ausgeschaltet wird.",
-    rulesAboutTitle: "ÜBER DAS SPIEL",
-    rulesAboutIntro: "Launch balls, collect bonuses and stop on multiplier cells. Each ball's collisions and final cell determine its result.",
-    rulesHowToWinTitle: "Auszahlung von Gewinnen",
-    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
-    rulesRtpTitle: "RTP",
-    rulesRtpText: "RTP has not been established for this version.",
-    rulesMaxWinTitle: "Maximalgewinn",
-    rulesMaxWinText: "Payouts depend on cell multipliers and active bonuses. A verified maximum round win has not yet been established.",
-    rulesVolatilityTitle: "Bonus order",
-    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
-    rulesDisclosureTitle: "Spielerinformation",
-    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
-    topUpTitle: "Guthaben aufladen", topUpText: "Füge einen beliebigen Betrag hinzu, um weiterzuspielen.", amount: "Betrag", topUp: "AUFLADEN", cancel: "ABBRECHEN",
-    totalHistory: "VERLAUF:", roundHistory: "Rundenverlauf", todayTopWins: "TOP HEUTE", riskLevel: "RISIKO", lines: "LINIEN", low: "Niedrig", normal: "Normal", high: "Hoch",
-    pucks: "BÄLLE", auto: "AUTO", bet: "SETZEN", wait: "WARTEN", round: "RUNDE", livePlayers: "LIVE-PROTOTYP-SPIELER", liveSubtitle: "LOKALE SIMULATION · GEMEINSAME MATHEMATIK",
-    player: "Spieler", type: "Typ", riskLines: "Risiko / Linien", result: "Ergebnis", payout: "Auszahlung", status: "Status", lost: "Verloren", win: "Gewinn", avatar: "Avatar",
-    showFullWinners: "Heutige Top 10 anzeigen", showTopWinner: "Nur heutigen Top-Gewinn anzeigen"
-  },
-  fr: {
-    balance: "Solde", changeAvatar: "Changer d’avatar", sound: "Effets sonores", music: "Musique", animations: "Animations", language: "Langue", rules: "Règles", gameRules: "Règles du jeu",
-    ruleLaunchTitle: "Lancement et physique", ruleLaunchText: "Choose a stake, 1–3 balls and 5–10 lines. Balls launch at random angles and bounce off the walls. This test build uses physical contact, not RTP-selected paths.",
-    ruleWinsTitle: "Cases gagnantes", ruleWinsText: "La boule gagne sur une case multiplicateur. La valeur s’applique à sa mise.",
-    rulePocketTitle: "X3 BALLS · blue pocket", rulePocketFieldText: "The blue pocket captures one ball and releases three balls into the main diamond. Each pocket can activate once per round. An occupied pocket cannot capture another ball. Blue and yellow pockets disappear after release; the red pocket disappears when its ball sinks.", rulePocketBilliardText: "Une boule qui entre dans une poche d’angle libère trois boules blanches. Elles peuvent rarement entrer de nouveau dans une poche ; la probabilité diminue à chaque génération.",
-    ruleBoostTitle: "x10 BOOST", ruleBoostText: "Always collect three purple diamonds, regardless of ball or line count. X10 BOOST multiplies wins in the main diamond and both LUCKY SHOT rooms by ten, including earlier wins in the same round. Boosted walls and multipliers turn purple.",
-    ruleMultiTitle: "EX MULTI", ruleMultiText: "The yellow pocket holds a ball while extra multiplier cells flash across the field, then releases that ball. There is one extra cell per selected line. Cells stay where the flashing stops. EX MULTI values for 5–10 lines: 1.5x, 1.8x, 2.2x, 2.7x, 3.2x, 3.6x. Landing on one is required to win.",
-    ruleLuckyTitle: "LUCKY SHOT · red pocket", ruleLuckyText: "The red pocket holds a ball until other balls and bonuses finish. It then selects one of the two lower rooms and launches the ball from its lower corner. Win by stopping in the multiplier cell at the top. The left room uses the main field’s highest multiplier; the right room uses ten times that value. X10 BOOST also applies to both rooms.",
-    ruleFieldTitle: "Lines", ruleFieldText: "Choose 5–10 lines to change cell size and the field’s multipliers. Use the values displayed on the current field.",
-    ruleAutoTitle: "Jeu automatique", ruleAutoText: "Répète la mise et le nombre de boules après chaque manche jusqu’à sa désactivation.",
-    rulesAboutTitle: "À PROPOS DU JEU",
-    rulesAboutIntro: "Balloro X test is a local prototype for testing pocket mechanics. Shots use random angles and outcomes follow actual collisions and stopping cells. This build does not use a calibrated RTP path table.",
-    rulesHowToWinTitle: "Paiement des gains",
-    rulesHowToWinText: "Each winning ball pays its per-ball stake × the multiplier of its stopping cell, with X10 BOOST when active. The round win is the sum of all ball payouts, including bonus balls and rooms. An empty stopping cell pays nothing. A large centre win or a room win triggers a celebration; repeated large wins restart it with up to three sound pitch levels.",
-    rulesRtpTitle: "RTP",
-    rulesRtpText: "Test mode: RTP has not been established for the current random-physics prototype. The former 97.45% figure does not describe this build.",
-    rulesMaxWinTitle: "Gain maximal",
-    rulesMaxWinText: "A verified maximum round win has not been established for this prototype. The former 8100x limit does not apply. Current cell values and active bonuses determine payouts.",
-    rulesVolatilityTitle: "Bonus order",
-    rulesVolatilityText: "When several pockets hold balls, yellow EX MULTI resolves first, then blue X3 BALLS, then red LUCKY SHOT. The red pocket waits for all other activity to finish. Activated bonus counters stay lit until the next round.",
-    rulesDisclosureTitle: "Information joueur",
-    rulesDisclosureText: "This is an experimental test build. Bonus animations show the current result; they do not establish or guarantee an RTP. Autoplay repeats the selected stake and ball count until switched off.",
-    topUpTitle: "Recharger le solde", topUpText: "Ajoutez le montant de votre choix pour continuer.", amount: "Montant", topUp: "RECHARGER", cancel: "ANNULER",
-    totalHistory: "HISTORIQUE :", roundHistory: "Historique des manches", todayTopWins: "TOP DU JOUR", riskLevel: "RISQUE", lines: "LIGNES", low: "Faible", normal: "Normal", high: "Élevé",
-    pucks: "BOULES", auto: "AUTO", bet: "MISER", wait: "ATTENDRE", round: "MANCHE", livePlayers: "JOUEURS DU PROTOTYPE", liveSubtitle: "SIMULATION LOCALE · MÊMES MATHÉMATIQUES",
-    player: "Joueur", type: "Type", riskLines: "Risque / Lignes", result: "Résultat", payout: "Gain", status: "Statut", lost: "Perdu", win: "Gain", avatar: "Avatar",
-    showFullWinners: "Afficher les 10 meilleurs gains du jour", showTopWinner: "Afficher uniquement le meilleur gain du jour"
-  }
-};
+const TRANSLATIONS = window.BalloroPlayerCopy;
 // Keep the legacy random symbol planners below intact for one-line rollback.
 const FIXED_BONUS_SYMBOL_LAYOUT = false;
 const POCKET_TEST_RANDOM_PHYSICS = true;
@@ -264,6 +97,8 @@ const state = {
   v3BonusLock: null,
   v3BonusPuck: null,
   v3BonusQueue: [],
+  v4HeldPurpleField: false,
+  v4HeldYellowCells: null,
   v3PocketSymbolCycle: { diamond: false, crown: false, lemon: false, blue: false },
   launchPrepared: false,
   launchPreparedSlot: null,
@@ -435,24 +270,7 @@ function applyLocalization(language, persist = true) {
   document.querySelectorAll("[data-i18n]").forEach((element) => {
     element.textContent = t(element.dataset.i18n);
   });
-  if (window.BalloroBonusUI?.isV2) {
-    const russian = state.language === "ru";
-    const copy = russian ? {
-      ruleLaunchText: "Выберите ставку, 1–3 шара и 5, 7 или 9 линий. Шары отскакивают от стенок; это локальный тест без откалиброванного RTP.",
-      ruleBoostText: "Попадание в фиолетовую лузу даёт один алмаз. Когда он долетает до каунтера, X10 BOOST окрашивает поле в фиолетовый и умножает выигрыши в десять раз.",
-      ruleFieldText: "Доступны 5, 7 и 9 линий. Они меняют размер ячеек и множители поля.",
-      ruleMultiText: "Попадание в жёлтую лузу даёт одну звезду. Когда она долетает до каунтера, EX MULTI запускает дополнительные множители и затем выпускает шар."
-    } : {
-      ruleLaunchText: "Choose a stake, 1–3 balls, and 5, 7, or 9 lines. Balls bounce off the walls; this local test has no calibrated RTP.",
-      ruleBoostText: "The purple pocket awards one diamond. Once it reaches the counter, X10 BOOST turns the field purple and multiplies wins by ten.",
-      ruleFieldText: "Choose 5, 7, or 9 lines to change cell size and field multipliers.",
-      ruleMultiText: "The yellow pocket awards one star. Once it reaches the counter, EX MULTI starts extra multipliers and then releases the ball."
-    };
-    for (const [key, value] of Object.entries(copy)) {
-      const element = document.querySelector(`[data-i18n="${key}"]`);
-      if (element) element.textContent = value;
-    }
-  }
+  if (typeof localizePlayerPanels === 'function') localizePlayerPanels();
   document.querySelectorAll(".language-options button").forEach((button) => {
     button.classList.toggle("active", button.dataset.lang === state.language);
   });
@@ -502,6 +320,7 @@ let v3FieldTransitionFrame = null;
 const V3_FIELD_SWEEP_MS = 190;
 
 function isX10VisualActive() {
+  if (window.BalloroBonusUI?.isV4 && state.v4HeldPurpleField) return true;
   if (window.BalloroBonusUI?.isV2) return Boolean(state.x10BoostActivated);
   return isX10BoostActive()
     || (Boolean(state.roundOutcome?.bonus_triggered) && state.crownsCollected >= getRequiredStars());
@@ -1002,12 +821,12 @@ function playMultiplierResultSound(multiplier, bonusActive = false, premium = fa
   const delayMs = Math.max(0, state.nextMultiplierSoundAt - now);
   state.nextMultiplierSoundAt = now + delayMs + 105;
   state.lastMultiplierSoundAt = now + delayMs;
-  if (window.BalloroBonusUI?.isV3 && !bonusActive && !premium
-    && multiplier < getMainFieldMaximumMultiplier()) {
+  if (window.BalloroBonusUI?.isV3 && !bonusActive && multiplier < 10) {
+    // Colour/value, not the cell category or boost flag, chooses the cue.
     if (!state.soundEffectsMuted) {
       state.winSoundEndsAt = Math.max(state.winSoundEndsAt, now + delayMs + 300);
     }
-    playV3SoftMultiplierWinSound(multiplier, delayMs / 1000, v3ColorTier);
+    playV3SoftMultiplierWinSound(multiplier, delayMs / 1000, multiplier > 1 ? 1 : 0);
     return;
   }
   if (!state.soundEffectsMuted) duckBackgroundMusic(bonusActive ? 1500 : 800);
@@ -1626,7 +1445,7 @@ function getRequiredStars() {
 }
 
 const V2_BONUS_PROGRESS_KEY = window.BalloroBonusUI?.isV3
-  ? "balloro-x-test-v3-live-progress-1"
+  ? (window.BalloroBonusUI?.isV4 ? "balloro-x-test-v4-live-progress-1" : "balloro-x-test-v3-live-progress-1")
   : window.BalloroPocketExperiment
     ? "balloro-x-test-v2-pocket-experiment-progress-1" : "balloro-x-test-v2-bonus-progress-1";
 const V2_BONUS_THRESHOLDS = Object.freeze({ diamond: 1, crown: 1, lemon: 1, blue: 1 });
@@ -2389,7 +2208,19 @@ function drawPurpleNeonPocketGlow(point, radius) {
   ctx.restore();
 }
 
+function drawStyledMultiplierText(context, method, text, x, y) {
+  if (window.BalloroMultiplierStyle) window.BalloroMultiplierStyle.draw(context, method, text, x, y);
+  else context[method](text, x, y);
+}
+
 function drawPurpleNeonMultiplierText(text, x, y, color) {
+  if (window.BalloroBonusUI?.isV4) {
+    ctx.save();
+    ctx.fillStyle = color;
+    drawStyledMultiplierText(ctx, "fillText", text, x, y);
+    ctx.restore();
+    return;
+  }
   const neonScale = getPurpleNeonPerformanceScale();
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
@@ -2398,11 +2229,11 @@ function drawPurpleNeonMultiplierText(text, x, y, color) {
   ctx.shadowBlur = Math.max(2, 7 * neonScale);
   ctx.lineWidth = 4;
   ctx.strokeStyle = `rgba(187, 91, 255, ${0.18 * neonScale})`;
-  ctx.strokeText(text, x, y);
+  drawStyledMultiplierText(ctx, "strokeText", text, x, y);
   ctx.shadowColor = `rgba(202, 104, 255, ${0.42 * neonScale})`;
   ctx.shadowBlur = Math.max(2, 5 * neonScale);
   ctx.fillStyle = color;
-  ctx.fillText(text, x, y);
+  drawStyledMultiplierText(ctx, "fillText", text, x, y);
   ctx.restore();
 }
 
@@ -2501,8 +2332,8 @@ function drawSecretRoomPuckCells(zone) {
     if (!isMoving && !isWinning) return;
     const cell = getSecretRoomCellAtPoint(zone, puck.x, puck.y);
     if (isWinning) {
-      drawSecretRoomCell(zone, cell, "rgba(255, 213, 77, 0.62)", "rgba(255, 213, 77, 0.98)");
-      drawSecretRoomCell(zone, cell, "rgba(255, 245, 166, 0.18)", "rgba(255, 245, 166, 0.92)");
+      drawSecretRoomCell(zone, cell, "rgba(255, 213, 77, 0.74)", "rgba(255, 213, 77, 0.98)");
+      drawSecretRoomCell(zone, cell, "rgba(255, 245, 166, 0.24)", "rgba(255, 245, 166, 0.92)");
     } else {
       drawSecretRoomCell(zone, cell, "rgba(117, 217, 255, 0.26)", "rgba(117, 217, 255, 0.54)");
     }
@@ -2882,7 +2713,7 @@ function drawV2PocketSymbolGlint(kind, point, size) {
     bounds.width, bounds.height);
 }
 
-function drawV2PocketSymbol(kind, point, radius, bubble) {
+function drawV2PocketSymbol(kind, point, radius, bubble, glint = true) {
   if (!window.BalloroBonusUI?.isV2) return;
   const size = radius * 0.91 * bubble.scale;
   ctx.save();
@@ -2909,7 +2740,20 @@ function drawV2PocketSymbol(kind, point, radius, bubble) {
     }
   }
   ctx.restore();
-  drawV2PocketSymbolGlint(kind, point, size);
+  if (glint) drawV2PocketSymbolGlint(kind, point, size);
+}
+
+function getV4PocketIdleScale(kind, bubble, occupied) {
+  if (!window.BalloroBonusUI?.isV4 || occupied || state.v3PocketSymbolCycle[kind]) return 1;
+  return bubble?.scale ?? 1;
+}
+
+function applyV4MultiplierBounce(center, enabled) {
+  if (!window.BalloroBonusUI?.isV4 || !enabled) return;
+  const scale = getCollectibleIdleBubble(7.4).scale;
+  ctx.translate(center.x, center.y);
+  ctx.scale(scale, scale);
+  ctx.translate(-center.x, -center.y);
 }
 
 function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, outerGlowColor = null,
@@ -2922,11 +2766,11 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
   const collectibleBubble = pulseInnerEdge ? getCollectibleIdleBubble(pulseSeed) : null;
   const v2Visual = window.BalloroBonusUI?.isV2 && usesFieldPocketMechanics()
     ? getV2PocketVisual(zone.id === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond") : null;
-  // Only the collectible bounces; the pocket rim stays still.
-  const pocketScale = 1;
+  const symbolKind = zone.id === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond";
   const isPreparing = state.pucks.some((puck) => puck.secretRoom?.zoneId === zone.id
     && ["capturing", "pocket_wait"].includes(puck.secretRoom.phase));
-  const radius = Math.max(6, puckRadius * pocketScale);
+  const radius = Math.max(6, puckRadius);
+  const pocketScale = getV4PocketIdleScale(symbolKind, collectibleBubble, isPreparing || pocket?.consumed);
   const activePocketStrokeColor = v2Visual?.stroke || (isPreparing
     ? usesFieldPocketMechanics()
       ? "rgba(117, 217, 255, 0.98)"
@@ -2949,10 +2793,9 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
     drawPurpleNeonPocketGlow(point, radius);
   }
   if (pulseInnerEdge) {
-    drawPulsingFieldPocketSurface(point, radius, collectibleBubble,
+    drawPulsingFieldPocketSurface(point, radius * pocketScale, collectibleBubble,
       v2Visual?.palette || BLUE_FIELD_POCKET_PALETTE,
       activePocketStrokeColor, v2Visual?.glow || outerGlowColor || "rgba(117, 217, 255, 0.29)");
-    const symbolKind = zone.id === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond";
     if (!pocket?.consumed && !state.v3PocketSymbolCycle[symbolKind]
       && !state.counterFlyIns.some((flyIn) => flyIn.kind === symbolKind)) {
       drawV2PocketSymbol(symbolKind, point, radius, collectibleBubble);
@@ -3124,9 +2967,17 @@ function getChanceRoomMultiplier(id) {
   return state.chanceRoomMultipliers[id] || getRiskBands().outer;
 }
 
+function getChancePreviewBlink(now = performance.now()) {
+  // Readiness blinking belongs to the ball in the red pocket, not the SC preview.
+  if (window.BalloroBonusUI?.isV4) return { alpha: 1, ready: false };
+  return { alpha: getPocketReadyPuckAlpha({ pocketReadyPreview: true }, now), ready: false };
+}
+
 function drawChanceRoomPreviewPuck(point) {
   const radius = state.field.puckRadius;
   ctx.save();
+  ctx.save();
+  ctx.globalAlpha *= getChancePreviewBlink().alpha;
   ctx.beginPath();
   ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
   const gradient = ctx.createRadialGradient(
@@ -3148,6 +2999,7 @@ function drawChanceRoomPreviewPuck(point) {
   ctx.lineWidth = Math.max(2, radius * 0.13);
   ctx.strokeStyle = "rgba(22, 25, 25, 0.94)";
   ctx.stroke();
+  ctx.restore();
   const waveProgress = (performance.now() % 700) / 700;
   ctx.beginPath();
   ctx.arc(point.x, point.y, radius * (1.05 + waveProgress * 0.8), 0, Math.PI * 2);
@@ -3198,17 +3050,25 @@ function isChanceMultiplierHit(u, v, id = "bottom-left", gridSize = getChanceRoo
 }
 
 function drawChanceMultiplierCrown(roomId, center, fontSize, color, bonusGridActive) {
-  if (roomId !== "bottom-right") return;
+  if (!window.BalloroBonusUI?.isV4 && roomId !== "bottom-right") return;
+  if (window.BalloroBonusUI?.isV4 && bonusGridActive) {
+    const size = Math.max(18, fontSize * .7);
+    drawV2PocketSymbol("diamond", { x: center.x,
+      y: center.y - fontSize * .57 - size * .5 }, size / (2 * .91),
+      { scale: 1, glowAlpha: 1 }, false);
+    return;
+  }
   if (window.BalloroBonusUI?.isV2) {
     const icon = v2PocketSymbolImages.crown;
     if (icon.complete && icon.naturalWidth) {
       const size = Math.max(18, fontSize * .7);
+      const bottomY = center.y - fontSize * (window.BalloroBonusUI?.isV4 ? .49 : .57);
       ctx.save();
       ctx.shadowColor = bonusGridActive ? "#c36aff" : "#ff4b37";
       ctx.shadowBlur = size * .35;
       if (bonusGridActive) ctx.filter = "hue-rotate(240deg)";
       ctx.drawImage(icon, center.x - size * .5,
-        center.y - fontSize * .57 - size, size, size);
+        bottomY - size, size, size);
       ctx.restore();
     }
     return;
@@ -3253,7 +3113,7 @@ function drawChanceMultiplierCrown(roomId, center, fontSize, color, bonusGridAct
   ctx.restore();
 }
 
-function drawChanceRooms() {
+function drawChanceRooms(sweep = null) {
   const gridSize = getChanceRoomGridSize();
   const bonusGridActive = isX10VisualActive();
   CHANCE_ROOM_IDS.forEach((id) => {
@@ -3320,7 +3180,7 @@ function drawChanceRooms() {
           ctx.stroke();
         }
         tracePolygon(puckCellCorners);
-        ctx.fillStyle = winningCell ? "rgba(255, 213, 77, 0.62)" : "rgba(117, 217, 255, 0.26)";
+        ctx.fillStyle = winningCell ? "rgba(255, 213, 77, 0.74)" : "rgba(117, 217, 255, 0.26)";
         ctx.strokeStyle = winningCell ? "rgba(255, 245, 166, 0.98)" : "rgba(117, 217, 255, 0.54)";
         ctx.lineWidth = 3;
         ctx.fill();
@@ -3330,6 +3190,7 @@ function drawChanceRooms() {
     }
 
     const isV3Room = Boolean(window.BalloroBonusUI?.isV3);
+    const roomRules = window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules;
     const cells = isV3Room
       ? Array.from({ length: gridSize * gridSize }, (_, index) => ({ col: index % gridSize, row: Math.floor(index / gridSize) }))
       : [getChanceMultiplierCell(id, gridSize)];
@@ -3337,14 +3198,28 @@ function drawChanceRooms() {
       const u = -1 + (cell.col + 0.5) * 2 / gridSize;
       const v = -1 + (cell.row + 0.5) * 2 / gridSize;
       const multiplierCenter = chanceRoomLocalToScreen(room, u, v);
+      const cellBonusActive = sweep?.vertical
+        ? getV4PointVisualActive(sweep, multiplierCenter.y) : bonusGridActive;
+      if (sweep?.vertical) {
+        const corners = [chanceRoomLocalToScreen(room, u - 1 / gridSize, v - 1 / gridSize),
+          chanceRoomLocalToScreen(room, u + 1 / gridSize, v - 1 / gridSize),
+          chanceRoomLocalToScreen(room, u + 1 / gridSize, v + 1 / gridSize),
+          chanceRoomLocalToScreen(room, u - 1 / gridSize, v + 1 / gridSize)];
+        tracePolygon(corners);
+        ctx.fillStyle = cellBonusActive ? "#14091b" : active ? "rgba(18, 7, 9, 0.97)" : "rgba(2, 3, 5, 0.9)";
+        ctx.fill();
+        ctx.strokeStyle = cellBonusActive ? "rgba(190, 124, 234, 0.46)" : "rgba(104, 39, 43, 0.38)";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        drawV4CellSwitchFlash(sweep, multiplierCenter.y, () => tracePolygon(corners));
+      }
       const roomMultiplier = isV3Room
-        ? window.BalloroV3Rules.roomCellMultiplier(GRID_SIZE, id, cell.col, cell.row)
+        ? roomRules.roomCellMultiplier(GRID_SIZE, id, cell.col, cell.row)
         : getChanceRoomMultiplier(id);
       const tier = isV3Room ? window.BalloroV3Rules.roomCellTier(GRID_SIZE, id, cell.col, cell.row) : "red";
-      const multiplierText = getFieldMultiplierText(bonusGridActive ? roomMultiplier * 10 : roomMultiplier);
-      const multiplierColor = bonusGridActive ? getBonusMultiplierColor(roomMultiplier)
-        : isV3Room ? ({ red: "#ff4b4b", yellow: "#ffd53d", green: "#64e66d" })[tier]
-          : getMultiplierColor(roomMultiplier);
+      const multiplierText = getFieldMultiplierText(cellBonusActive ? roomMultiplier * 10 : roomMultiplier);
+      const multiplierColor = cellBonusActive ? getBonusMultiplierColor(roomMultiplier)
+        : getMultiplierColor(roomMultiplier);
       ctx.fillStyle = multiplierColor;
       const maxTextWidth = room.halfDiagonal * 1.32 / gridSize;
       let fontSize = Math.max(18, Math.min(78, state.field.grid * 0.41));
@@ -3355,14 +3230,31 @@ function drawChanceRooms() {
       }
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      if (bonusGridActive) {
+      ctx.save();
+      if (window.BalloroBonusUI?.isV4) {
+        const hasPendingPuck = state.pucks.some((puck) => {
+          if (puck.chance?.roomId !== id || puck.chance.phase !== "inside"
+            || !puckHasPendingCellReward(puck)) return false;
+          const frame = getChancePresentationFrame(puck);
+          const col = clamp(Math.floor((frame[0] + 1) * gridSize / 2), 0, gridSize - 1);
+          const row = clamp(Math.floor((frame[1] + 1) * gridSize / 2), 0, gridSize - 1);
+          return col === cell.col && row === cell.row;
+        });
+        ctx.globalAlpha = hasPendingPuck ? 1 : dimmed ? 0.2 : 0.5;
+      }
+      applyV4MultiplierBounce(multiplierCenter,
+        window.BalloroBonusUI?.isV4 && roomRules.hasMultiplierFire(GRID_SIZE, cell.col, cell.row, id));
+      if (cellBonusActive) {
         drawPurpleNeonMultiplierText(multiplierText, multiplierCenter.x, multiplierCenter.y, multiplierColor);
       } else {
-        ctx.fillText(multiplierText, multiplierCenter.x, multiplierCenter.y);
+        drawStyledMultiplierText(ctx, "fillText", multiplierText, multiplierCenter.x, multiplierCenter.y);
       }
-      if (!isV3Room || tier === "red") {
-        drawChanceMultiplierCrown(id, multiplierCenter, fontSize, multiplierColor, bonusGridActive);
+      if (window.BalloroBonusUI?.isV4
+        ? roomRules.hasMultiplierFire(GRID_SIZE, cell.col, cell.row, id)
+        : !isV3Room || tier === "red") {
+        drawChanceMultiplierCrown(id, multiplierCenter, fontSize, multiplierColor, cellBonusActive);
       }
+      ctx.restore();
     }
     ctx.restore();
 
@@ -3446,18 +3338,19 @@ function drawChancePocket() {
   const pocket = getChancePocketGeometry();
   if (!pocket) return;
   const collectibleBubble = getCollectibleIdleBubble(7.4);
-  const pocketScale = 1;
-  const radius = Math.max(6, state.field.puckRadius * pocketScale);
+  const radius = Math.max(6, state.field.puckRadius);
   const capturedPuck = state.chanceCapturedPuck;
   const visual = window.BalloroBonusUI?.isV2 ? getV2PocketVisual("crown") : null;
   const waveActive = Boolean(capturedPuck)
     && ["capturing", "captured", "sinking"].includes(state.chancePhase);
+  const pocketScale = getV4PocketIdleScale("crown", collectibleBubble,
+    waveActive || state.chancePocket?.consumed);
   ctx.save();
   if (waveActive) {
     const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
     (visual?.waves || drawRedReadyWaves)(pocket.point, radius, pulse);
   }
-  drawPulsingFieldPocketSurface(pocket.point, radius, collectibleBubble,
+  drawPulsingFieldPocketSurface(pocket.point, radius * pocketScale, collectibleBubble,
     visual?.palette || RED_FIELD_POCKET_PALETTE,
     visual?.stroke || "rgb(255, 74, 82)", visual?.glow || "rgba(255, 48, 58, 0.29)");
   if (!state.chancePocket?.consumed && !state.v3PocketSymbolCycle.crown
@@ -3475,7 +3368,18 @@ function puckIsUsingSecretRoom(puck) {
   return ["capturing", "pocket_wait", "pocket"].includes(phase);
 }
 
+function puckHasPendingCellReward(puck) {
+  // A displayed reward or a fading ball must not brighten its old cell.
+  return !(puck.result?.multiplier > 0)
+    && (!puck.stopped || !puck.resultRevealStartedAt);
+}
+
 function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid, sweep = null) {
+  // Build the moving-ball cell index once, not once per label (up to 81 cells).
+  // This affects opacity only; payout/collision state remains authoritative.
+  const pendingCells = window.BalloroBonusUI?.isV4 ? new Set(state.pucks
+    .filter(puck => !puckIsUsingSecretRoom(puck) && puckHasPendingCellReward(puck))
+    .map(puck => { const cell = getCellFromPoint(puck.x, puck.y); return `${cell.col}_${cell.row}`; })) : null;
   mergedMultiplierCells.groups.forEach((group) => {
     const center = toScreen(
       -half + grid * group.col + grid * group.size / 2,
@@ -3502,18 +3406,25 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
     ctx.save();
     const hasPuck = state.pucks.some((puck) => {
       if (puckIsUsingSecretRoom(puck)) return false;
+      if (window.BalloroBonusUI?.isV4 && !puckHasPendingCellReward(puck)) return false;
       const puckCell = getCellFromPoint(puck.x, puck.y);
       return puckCell.col >= group.col
         && puckCell.col < group.col + group.size
         && puckCell.row >= group.row
         && puckCell.row < group.row + group.size;
     });
-    ctx.globalAlpha = (window.BalloroBonusUI?.isV3 ? 0.5
+    ctx.globalAlpha = (window.BalloroBonusUI?.isV4 ? hasPuck ? 1 : 0.5
+      : window.BalloroBonusUI?.isV3 ? 0.5
       : bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
+    applyV4MultiplierBounce({ x: center.x, y: reveal.y },
+      window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, group.col, group.row));
     if (bonusGridActive) {
       drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
     } else {
-      ctx.fillText(text, center.x, reveal.y);
+      drawStyledMultiplierText(ctx, "fillText", text, center.x, reveal.y);
+    }
+    if (window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, group.col, group.row)) {
+      drawChanceMultiplierCrown("main", { x: center.x, y: reveal.y }, fontSize, multiplierColor, bonusGridActive);
     }
     ctx.restore();
   });
@@ -3527,7 +3438,7 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
       if (mergedMultiplierCells.covered.has(`${col}_${row}`)) {
         continue;
       }
-      const multiplier = getCellMultiplier(col, row);
+      const multiplier = getDisplayedCellMultiplier(col, row);
       if (!multiplier) {
         continue;
       }
@@ -3556,17 +3467,24 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
         ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
       }
       ctx.save();
-      const hasPuck = state.pucks.some((puck) => {
+      const hasPuck = pendingCells ? pendingCells.has(`${col}_${row}`) : state.pucks.some((puck) => {
         if (puckIsUsingSecretRoom(puck)) return false;
+        if (window.BalloroBonusUI?.isV4 && !puckHasPendingCellReward(puck)) return false;
         const puckCell = getCellFromPoint(puck.x, puck.y);
         return puckCell.col === col && puckCell.row === row;
       });
-      ctx.globalAlpha = (window.BalloroBonusUI?.isV3 ? 0.5
+      ctx.globalAlpha = (window.BalloroBonusUI?.isV4 ? hasPuck ? 1 : 0.5
+        : window.BalloroBonusUI?.isV3 ? 0.5
         : bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
+      applyV4MultiplierBounce({ x: center.x, y: reveal.y },
+        window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, col, row));
       if (cellBonusActive) {
         drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
       } else {
-        ctx.fillText(text, center.x, reveal.y);
+        drawStyledMultiplierText(ctx, "fillText", text, center.x, reveal.y);
+      }
+      if (window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, col, row)) {
+        drawChanceMultiplierCrown("main", { x: center.x, y: reveal.y }, fontSize, multiplierColor, cellBonusActive);
       }
       ctx.restore();
     }
@@ -3589,7 +3507,7 @@ function drawField(clearCanvas = true, sweep = null) {
     ctx.fillStyle = document.body.classList.contains('slot-ui') ? "#000000" : "#010205";
     ctx.fillRect(0, 0, state.field.width, state.field.height);
   }
-  drawChanceRooms();
+  drawChanceRooms(sweep);
 
   const borderGradient = createFieldBorderGradient(corners, bonusGridActive);
   const secretZones = usesFieldPocketMechanics()
@@ -3619,7 +3537,18 @@ function drawField(clearCanvas = true, sweep = null) {
     const oldGrid = sweep.from ? "rgba(190, 124, 234, 0.46)" : "rgba(27, 184, 102, 0.28)";
     for (let row = 0; row < GRID_SIZE; row += 1) {
       for (let col = 0; col < GRID_SIZE; col += 1) {
-        if (getV3CellVisualActive(sweep, col, row) === sweep.from) {
+        if (sweep.vertical) {
+          const y = toScreen(-half + (col + 0.5) * grid, -half + (row + 0.5) * grid).y;
+          const active = getV4PointVisualActive(sweep, y);
+          drawCell(col, row, active ? "#14091b" : "#05070c",
+            active ? "rgba(190, 124, 234, 0.46)" : "rgba(27, 184, 102, 0.28)", 2.5);
+          drawV4CellSwitchFlash(sweep, y, () => {
+            tracePolygon([toScreen(-half + col * grid, -half + row * grid),
+              toScreen(-half + (col + 1) * grid, -half + row * grid),
+              toScreen(-half + (col + 1) * grid, -half + (row + 1) * grid),
+              toScreen(-half + col * grid, -half + (row + 1) * grid)]);
+          });
+        } else if (getV3CellVisualActive(sweep, col, row) === sweep.from) {
           drawCell(col, row, oldFill, oldGrid, 2.5);
         }
       }
@@ -3664,8 +3593,9 @@ function drawField(clearCanvas = true, sweep = null) {
       && !cell.purpleBoost && !bigWinEffect.winners.has(settledPuck);
     const flashElapsed = ordinaryV3Win
       ? performance.now() - settledPuck.resultRevealStartedAt : 0;
+    const winFlashDuration = window.BalloroBonusUI?.isV4 ? 325 : 650;
     const puckFade = ordinaryV3Win
-      ? Math.sin(Math.PI * clamp(flashElapsed / 650, 0, 1))
+      ? Math.sin(Math.PI * clamp(flashElapsed / winFlashDuration, 0, 1))
       : window.BalloroBonusUI?.isV3
         ? (settledPuck ? getV3PuckFade(settledPuck) : 0) : 1;
     if (puckFade <= 0) return;
@@ -3691,14 +3621,14 @@ function drawField(clearCanvas = true, sweep = null) {
         mergedMultiplierCells,
         cell.col,
         cell.row,
-        "rgba(255, 213, 77, 0.62)",
+        "rgba(255, 213, 77, 0.74)",
         "rgba(255, 213, 77, 0.98)"
       );
       drawMultiplierCellHighlight(
         mergedMultiplierCells,
         cell.col,
         cell.row,
-        "rgba(255, 245, 166, 0.18)",
+        "rgba(255, 245, 166, 0.24)",
         "rgba(255, 245, 166, 0.92)"
       );
       if (cell.lineWin) {
@@ -3717,14 +3647,14 @@ function drawField(clearCanvas = true, sweep = null) {
       mergedMultiplierCells,
       cell.col,
       cell.row,
-      "rgba(255, 213, 77, 0.62)",
+      "rgba(255, 213, 77, 0.74)",
       "rgba(255, 213, 77, 0.98)"
     );
     drawMultiplierCellHighlight(
       mergedMultiplierCells,
       cell.col,
       cell.row,
-      "rgba(255, 245, 166, 0.18)",
+      "rgba(255, 245, 166, 0.24)",
       "rgba(255, 245, 166, 0.92)"
     );
     if (cell.squareWin && cell.lineWin) {
@@ -3802,10 +3732,11 @@ function getMultiPlusFieldMultiplier() {
 
 function getCellMultiplier(col, row) {
   if (window.BalloroBonusUI?.isV3) {
-    const base = window.BalloroV3Rules.cellMultiplier(GRID_SIZE, col, row);
+    const rules = window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules;
+    const base = rules.cellMultiplier(GRID_SIZE, col, row);
     if (base && isMultiPlusVisualActive()
       && getActiveMultiPlusCells().some((cell) => cell.col === col && cell.row === row)) {
-      return Math.round(base * window.BalloroV3Rules.yellowMultiplier * 10) / 10;
+      return Math.round(base * rules.yellowMultiplier * 10) / 10;
     }
     return base;
   }
@@ -3821,6 +3752,16 @@ function getCellMultiplier(col, row) {
     if (sector) return sector.multiplier ?? config.multiplier_table[category];
   }
   return 0;
+}
+
+function getDisplayedCellMultiplier(col, row) {
+  const held = window.BalloroBonusUI?.isV4 && !state.multiPlusActive
+    && state.v4HeldYellowCells?.some(cell => cell.col === col && cell.row === row);
+  if (held) {
+    const rules = window.BalloroV4Rules;
+    return Math.round(rules.cellMultiplier(GRID_SIZE, col, row) * rules.yellowMultiplier * 10) / 10;
+  }
+  return getCellMultiplier(col, row);
 }
 
 function getFieldMultiplierText(multiplier, category = null) {
@@ -3887,19 +3828,14 @@ function withColorAlpha(color, alpha) {
 
 function getMultiplierColor(multiplier) {
   if (window.BalloroBonusUI?.isV3) {
-    return multiplier >= 10 ? "#ff4b4b" : multiplier > 1 ? "#ffd53d" : "#64e66d";
+    return window.BalloroMultiplierPresentation.color(multiplier);
   }
   const color = interpolateMultiplierColor(multiplier);
   return `hsla(${color.hue.toFixed(1)}, ${color.saturation.toFixed(1)}%, ${color.lightness.toFixed(1)}%, 1)`;
 }
 
 function getV3FieldMultiplierColor(col, row, multiplier) {
-  if (!window.BalloroBonusUI?.isV3) return getMultiplierColor(multiplier);
-  if (isMultiPlusVisualActive() && getActiveMultiPlusCells()
-    .some((cell) => cell.col === col && cell.row === row)) return "#ff4b4b";
-  const mid = (GRID_SIZE - 1) / 2;
-  const ring = Math.max(Math.abs(col - mid), Math.abs(row - mid));
-  return ring === 0 ? "#ff4b4b" : ring === 1 ? "#ffd53d" : "#64e66d";
+  return getMultiplierColor(multiplier);
 }
 
 function getV3WinSoundTier(col, row) {
@@ -4001,11 +3937,26 @@ function getCollectibleIdleBubble(seed = 0) {
   };
 }
 
+function isPocketReadyPuck(puck) {
+  if (!window.BalloroBonusUI?.isV4) return false;
+  if (puck.chance) return puck.chance.phase === "captured";
+  return Boolean(puck.pocketReadyPreview
+    || puck.secretRoom?.phase === "pocket_wait"
+    || (puck === state.multiPlusCapturedPuck
+      && ["captured", "revealing"].includes(state.multiPlusPhase))
+    || (puck.waitingForPocket && !puck.v3QueuePull));
+}
+
+function getPocketReadyPuckAlpha(puck, now = performance.now()) {
+  const waiting = isPocketReadyPuck(puck);
+  if (!window.BalloroReadyBlink) return waiting ? (now % 200 < 100 ? 1 : 0) : 1;
+  return window.BalloroReadyBlink.sample(puck.readyBlinkOwner || puck, waiting, now).alpha;
+}
+
 function drawPuck(puck, index) {
   if (["spinning", "final_cue"].includes(puck.chance?.phase)) return;
   const chanceSinkProgress = puck.chance?.phase === "sinking"
-    ? clamp(((puck.pocketDepth || 0) - 0.55) / 0.45, 0, 1)
-    : 0;
+    ? clamp(((puck.pocketDepth || 0) - 0.55) / 0.45, 0, 1) : 0;
   const chanceSinkScale = puck.chance?.phase === "sinking"
     ? Math.max(0.02, 1 - chanceSinkProgress)
     : 1;
@@ -4016,6 +3967,7 @@ function drawPuck(puck, index) {
   const chanceRoomDimmed = puck.chance?.roomId && isChanceRoomDimmed(puck.chance.roomId);
 
   ctx.save();
+  ctx.globalAlpha *= getPocketReadyPuckAlpha(puck);
   if (window.BalloroBonusUI?.isV3 && puck.stopped) {
     ctx.globalAlpha *= getV3PuckFade(puck);
     if (ctx.globalAlpha <= 0) { ctx.restore(); return; }
@@ -4154,7 +4106,7 @@ function drawV3PocketQueueIndicators() {
     const count = state.pucks.filter((puck) => !puck.chance && !puck.secretRoom
       && !puck.pocketRelease && ((puck.waitingForPocket?.kind === "red")
         || (puck.stopped && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2 - 1))).length;
-    if (count) entries.push({ point, count });
+    if (count) entries.push({ point, count, kind: "red" });
   }
   if (state.multiPlusToken?.consumed && state.multiPlusCapturedPuck) {
     const point = state.multiPlusToken;
@@ -4165,13 +4117,14 @@ function drawV3PocketQueueIndicators() {
         && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius + point.radius - 1))).length;
     if (count) entries.push({ point, count });
   }
-  for (const { point, count } of entries) {
+  for (const { point, count, kind } of entries) {
     const screen = toScreen(point.x, point.y);
     const hasVisibleBall = state.pucks.some((puck) => !puck.chance && !puck.secretRoom
       && (!puck.stopped || getV3PuckFade(puck) > 0)
       && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 0.65);
     if (!hasVisibleBall) {
-      drawPuck({ x: point.x, y: point.y, pocketDepth: 0, stopped: false }, -1);
+      drawPuck({ x: point.x, y: point.y, pocketDepth: 0, stopped: false,
+        pocketReadyPreview: true, waitingForPocket: kind === "red" ? { kind } : null }, -1);
     }
     ctx.save();
     ctx.textAlign = "center";
@@ -4269,13 +4222,15 @@ function drawMultiPlusToken() {
   const bubble = getCollectibleIdleBubble((token.col ?? 0) * 0.79 + (token.row ?? 0) * 1.13 + 2.4);
   const radius = Math.max(6, state.field.puckRadius);
   const visual = window.BalloroBonusUI?.isV2 ? getV2PocketVisual("lemon") : null;
+  const pocketScale = getV4PocketIdleScale("lemon", bubble,
+    token.consumed || ["capturing", "captured", "revealing"].includes(state.multiPlusPhase));
 
   ctx.save();
   if (["capturing", "captured", "revealing"].includes(state.multiPlusPhase)) {
     const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
     (visual?.waves || drawYellowReadyWaves)(point, radius, pulse);
   }
-  drawPulsingFieldPocketSurface(point, radius, bubble,
+  drawPulsingFieldPocketSurface(point, radius * pocketScale, bubble,
     visual?.palette || YELLOW_FIELD_POCKET_PALETTE,
     visual?.stroke || "rgb(255, 213, 61)", visual?.glow || "rgba(255, 213, 61, 0.29)");
   if (!token.consumed && !token.collected && !state.v3PocketSymbolCycle.lemon
@@ -4773,12 +4728,20 @@ function drawMultiPlusRoomsBlinkVisual(now = performance.now()) {
     );
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `1000 ${Math.max(11, Math.min(42, grid * 0.42))}px Inter, system-ui, sans-serif`;
-    ctx.fillStyle = window.BalloroBonusUI?.isV3 ? "#ff4b4b" : flash ? "#ffffff" : "#ffd83d";
-    ctx.shadowColor = window.BalloroBonusUI?.isV3
-      ? "rgba(255, 65, 68, 0.96)" : flash ? "#ffffff" : "rgba(255, 194, 20, 0.96)";
+    const fontSize = Math.max(11, Math.min(42, grid * 0.42));
+    const hasTopSymbol = window.BalloroBonusUI?.isV4
+      && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, cell.col, cell.row);
+    applyV4MultiplierBounce(center, hasTopSymbol);
+    ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
+    const purple = isX10VisualActive();
+    const multiplierColor = purple ? getBonusMultiplierColor(cell.multiplier) : getMultiplierColor(cell.multiplier);
+    ctx.fillStyle = multiplierColor;
+    ctx.shadowColor = multiplierColor;
     ctx.shadowBlur = flash ? 26 : 14 + pulse * 12;
-    ctx.fillText(getFieldMultiplierText(cell.multiplier, "multi_plus"), center.x, center.y);
+    drawStyledMultiplierText(ctx, "fillText", getFieldMultiplierText(cell.multiplier * (purple ? 10 : 1), "multi_plus"), center.x, center.y);
+    if (hasTopSymbol) {
+      drawChanceMultiplierCrown("main", center, fontSize, multiplierColor, purple);
+    }
     ctx.restore();
   });
 }
@@ -4801,6 +4764,60 @@ function spawnStarBurst(star, theme = "purple") {
   if (state.starEffectFrame === null) {
     state.starEffectFrame = requestAnimationFrame(animateStarBursts);
   }
+}
+
+const winningTextLayers = new Map();
+
+function drawWinningTextLayer(text, x, y, color, font, outlineColor, outlineWidth, outerOutlineColor) {
+  const ratio = window.devicePixelRatio || 1;
+  const key = JSON.stringify([text, color, font, outlineColor, outlineWidth, outerOutlineColor, ratio]);
+  let layer = winningTextLayers.get(key);
+  if (!layer) {
+    ctx.save();
+    ctx.font = font;
+    const metrics = ctx.measureText(text);
+    ctx.restore();
+    const fontSize = Number.parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1] || "30");
+    const padding = Math.ceil(outlineWidth + 6 + 28);
+    const width = Math.ceil(Math.max(metrics.width,
+      2 * Math.max(metrics.actualBoundingBoxLeft || 0, metrics.actualBoundingBoxRight || 0)) + padding * 2);
+    const height = Math.ceil(fontSize * 2 + padding * 2);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(width * ratio);
+    canvas.height = Math.ceil(height * ratio);
+    const paint = canvas.getContext("2d");
+    paint.setTransform(ratio, 0, 0, ratio, 0, 0);
+    paint.font = font;
+    paint.textAlign = "center";
+    paint.textBaseline = "middle";
+    paint.lineJoin = "round";
+    const drawText = (method) => {
+      if (window.BalloroMultiplierStyle) window.BalloroMultiplierStyle.draw(paint, method, text, width / 2, height / 2);
+      else paint[method](text, width / 2, height / 2);
+    };
+    if (outerOutlineColor) {
+      paint.lineWidth = outlineWidth + 6;
+      paint.strokeStyle = outerOutlineColor;
+      drawText("strokeText");
+    }
+    paint.lineWidth = outlineWidth;
+    paint.strokeStyle = outlineColor;
+    drawText("strokeText");
+    // Flatten opaque fill and outlines before applying the reveal/fade alpha.
+    // Otherwise each translucent pass exposes the stroke inside the glyphs.
+    paint.fillStyle = withColorAlpha(color, 1);
+    paint.shadowColor = outerOutlineColor ? withColorAlpha(color, 0.82) : "rgba(0, 0, 0, 0)";
+    paint.shadowBlur = outerOutlineColor ? 14 : 0;
+    drawText("fillText");
+    layer = { canvas, width, height };
+    if (winningTextLayers.size >= 64) winningTextLayers.delete(winningTextLayers.keys().next().value);
+    winningTextLayers.set(key, layer);
+  }
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0)";
+  ctx.shadowBlur = 0;
+  ctx.drawImage(layer.canvas, x - layer.width / 2, y - layer.height / 2, layer.width, layer.height);
+  ctx.restore();
 }
 
 function drawResultOverlay({ glows = true, text = true } = {}) {
@@ -4845,24 +4862,7 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
   };
 
   const drawWinningText = (text, x, y, color, font, outlineColor = "rgba(0, 0, 0, 0.92)", outlineWidth = 6, outerOutlineColor = null) => {
-    ctx.save();
-    ctx.font = font;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.lineJoin = "round";
-    if (outerOutlineColor) {
-      ctx.lineWidth = outlineWidth + 6;
-      ctx.strokeStyle = outerOutlineColor;
-      ctx.strokeText(text, x, y);
-    }
-    ctx.lineWidth = outlineWidth;
-    ctx.strokeStyle = outlineColor;
-    ctx.strokeText(text, x, y);
-    ctx.fillStyle = color;
-    ctx.shadowColor = outerOutlineColor ? withColorAlpha(color, 0.82) : "rgba(0, 0, 0, 0)";
-    ctx.shadowBlur = outerOutlineColor ? 14 : 0;
-    ctx.fillText(text, x, y);
-    ctx.restore();
+    drawWinningTextLayer(text, x, y, color, font, outlineColor, outlineWidth, outerOutlineColor);
   };
 
   ctx.textAlign = "center";
@@ -4916,9 +4916,7 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
       const classification = classifyResult(resultMultiplier, puck.result.category);
       const resultText = getMultiplierText(resultMultiplier);
       const resultColor = puck.result.chanceRoom && !canUseBonusMultiplier
-        ? (window.BalloroBonusUI?.isV3
-          ? ({ red: "#ff4b4b", yellow: "#ffd53d", green: "#64e66d" })[puck.result.chanceRoomTier]
-          : getMultiplierColor(puck.result.multiplier))
+        ? getMultiplierColor(puck.result.multiplier)
         : puck.result.purpleBoost
         ? getBonusResultColor(Math.max(1, puck.result.multiplier / PURPLE_POCKET_MULTIPLIER))
         : canUseBonusMultiplier
@@ -5055,7 +5053,8 @@ function getV3PuckFade(puck, now = performance.now()) {
   if (!puck.stopped || !puck.resultRevealStartedAt) return 1;
   const ordinaryFieldWin = puck.result?.multiplier > 0 && !puck.result.secretRoom
     && !puck.result.x10Boosted && !bigWinEffect.winners.has(puck);
-  const duration = window.BalloroV3Rules.resultFadeMs / (ordinaryFieldWin ? 4 : 2);
+  const duration = window.BalloroV3Rules.resultFadeMs / (ordinaryFieldWin ? 4 : 2)
+    / (window.BalloroBonusUI?.isV4 ? 2 : 1);
   return 1 - clamp(getV3ResultFadeElapsed(puck, now) / duration, 0, 1);
 }
 
@@ -5079,17 +5078,24 @@ function hasUnfinishedV3PurpleReward(now = performance.now()) {
       || (puck.chance && puck.chance.phase !== "settled")
       || state.v3BonusQueue.some((entry) => entry.puck === puck)) return true;
     if (!puck.result) return false;
+    // Shorten only the completed reward's purple-board hold. Floating text,
+    // ball fading and victory music retain their original presentation clocks.
+    const fieldRewardNow = window.BalloroBonusUI?.isV4 && puck.resultRevealStartedAt
+      ? puck.resultRevealStartedAt + (now - puck.resultRevealStartedAt) * 2 : now;
     return puck.result.multiplier > 0
-      ? getV3MultiplierFade(puck, now) > 0
-      : getV3PuckFade(puck, now) > 0;
+      ? getV3MultiplierFade(puck, fieldRewardNow) > 0
+      : getV3PuckFade(puck, fieldRewardNow) > 0;
   });
 }
 
 function finishV3PurplePresentation(now = performance.now()) {
   if (!window.BalloroBonusUI?.isV3 || !state.x10BoostActivated
     || hasUnfinishedV3PurpleReward(now)) return;
+  // V4 now restores the board with the reverse cell sequence after rewards.
+  if (window.BalloroBonusUI?.isV4) state.v4HeldPurpleField = false;
   state.x10BoostActivated = false;
   state.crownBonusAwarded = false;
+  if (window.BalloroBonusUI?.isV4) getV3FieldSweep(now);
   updateBetButtons();
 }
 
@@ -5136,9 +5142,9 @@ function updateBigWinEffect(now = performance.now()) {
     const previousWinner=bigWinEffect.seenWinners.has(puck);
     const boostEncore=previousWinner && result.x10Boosted && !bigWinEffect.boostedWinners.has(puck);
     if(previousWinner && !boostEncore)return;
-    const premium = (result.chanceRoom && (!window.BalloroBonusUI?.isV3 || result.chanceRoomTier === "red"))
-      || (window.BalloroBonusUI?.isV3
-        && (result.x10Boosted || result.multiPlusBoosted || result.category === "center"))
+    const premium = window.BalloroBonusUI?.isV3
+      ? window.BalloroMultiplierPresentation.premium(result)
+      : result.chanceRoom
       || (["outer", "middle", "center"].includes(result.category)
         && result.multiplier >= getMainFieldMaximumMultiplier());
     if (!premium && !boostEncore) return;
@@ -5214,25 +5220,106 @@ function drawBigWinWalls() {
   ctx.restore();
 }
 
+function drawV4FieldSwitchFlash(now, active) {
+  if (!window.BalloroBonusUI?.isV4) return false;
+  if (v3LastFieldVisualState === null) v3LastFieldVisualState = active;
+  if (active !== v3LastFieldVisualState) {
+    v3LastFieldVisualState = active;
+    v3FieldTransition = { startedAt: now };
+  }
+  if (!v3FieldTransition) return false;
+  const progress = (now - v3FieldTransition.startedAt) / 160;
+  if (progress >= 1 || !state.animationsEnabled) {
+    v3FieldTransition = null;
+    return false;
+  }
+  const { half } = state.field;
+  const corners = [toScreen(-half, -half), toScreen(half, -half),
+    toScreen(half, half), toScreen(-half, half)];
+  ctx.save();
+  ctx.globalAlpha = Math.pow(1 - progress, 2);
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 15;
+  ctx.strokeStyle = active ? "#c76aff" : "#35ee88";
+  ctx.shadowBlur = 0;
+  traceRoundedPolygon(corners, Math.max(8, state.field.grid * .08));
+  ctx.stroke();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#fff1ff";
+  ctx.stroke();
+  ctx.restore();
+  return true;
+}
+
 function getV3FieldSweep(now) {
   if (!window.BalloroBonusUI?.isV3) return null;
   const active = isX10VisualActive();
-  if (v3LastFieldVisualState === null) v3LastFieldVisualState = active;
-  if (active !== v3LastFieldVisualState) {
-    v3FieldTransition = { from: v3LastFieldVisualState, to: active, startedAt: now };
-    v3LastFieldVisualState = active;
+  if (window.BalloroBonusUI?.isV4 && v3LastFieldVisualState !== null
+    && active !== v3LastFieldVisualState) {
+    const audio = state.audioContext;
+    window.BalloroBonusSound?.transition(audio, audio ? getAudioOutput(audio) : null,
+      active, state.soundEffectsMuted);
   }
-  if (!v3FieldTransition) return null;
-  const raw = clamp((now - v3FieldTransition.startedAt) / V3_FIELD_SWEEP_MS, 0, 1);
-  if (raw >= 1) {
+  if (window.BalloroBonusUI?.isV4 && !state.animationsEnabled) {
+    v3LastFieldVisualState = active;
     v3FieldTransition = null;
     return null;
   }
-  return { ...v3FieldTransition, progress: raw * raw * (3 - 2 * raw) };
+  if (v3LastFieldVisualState === null) v3LastFieldVisualState = active;
+  if (active !== v3LastFieldVisualState) {
+    v3FieldTransition = { from: v3LastFieldVisualState, to: active, startedAt: now };
+    if (window.BalloroBonusUI?.isV4) {
+      const half = state.field.half;
+      const ys = [toScreen(-half, -half).y, toScreen(half, half).y,
+        ...CHANCE_ROOM_IDS.flatMap(id => getChanceRoomGeometry(id).vertices.map(point => point.y))];
+      Object.assign(v3FieldTransition, { vertical: true, top: Math.min(...ys), bottom: Math.max(...ys) });
+    }
+    v3LastFieldVisualState = active;
+  }
+  if (!v3FieldTransition) return null;
+  const duration = v3FieldTransition.vertical
+    ? (v3FieldTransition.to ? V4_PURPLE_FIELD_ENTER_MS : V4_PURPLE_FIELD_EXIT_MS)
+    : V3_FIELD_SWEEP_MS;
+  const raw = clamp((now - v3FieldTransition.startedAt) / duration, 0, 1);
+  if (raw >= 1) {
+    v3FieldTransition = null;
+    if (window.BalloroBonusUI?.isV4) updateBetButtons();
+    return null;
+  }
+  return { ...v3FieldTransition, progress: v3FieldTransition.vertical ? raw : raw * raw * (3 - 2 * raw) };
+}
+
+function getV4PointSwitchStep(sweep, y) {
+  const position = clamp((y - sweep.top) / Math.max(1, sweep.bottom - sweep.top), 0, 1);
+  return 0.04 + (sweep.to ? position : 1 - position) * 0.88;
+}
+
+function getV4PointVisualActive(sweep, y) {
+  return sweep.progress >= getV4PointSwitchStep(sweep, y) ? sweep.to : sweep.from;
+}
+
+function drawV4CellSwitchFlash(sweep, y, trace) {
+  const elapsed = sweep.progress - getV4PointSwitchStep(sweep, y);
+  if (elapsed < 0 || elapsed >= 0.08) return;
+  ctx.save();
+  ctx.globalAlpha = (1 - elapsed / 0.08) * 0.85;
+  ctx.shadowBlur = 0;
+  trace();
+  ctx.fillStyle = sweep.to ? "#b85cff" : "#35ee88";
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#f4eaff";
+  ctx.stroke();
+  ctx.restore();
 }
 
 function getV3CellVisualActive(sweep, col, row) {
   if (!sweep) return isX10VisualActive();
+  if (sweep.vertical) {
+    const { half, grid } = state.field;
+    return getV4PointVisualActive(sweep,
+      toScreen(-half + (col + 0.5) * grid, -half + (row + 0.5) * grid).y);
+  }
   const mid = (GRID_SIZE - 1) / 2;
   const ring = Math.max(Math.abs(col - mid), Math.abs(row - mid));
   const maxRing = Math.ceil(mid);
@@ -5241,8 +5328,18 @@ function getV3CellVisualActive(sweep, col, row) {
   return changed ? sweep.to : sweep.from;
 }
 
+function updateBonusReadySound(now) {
+  if (!window.BalloroBonusUI?.isV4 || !window.BalloroBonusSound) return;
+  const samples = state.pucks.map(puck => window.BalloroReadyBlink?.sample(puck, isPocketReadyPuck(puck), now));
+  const blink = samples.find(sample => sample?.ready && sample.alpha === 1);
+  const audio = state.audioContext;
+  window.BalloroBonusSound.readyPulse(audio, audio ? getAudioOutput(audio) : null,
+    blink, now, state.soundEffectsMuted || document.hidden);
+}
+
 function render() {
   const now = performance.now();
+  updateBonusReadySound(now);
   const bonusGridActive = isX10VisualActive();
   document.body.classList.toggle("x10-visual-active", bonusGridActive);
   updateBigWinEffect();
@@ -5253,7 +5350,8 @@ function render() {
   const sweep = getV3FieldSweep(now);
   drawField(true, sweep);
   drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid, sweep);
-  if (sweep && v3FieldTransitionFrame === null) {
+  const wallFlash = !window.BalloroBonusUI?.isV4 && drawV4FieldSwitchFlash(now, bonusGridActive);
+  if ((sweep || wallFlash) && v3FieldTransitionFrame === null) {
     v3FieldTransitionFrame = requestAnimationFrame(() => {
       v3FieldTransitionFrame = null;
       render();
@@ -5773,7 +5871,7 @@ function selectRoundFieldPocket(roundOutcome) {
 
 function selectPrototypeFieldPocket() {
   if (window.BalloroBonusUI?.isV3) {
-    return { ...window.BalloroV3Rules.pocketCells(GRID_SIZE).diamond };
+    return { ...(window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules).pocketCells(GRID_SIZE).diamond };
   }
   const candidates = (getMathConfiguration()?.sector_definitions?.empty || [])
     .filter((sector) => sector.index >= 0
@@ -5785,7 +5883,7 @@ function selectPrototypeFieldPocket() {
 function selectV2BluePocket(roundOutcome) {
   if (!window.BalloroBonusUI?.isV2 || !usesFieldPocketMechanics()) return null;
   if (window.BalloroBonusUI?.isV3) {
-    return { ...window.BalloroV3Rules.pocketCells(GRID_SIZE).blue };
+    return { ...(window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules).pocketCells(GRID_SIZE).blue };
   }
   const blocked = new Set([state.fieldPocket, state.chancePocket,
     roundOutcome?.multi_plus_position].filter(Boolean).map(cell => `${cell.col}_${cell.row}`));
@@ -5806,7 +5904,7 @@ function selectV2BluePocket(roundOutcome) {
 function selectRoundChancePocket(roundOutcome, trajectories = []) {
   if (!usesFieldPocketMechanics() || !roundOutcome) return null;
   if (window.BalloroBonusUI?.isV3) {
-    return { ...window.BalloroV3Rules.pocketCells(GRID_SIZE).crown, forced: false };
+    return { ...(window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules).pocketCells(GRID_SIZE).crown, forced: false };
   }
   const candidates = [];
   for (let row = 0; row < GRID_SIZE; row += 1) {
@@ -5976,6 +6074,7 @@ function buildRandomPrototypeTrajectory(startPoint = null, angleCenter = -135) {
 }
 
 function selectV3RepeatedPurpleRelease(startPoint, puck) {
+  if (window.BalloroMvpMath?.enabled()) return buildRandomPrototypeTrajectory(startPoint, -135);
   const previous = puck.v3LastPurpleReleaseDirection;
   let mostDifferent = null;
   let widestTurn = -1;
@@ -5996,7 +6095,8 @@ function selectV3RepeatedPurpleRelease(startPoint, puck) {
 }
 
 function isV3BonusLaunchBlocked() {
-  return Boolean(state.v3BonusLock || state.x10BoostActivated);
+  return Boolean(state.v3BonusLock || state.x10BoostActivated
+    || (window.BalloroBonusUI?.isV4 && v3FieldTransition?.vertical && !v3FieldTransition.to));
 }
 
 function applyPocketTestPrototypePlan(roundOutcome, trajectoryResult) {
@@ -6025,7 +6125,7 @@ function applyPocketTestPrototypePlan(roundOutcome, trajectoryResult) {
 function placePrototypeMultiPlusPosition(roundOutcome) {
   if (!POCKET_TEST_RANDOM_PHYSICS) return;
   if (window.BalloroBonusUI?.isV3) {
-    const { col, row } = window.BalloroV3Rules.pocketCells(GRID_SIZE).lemon;
+    const { col, row } = (window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules).pocketCells(GRID_SIZE).lemon;
     roundOutcome.multi_plus_position = {
       index: row * GRID_SIZE + col, col, row, collected: true,
       assigned_puck: -1, assigned_result_path: null, collect_time: null,
@@ -7105,6 +7205,7 @@ function upgradeSettledResultToX10(puck, { animate = true, playSound = true } = 
   if (payoutDelta > 0) {
     state.bankroll += payoutDelta;
     state.roundWinAmount += payoutDelta;
+    updateBank();
   }
   markSettledCellAsBoosted(puck);
   if (playSound) playMultiplierResultSound(result.multiplier, true);
@@ -7209,7 +7310,10 @@ function collectMultiPlusByTouch(puck, captureChance = 1, allowUnplanned = false
   const closestY = startY + segmentY * projection;
   const settledHitRadius = Math.max(0, state.field.puckRadius + token.radius - 1);
   const inRange = window.BalloroBonusUI?.isV2
-    ? Math.hypot(puck.x - token.x, puck.y - token.y) <= settledHitRadius
+    ? (Math.hypot(puck.x - token.x, puck.y - token.y) <= settledHitRadius
+      || (window.BalloroBonusUI?.isV4 && atRest
+        && getCellFromPoint(puck.x, puck.y).col === token.col
+        && getCellFromPoint(puck.x, puck.y).row === token.row))
     : (closestX - token.x) ** 2 + (closestY - token.y) ** 2 <= hitRadius ** 2;
   if (inRange
     && (captureChance >= 1 || nextPuckRandom(puck) <= captureChance)) {
@@ -7322,9 +7426,7 @@ function queueV3PocketPuck(puck, kind, point, zoneId = null) {
 }
 
 function stepFieldPocketPullCapture(puck, capture) {
-  const captureStep = window.BalloroQuickPlayTiming
-    ? window.BalloroQuickPlayTiming.preparationStep(FIXED_PHYSICS_STEP, state.quickPlay)
-    : FIXED_PHYSICS_STEP / (state.quickPlay ? 3 : 1);
+  const captureStep = getLiveBonusPreparationStep();
   capture.elapsed += captureStep;
   const progress = clamp(capture.elapsed / capture.duration, 0, 1);
   puck.previousX = puck.x;
@@ -7409,7 +7511,9 @@ function isBluePocketCoveringCell(cell) {
 function moveMultiPlusNeonCells(now, final = false) {
   const finalSectors = getMathConfiguration()?.multi_plus?.sectors || [];
   if (final) {
-    state.multiPlusFinalCells = state.multiPlusNeonCells.map((cell) => ({ ...cell }));
+    state.multiPlusFinalCells = (state.multiPlusMvpPlan?.cells || state.multiPlusNeonCells)
+      .map((cell) => ({ ...cell }));
+    if (state.multiPlusMvpPlan) state.multiPlusNeonCells = state.multiPlusFinalCells.map(cell => ({ ...cell }));
     return;
   }
   const candidates = getMultiPlusNeonCandidateCells();
@@ -7452,8 +7556,9 @@ function moveMultiPlusNeonCells(now, final = false) {
     return {
       ...cell,
       multiplier: window.BalloroBonusUI?.isV3
-        ? Math.round(window.BalloroV3Rules.cellMultiplier(GRID_SIZE, cell.col, cell.row)
-          * window.BalloroV3Rules.yellowMultiplier * 10) / 10
+        ? Math.round((window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules)
+          .cellMultiplier(GRID_SIZE, cell.col, cell.row)
+          * (window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules).yellowMultiplier * 10) / 10
         : getMultiPlusFieldMultiplier()
     };
   });
@@ -7482,6 +7587,10 @@ function maybeAdvanceMultiPlus(now) {
     state.multiPlusNeonFlashUntil = 0;
     state.multiPlusActive = true;
     state.multiPlusActivatedAt = now;
+    state.multiPlusMvpPlan = window.BalloroMvpMath?.enabled()
+      ? window.BalloroSavedPaths.yellowV2Plan(GRID_SIZE,
+        { x: state.multiPlusToken.x / state.field.half, y: state.multiPlusToken.y / state.field.half },
+        randomPrototypeUnit) : null;
     moveMultiPlusNeonCells(now);
     updateMultiPlusCounter();
     playMultiPlusSound();
@@ -7518,7 +7627,7 @@ function releaseMultiPlusCapturedPuck(puck) {
     x: state.multiPlusToken.x / state.field.half,
     y: state.multiPlusToken.y / state.field.half
   };
-  const releaseTrajectory = POCKET_TEST_RANDOM_PHYSICS
+  const releaseTrajectory = state.multiPlusMvpPlan?.trajectory || (POCKET_TEST_RANDOM_PHYSICS
     ? buildRandomPrototypeTrajectory(releaseStartPoint, -135)
     : planRuntimeFieldPocketTrajectory({
       result: puck.authoritativeResult,
@@ -7528,7 +7637,8 @@ function releaseMultiPlusCapturedPuck(puck) {
       startPoint: releaseStartPoint,
       releaseIndex,
       avoidPockets: [releaseStartPoint]
-    });
+    }));
+  state.multiPlusMvpPlan = null;
   if (!releaseTrajectory) {
     throw new Error("EX MULTI single-ball release trajectory is unavailable");
   }
@@ -7555,6 +7665,8 @@ function releaseMultiPlusCapturedPuck(puck) {
 
 function resetPucks({ force = false } = {}) {
   if (window.BalloroRoundTapes?.busy && !force) return;
+  state.v4HeldPurpleField = false;
+  state.v4HeldYellowCells = null;
   if (state.v3HoldTimer) window.clearTimeout(state.v3HoldTimer);
   state.v3HoldTimer = null;
   state.v3BonusLock = null;
@@ -7587,6 +7699,7 @@ function resetPucks({ force = false } = {}) {
   state.multiPlusToken = null;
   state.multiPlusActive = false;
   state.multiPlusFinalCells = null;
+  state.multiPlusMvpPlan = null;
   state.multiPlusPickupLog = null;
   state.multiPlusActivatedAt = 0;
   state.multiPlusCapturedPuck = null;
@@ -7664,6 +7777,9 @@ function prepareLaunchRound(slot, { debit = true } = {}) {
     openPopup(els.topUpPopup);
     return false;
   }
+  // Retained bonus boards are presentation only; a new paid shot is normal.
+  state.v4HeldPurpleField = false;
+  state.v4HeldYellowCells = null;
 
   const roundSeed = createRoundSeed();
   const roundOutcome = window.PuckLuckMath?.createRound({
@@ -7809,6 +7925,7 @@ function prepareLaunchRound(slot, { debit = true } = {}) {
   state.crownBonusAwarded = false;
   state.multiPlusActive = false;
   state.multiPlusFinalCells = null;
+  state.multiPlusMvpPlan = null;
   state.multiPlusPickupLog = null;
   state.multiPlusActivatedAt = 0;
   state.multiPlusCapturedPuck = null;
@@ -7934,6 +8051,8 @@ function launchV3Pucks(slot) {
     openPopup(els.topUpPopup);
     return false;
   }
+  state.v4HeldPurpleField = false;
+  state.v4HeldYellowCells = null;
   // Prepare the field only once. A subsequent launch is another paid bet on
   // the same live board; it must not clear moving balls or bonus pockets.
   if (!state.roundOutcome) {
@@ -8412,9 +8531,7 @@ function stepSecretRoomPuck(puck) {
   if (!visit) return false;
   if (visit.phase === "capturing") {
     const zone = getSecretZoneGeometry(visit.zoneId);
-    const captureStep = window.BalloroQuickPlayTiming
-      ? window.BalloroQuickPlayTiming.preparationStep(FIXED_PHYSICS_STEP, state.quickPlay)
-      : FIXED_PHYSICS_STEP / (state.quickPlay ? 3 : 1);
+    const captureStep = getLiveBonusPreparationStep();
     visit.captureElapsed += captureStep;
     const progress = clamp(visit.captureElapsed / visit.captureDuration, 0, 1);
     const eased = visit.preserveEntrySpeed ? progress : progress * progress;
@@ -8472,8 +8589,11 @@ function captureFieldPocketPuckByTouch(puck, atRest = false) {
       if (Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius) continue;
       puck.purplePocketExitRequired = false;
     }
+    const v4PocketCell = window.BalloroBonusUI?.isV4 && atRest
+      && (() => { const cell = getCellFromPoint(puck.x, puck.y);
+        return cell.col === pocketState.col && cell.row === pocketState.row; })();
     const captureProgress = atRest
-      ? (Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius ? 1 : null)
+      ? (v4PocketCell || Math.hypot(current.x - pocket.x, current.y - pocket.y) <= captureRadius ? 1 : null)
       : window.PuckLuckTrajectoryPlanner.segmentCircleFirstIntersection(
         [0, previous.x, previous.y], [0, current.x, current.y], pocket, captureRadius);
     if (captureProgress === null) continue;
@@ -8519,7 +8639,9 @@ function captureChancePuck(puck, allowStationaryOverlap = false, slowApproach = 
       captureRadius
     ) !== null;
   if (!captured && allowStationaryOverlap) {
-    captured = slowApproach || Math.hypot(normalizedX - pocket.normalized.x, normalizedY - pocket.normalized.y) <= captureRadius;
+    const cell = window.BalloroBonusUI?.isV4 ? getCellFromPoint(puck.x, puck.y) : null;
+    captured = slowApproach || Math.hypot(normalizedX - pocket.normalized.x, normalizedY - pocket.normalized.y) <= captureRadius
+      || (window.BalloroBonusUI?.isV4 && cell.col === state.chancePocket.col && cell.row === state.chancePocket.row);
   }
   if (!window.BalloroBonusUI?.isV2 && !captured && state.chancePocket.forced && state.pucks.indexOf(puck) === 0
     && puck.replayFrame >= state.chancePocket.forceFrameIndex) captured = true;
@@ -8641,7 +8763,8 @@ function stepChanceRoomPuck(puck) {
   const won = window.BalloroBonusUI?.isV3
     ? Boolean(chanceRoomTier) : isChanceMultiplierHit(chance.u, chance.v, chance.roomId, gridSize);
   const multiplier = window.BalloroBonusUI?.isV3
-    ? (won ? window.BalloroV3Rules.roomCellMultiplier(GRID_SIZE, chance.roomId, roomCol, roomRow) : 0)
+    ? (won ? (window.BalloroBonusUI?.isV4 ? window.BalloroV4Rules : window.BalloroV3Rules)
+      .roomCellMultiplier(GRID_SIZE, chance.roomId, roomCol, roomRow) : 0)
     : won ? getChanceRoomMultiplier(chance.roomId) : 0;
   const x10Boosted = won && (window.BalloroBonusUI?.isV3
     ? Boolean(puck.v3PurpleBonus) : isX10BoostActive());
@@ -8650,6 +8773,7 @@ function stepChanceRoomPuck(puck) {
   state.bankroll += payout;
   state.roundWinAmount += payout;
   puck.stopped = true;
+  updateBank();
   puck.speed = 0;
   puck.resultRevealStartedAt = performance.now();
   puck.result = {
@@ -8728,7 +8852,9 @@ function startChanceRoomSpin(puck, now) {
   puck.chance.phase = "spinning";
   state.chanceSpinStartedAt = now;
   const rng = window.PuckLuckMath.createRng(((state.roundOutcome?.seed || 1) ^ 0x57484545) >>> 0);
-  state.chanceSelectedRoomId = CHANCE_ROOM_IDS[rng.int(CHANCE_ROOM_IDS.length)];
+  state.chanceSelectedRoomId = window.BalloroMvpMath?.enabled()
+    ? CHANCE_ROOM_IDS[Math.floor(randomPrototypeUnit() * CHANCE_ROOM_IDS.length)]
+    : CHANCE_ROOM_IDS[rng.int(CHANCE_ROOM_IDS.length)];
   // Fractional travel reaches the final room before the bell; integer travel
   // keeps the final jump until the bell. Vary presentation, not the chosen payout.
   const holdFinalRoom = Math.random() < 0.5;
@@ -8772,7 +8898,8 @@ function launchChanceRoomPuck(puck) {
   chance.dampingPerStep = puck.replayTrajectory?.damping_per_step || 0.972;
   if (window.BalloroSavedPaths?.enabled) {
     const savedFrames = window.BalloroBonusUI?.isV3
-      ? window.BalloroSavedPaths.roomV3(GRID_SIZE,chance.roomId,rng.next())
+      ? window.BalloroSavedPaths.roomV3(GRID_SIZE,chance.roomId,
+        window.BalloroMvpMath?.enabled() ? randomPrototypeUnit() : rng.next())
       : window.BalloroSavedPaths.room(GRID_SIZE,rng.next());
     chance.savedFrames = sharedEntry
       ? savedFrames.map((frame) => mapLegacyChanceFrameToV2(chance.roomId, frame))
@@ -8801,7 +8928,9 @@ function captureStoppedV2Pocket(puck) {
     const pocket = getChancePocketGeometry();
     const distance = Math.hypot(puck.x - pocket.normalized.x * state.field.half,
       puck.y - pocket.normalized.y * state.field.half);
-    if (distance <= Math.max(0, 2 * state.field.puckRadius - 1)) {
+    const cell = window.BalloroBonusUI?.isV4 ? getCellFromPoint(puck.x, puck.y) : null;
+    if (distance <= Math.max(0, 2 * state.field.puckRadius - 1)
+      || (window.BalloroBonusUI?.isV4 && cell.col === state.chancePocket.col && cell.row === state.chancePocket.row)) {
       return queueV3PocketPuck(puck, "red", {
         x: pocket.normalized.x * state.field.half,
         y: pocket.normalized.y * state.field.half
@@ -8816,14 +8945,18 @@ function captureStoppedV2Pocket(puck) {
       const normalized = getFieldPocketNormalized(pocket);
       const point = { x: normalized.x * state.field.half,
         y: normalized.y * state.field.half };
-      if (Math.hypot(puck.x - point.x, puck.y - point.y) <= state.field.puckRadius * 2 - 1) {
+      const cell = window.BalloroBonusUI?.isV4 ? getCellFromPoint(puck.x, puck.y) : null;
+      if (Math.hypot(puck.x - point.x, puck.y - point.y) <= state.field.puckRadius * 2 - 1
+        || (window.BalloroBonusUI?.isV4 && cell.col === pocket.col && cell.row === pocket.row)) {
         return queueV3PocketPuck(puck, "blue", point, zoneId);
       }
     }
     const token = state.multiPlusToken;
     if (token?.consumed && !puck.multiPlusExitRequired
-      && Math.hypot(puck.x - token.x, puck.y - token.y)
-        <= state.field.puckRadius + token.radius - 1) {
+      && (Math.hypot(puck.x - token.x, puck.y - token.y)
+        <= state.field.puckRadius + token.radius - 1
+        || (window.BalloroBonusUI?.isV4 && getCellFromPoint(puck.x, puck.y).col === token.col
+          && getCellFromPoint(puck.x, puck.y).row === token.row))) {
       return queueV3PocketPuck(puck, "yellow", token);
     }
   }
@@ -8838,8 +8971,17 @@ function pullSlowV3PuckIntoPocket(puck, frames) {
   const last = frames[frames.length - 1];
   const end = { x: last[1] * state.field.half, y: last[2] * state.field.half };
   const radius = state.field.puckRadius;
-  const near = (point, captureRadius) => Math.hypot(end.x - point.x, end.y - point.y) <= captureRadius
-    && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2.6;
+  const near = (point, captureRadius) => {
+    if (window.BalloroBonusUI?.isV4) {
+      const currentCell = getCellFromPoint(puck.x, puck.y);
+      const endCell = getCellFromPoint(end.x, end.y);
+      const pocketCell = getCellFromPoint(point.x, point.y);
+      if (currentCell.col === pocketCell.col && currentCell.row === pocketCell.row
+        && endCell.col === pocketCell.col && endCell.row === pocketCell.row) return true;
+    }
+    return Math.hypot(end.x - point.x, end.y - point.y) <= captureRadius
+      && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2.6;
+  };
 
   for (const [zoneId, pocket] of [[FIELD_POCKET_ZONE_ID, state.fieldPocket],
     [BLUE_FIELD_POCKET_ZONE_ID, state.bluePocket]]) {
@@ -8923,6 +9065,21 @@ function stepReplayPuck(puck) {
   puck.vy = frame[4] * half * playbackRate;
   puck.bounceCount = frame[5];
   puck.speed = Math.hypot(puck.vx, puck.vy);
+  if (window.BalloroMvpMath?.enabled()) {
+    // Re-arm source-pocket guards while the saved flight actually leaves the
+    // pocket. A guard inherited through a bonus chain must not suppress a later
+    // legitimate return. V1 retains its original rest-only guards.
+    const exitRadius = Math.max(0, 2 * state.field.puckRadius - 1);
+    for (const [flag, pocket] of [["bluePocketExitRequired", state.bluePocket],
+      ["purplePocketExitRequired", state.fieldPocket]]) {
+      if (!puck[flag] || !pocket) continue;
+      const point = getFieldPocketNormalized(pocket);
+      if (Math.hypot(puck.x - point.x * half, puck.y - point.y * half) > exitRadius) puck[flag] = false;
+    }
+    if (puck.multiPlusExitRequired && state.multiPlusToken
+      && Math.hypot(puck.x - state.multiPlusToken.x, puck.y - state.multiPlusToken.y)
+        > state.field.puckRadius + state.multiPlusToken.radius + 2) puck.multiPlusExitRequired = false;
+  }
   if (puck.bounceCount > previousBounces) playWallHitSound(puck.speed);
   collectBonusStarByTouch(puck);
   if (puck.pocketRelease) collectPocketReleaseSymbolsByTouch(puck);
@@ -9035,6 +9192,7 @@ function settleSecretPuck(puck) {
   state.bankroll += payout;
   state.roundWinAmount += payout;
   puck.stopped = true;
+  updateBank();
   puck.vx = 0;
   puck.vy = 0;
   puck.speed = 0;
@@ -9094,6 +9252,7 @@ function settlePuck(puck) {
   state.bankroll += payout;
   state.roundWinAmount += payout;
   puck.stopped = true;
+  updateBank();
   puck.vx = 0;
   puck.vy = 0;
   puck.speed = 0;
@@ -9219,6 +9378,17 @@ function maybeLaunchParkedSecretRooms(now) {
     if (parked.some((puck) => puck.secretRoom?.bonusSymbolPending
       || (puck.secretRoom?.blueLaunchReadyAt || 0) > now)) return;
     const ready = v3GreenWaiting.length ? v3GreenWaiting : parked;
+    if (window.BalloroBonusUI?.isV4 && state.v3BonusLock === "diamond"
+      && ready[0].secretRoom.v2BonusActivated) {
+      const visit = ready[0].secretRoom;
+      if (!visit.purpleFieldReadyAt) {
+        activateX10Boost();
+        ready[0].v3PurpleBonus = true;
+        visit.purpleFieldReadyAt = now + (state.animationsEnabled ? V4_PURPLE_FIELD_ENTER_MS : 0);
+        return;
+      }
+      if (now < visit.purpleFieldReadyAt) return;
+    }
     if (window.BalloroBonusUI?.isV3) {
       beginSecretRoomVisit(ready[0]);
       state.secretRoomLaunchAt = 0;
@@ -9368,6 +9538,15 @@ function finalizeVisuallyStoppedReplayPucks(now) {
   });
 }
 
+function getLiveBallPlaybackSpeed() {
+  return state.quickPlay ? 3 : window.BalloroBonusUI?.isV4 ? 1.3 : 1;
+}
+
+function getLiveBonusPreparationStep() {
+  // Preparation stays real-time while saved moving paths play faster.
+  return FIXED_PHYSICS_STEP / getLiveBallPlaybackSpeed();
+}
+
 function tick(now, roundId) {
   if (!state.running || roundId !== state.roundId) {
     return;
@@ -9375,7 +9554,7 @@ function tick(now, roundId) {
 
   const frameTime = Math.min(0.1, Math.max(0, (now - state.lastFrameAt) / 1000));
   state.lastFrameAt = now;
-  state.physicsAccumulator += frameTime * (state.quickPlay ? 3 : 1);
+  state.physicsAccumulator += frameTime * getLiveBallPlaybackSpeed();
   while (state.physicsAccumulator >= FIXED_PHYSICS_STEP) {
     state.pucks.forEach((puck) => {
       if (!stepChanceRoomPuck(puck)) stepReplayPuck(puck);
@@ -9426,6 +9605,9 @@ function finishV3ExclusiveBonus(now) {
     || state.v3BonusQueue.some((entry) => entry.puck === state.v3BonusPuck
       && entry.kind !== state.v3BonusLock);
   if (state.v3BonusLock === "blue") {
+    if (window.BalloroMvpMath?.enabled()
+      && state.v3BonusPuck.secretRoom?.zoneId === BLUE_FIELD_POCKET_ZONE_ID
+      && ["capturing", "pocket_wait"].includes(state.v3BonusPuck.secretRoom?.phase)) return;
     const released = state.pucks.filter((puck) => puck.v3ShotId === state.v3BonusPuck.v3ShotId
       && puck.pocketBallKind === "blue");
     if (!released.length || released.some((puck) => !puck.stopped
@@ -9451,6 +9633,9 @@ function finishV3ExclusiveBonus(now) {
       state.fieldPocket.finished = false;
     }
   } else if (state.v3BonusLock === "lemon") {
+    if (window.BalloroBonusUI?.isV4 && !state.autoPlay && !state.v3HoldTimer) {
+      state.v4HeldYellowCells = state.multiPlusFinalCells?.map(cell => ({ ...cell })) || null;
+    }
     state.multiPlusActive = false;
     state.multiPlusFinalCells = null;
     if (state.multiPlusToken) {
@@ -9565,13 +9750,19 @@ function advanceV3BonusQueue() {
 }
 
 function openPopup(popup) {
+  const focus = document.activeElement;
   if (typeof closeSlotDialogs === "function") closeSlotDialogs();
+  [els.rulesScreen, els.languagePopup, els.avatarPopup, els.topUpPopup].forEach(node => {
+    if (node !== popup) node.classList.add('hidden');
+  });
   popup.classList.remove("hidden");
   els.menuDropdown.classList.add("hidden");
+  playerPopupOpened(popup, focus);
 }
 
 function closePopup(popup) {
   popup.classList.add("hidden");
+  playerPanels.focus?.focus();
 }
 
 function updateBank() {
@@ -9815,7 +10006,7 @@ function updateBetButtons() {
   const versionLocked = controlsLocked || state.autoPlay || state.v3BonusQueue.length > 0;
   els.versionButtons.forEach((button) => {
     button.disabled = versionLocked;
-    button.setAttribute("aria-pressed", String(button.dataset.bonusUiVersion === (window.BalloroBonusUI?.isV3 ? "v3" : "v2")));
+    button.setAttribute("aria-pressed", String(button.dataset.bonusUiVersion === window.BalloroBonusUI?.version));
   });
 }
 
@@ -10080,9 +10271,13 @@ function setupInteractions() {
   els.versionButtons.forEach((button) => button.addEventListener("click", () => {
     if (button.disabled || state.running || state.autoPlay) return;
     const version = button.dataset.bonusUiVersion;
-    if ((version !== "v2" && version !== "v3") || version === (window.BalloroBonusUI?.isV3 ? "v3" : "v2")) return;
+    if (!["v2", "v3", "v4"].includes(version) || version === window.BalloroBonusUI?.version) return;
     const url = new URL(window.location.href);
     url.searchParams.set("bonusUI", version);
+    if (version === "v4") {
+      url.searchParams.set("pocketExperiment", "1");
+      url.searchParams.delete("recordedRounds");
+    }
     window.location.assign(url.toString());
   }));
   const toggleTodayWinners = () => {
@@ -10191,6 +10386,7 @@ function init() {
   loadV2BonusProgress();
   setupSlotUi();
   if (typeof setupDesktopUi === 'function') setupDesktopUi();
+  setupPlayerPanels();
   setupCanvas();
   resetPucks();
   const storedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
