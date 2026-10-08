@@ -1,8 +1,7 @@
 /* Isolated, removable UI experiment. No field or bonus drawing rules here. */
-@media(max-width:720px){
+@media(max-width:1359px), (max-height:649px){
  /* Invisible touch padding: keep the art and spacing unchanged. */
  .slot-ui .slot-circle,.slot-ui .bet-action{overflow:visible}
- .slot-ui .slot-circle::after,
  .slot-ui .bet-action::after{
   content:"";position:absolute;inset:-4px;border-radius:inherit;
  }
@@ -24,7 +23,7 @@
 .slot-ui .mine-stage {--top-wins-width:184px;--top-wins-inset:14px}
 .slot-ui .sound-button {position:absolute;right:calc(var(--top-wins-inset) + var(--top-wins-width) + 8px);top:12px;z-index:6;width:36px;height:36px;min-height:0;background:none;border:none;box-shadow:none;color:white}
 .slot-ui .purple-leaderboard {top:12px;right:var(--top-wins-inset);width:var(--top-wins-width)}
-@media(max-width:720px){.slot-ui .mine-stage{--top-wins-width:156px;--top-wins-inset:10px}}
+@media(max-width:1359px), (max-height:649px){.slot-ui .mine-stage{--top-wins-width:156px;--top-wins-inset:10px}}
 .slot-ui .bet-panel {position:relative;padding:8px 12px 5px;display:block;border:0;background:linear-gradient(180deg,#14171e,#0b0d12);border-radius:12px;min-height:132px;backdrop-filter:none;overflow:visible;z-index:10}
 .slot-ui .bank,.slot-total {position:absolute;top:10px;display:flex;flex-direction:column;gap:3px;padding:0;min-height:0;background:none;border:none;box-shadow:none;max-width:36%;font-size:12px}
 .slot-ui .bank {left:12px;align-items:flex-start}
@@ -34,13 +33,25 @@
 .slot-controls {display:grid;grid-template-columns:1fr 1fr 1.8fr 1fr 1fr;align-items:end;gap:10px;padding-top:25px}
 .slot-circle {width:clamp(40px,10.8vw,58px);height:clamp(40px,10.8vw,58px);border-radius:50%;background:#101a20;border:2px solid #63cee9;color:#79ddf5;display:grid;place-items:center;justify-self:center;position:relative;padding:6px;margin-bottom:3px}
 .slot-circle svg {width:100%;height:100%}
+/* Enlarge the actual hit region without resizing or moving the artwork.
+   Explicit size avoids counting the button border as invisible touch padding. */
+.slot-ui .slot-circle::after {
+ content:"";position:absolute;left:50%;top:50%;
+ width:max(100%,48px);height:max(100%,48px);
+ transform:translate(-50%,-50%);border-radius:inherit;
+}
 .slot-circle.active {background:#1a5b43;border-color:#7bf0bd;color:#b9ffe2;box-shadow:0 0 15px #45df6840}
 .slot-circle b:empty {display:none}
 .slot-circle b {position:absolute;right:-7px;top:-8px;border-radius:12px;background:#e1ffe8;color:#124b2e;min-width:24px;padding:2px 5px;font-size:11px}
+#autoRemaining {left:50%;right:auto;transform:translateX(-50%);width:max-content}
+#autoPlayToggle .auto-stop-icon {display:none}
+#autoPlayToggle.active .auto-start-icon {display:none}
+#autoPlayToggle.active .auto-stop-icon {display:block}
+.slot-ui .bet-action.is-auto-held {cursor:default}
 .slot-ui .bet-slot {display:block;padding:0;background:none;border:0;box-shadow:none;min-width:0}
 .slot-ui .bet-action {display:flex;align-items:center;justify-content:center;width:clamp(88px,23vw,116px);height:clamp(88px,23vw,116px);min-height:0;border-radius:50%;margin:auto;padding:15px;border:3px solid #8de957;background:linear-gradient(145deg,#38d713,#0f9301);box-shadow:inset 0 2px 8px #e1ffa95c,inset 0 -7px 0 #065e5466,0 0 22px #40ed1530}
 .slot-ui .bet-action>svg {width:80%;height:80%;color:#fff;transform:scaleX(-1);transform-box:fill-box;transform-origin:center}
-.slot-ui .bet-action:not(.waiting):not(.cashout):not(.mining):not(:disabled)>svg {
+.slot-ui .bet-action:where(:not(.waiting):not(.cashout):not(.mining):not(:disabled))>svg {
  animation:slotActionArrowsRotate 2.4s linear infinite;
 }
 @keyframes slotActionArrowsRotate {
@@ -65,17 +76,7 @@ body.bonus-ui-v3.slot-ui .bet-action>svg {
  animation:slotActionArrowsRotate 2.4s linear infinite;
  animation-play-state:running;
 }
-body.bonus-ui-v3.slot-ui .bet-action.is-auto-firing:not(:disabled)>svg {
- animation-duration:1.2s;
-}
-body.bonus-ui-v3.slot-ui .bet-action.is-held:not(:disabled)>svg {
- animation-duration:.8s;
-}
-body.bonus-ui-v3.slot-ui .bet-action.is-held:not(:disabled) {
- background:linear-gradient(145deg,#18a90c,#0f7e08);
- box-shadow:inset 0 5px 16px rgba(0,0,0,.38),0 0 18px rgba(73,255,100,.24);
- transform:translateY(3px) scale(.985);
-}
+/* play-controls-ui.js changes arrow speed without changing the current angle. */
 .slot-ui .bet-action:focus-visible,.slot-circle:focus-visible,.slot-dialog button:focus-visible {outline:3px solid white;outline-offset:3px}
 .slot-dialog {position:fixed;inset:0;z-index:110;background:rgba(0,0,0,.8);backdrop-filter:none;-webkit-backdrop-filter:none;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}
 .slot-dialog-card {width:min(100%,480px);max-height:calc(100dvh - 36px);overflow:auto;padding:22px;border:1px solid #43535c;border-radius:24px;background:linear-gradient(155deg,#1b242c,#10151d);box-shadow:0 24px 90px #0008}
@@ -115,7 +116,7 @@ body.bonus-ui-v3.slot-ui .bet-action.is-held:not(:disabled) {
 .slot-dialog #rewardHistory {display:flex;flex-wrap:wrap;max-height:none;overflow:visible;gap:8px}
 .slot-dialog #rewardHistory:empty:before {content:'Пока нет завершённых раундов';color:#acb7c5}
 .slot-ui .rules-screen {z-index:120}
-@media(min-width:721px){
+@media(min-width:1360px) and (min-height:650px){
  .slot-ui .bet-panel{min-height:145px;--controls-width:560px;--side-button-size:58px;--controls-gap:10px;
   /* The five grid tracks total 5.8fr. Align labels with the outer circle edges. */
   --label-inset:calc(50% - var(--controls-width)/2 + ((var(--controls-width) - 4*var(--controls-gap))/5.8 - var(--side-button-size))/2)}
@@ -136,7 +137,7 @@ html:has(body.slot-ui),body.slot-ui {background:#000}
 .slot-ui .slot-controls {padding-top:10px}
 .slot-ui .sound-button {width:56px;height:56px;top:12px;right:10px}
 .slot-ui .sound-button::before {background-size:48px 48px}
-@media(min-width:721px){.slot-ui .sound-button{right:calc(50% - 264px)}}
+@media(min-width:1360px) and (min-height:650px){.slot-ui .sound-button{right:calc(50% - 264px)}}
 .slot-ui .sound-button {display:none}
 @media(max-width:1359px){.slot-ui .purple-leaderboard{top:12px}}
 .slot-ui .purple-leaderboard-title {min-height:32px}
@@ -148,6 +149,6 @@ html:has(body.slot-ui),body.slot-ui {background:#000}
 .bonus-help-copy {font-size:16px;line-height:1.55;margin:0;color:#f0f2f7}
 .bonus-help-note {font-size:12px;color:#97a4b7;margin:0;text-align:center}
 .slot-ui #bonusHelpDialog .slot-dialog-card {width:min(100%,440px)}
-@media(max-width:720px){.slot-ui .purple-leaderboard-title span{font-size:.57rem}.slot-ui .purple-leaderboard li{font-size:.62rem}}
+@media(max-width:1359px), (max-height:649px){.slot-ui .purple-leaderboard-title span{font-size:.57rem}.slot-ui .purple-leaderboard li{font-size:.62rem}}
 @media(max-height:600px){.slot-ui .bet-panel{min-height:106px}.bonus-help-canvas{max-height:210px;object-fit:contain}}
 @media(max-width:360px){.slot-ui .mine-stage{--top-wins-width:130px}.slot-ui .purple-leaderboard li{font-size:.56rem}}

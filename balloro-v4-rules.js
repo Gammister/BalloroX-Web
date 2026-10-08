@@ -1,15 +1,18 @@
 "use strict";
 
-// V4 is an isolated opt-in variant. The V2 and V3 tables remain unchanged.
-window.BalloroV4Rules = Object.freeze((() => {
+// Approved V2 only. Historical comparison rules are kept in work/version-archives.
+window.BalloroPayoutVersions = Object.freeze((() => {
+function createVersion() {
   const base = window.BalloroV3Rules;
-  const centerMultipliers = Object.freeze({ 5: 40, 7: 70, 9: 100 });
+  const mathVersion = 'v2';
+  const centerMultipliers = Object.freeze({ 5: 10, 7: 60, 9: 85 });
   const rings = Object.freeze({
     5: Object.freeze([centerMultipliers[5], 2, 0.3]),
     7: Object.freeze([centerMultipliers[7], 5, 0.3, 0.1]),
-    9: Object.freeze([centerMultipliers[9], 10, 0.5, 0.2, 0.1])
+    9: Object.freeze([centerMultipliers[9], 10, 1.1, 0.2, 0.1])
   });
-  // Keep the existing selection weights during the uncalibrated payout test.
+  // Legacy tier selectors are retained for archive/test compatibility; the live
+  // MVP selector calibrates complete bonus chains in balloro-mvp-math.js.
   const neutralTierWeights = Object.freeze({
     5: Object.freeze({ red: 0.004, yellowHigh: 0.04, yellowLow: 0.179288, greenHigh: 0.08, greenLow: 0.696712 }),
     7: Object.freeze({ red: 0.003, yellowHigh: 0.03, yellowLow: 0.169489, greenHigh: 0.08, greenLow: 0.717511 }),
@@ -53,14 +56,19 @@ window.BalloroV4Rules = Object.freeze((() => {
   }
 
   const roomSideMultipliers = Object.freeze({ ...base.roomSideMultipliers,
-    5: Object.freeze({ "bottom-left": Object.freeze([2]), "bottom-right": Object.freeze([5]) }),
+    5: Object.freeze({ "bottom-left": Object.freeze([2]), "bottom-right": Object.freeze([7]) }),
     7: Object.freeze({ "bottom-left": Object.freeze([5]), "bottom-right": Object.freeze([10]) }),
-    9: Object.freeze({ "bottom-left": Object.freeze([10, 10]), "bottom-right": Object.freeze([20, 20]) }) });
+    9: Object.freeze({ "bottom-left": Object.freeze([10, 10]), "bottom-right": Object.freeze([15, 15]) }) });
+  const roomMultipliers = Object.freeze({
+    ...base.roomMultipliers,
+    7: Object.freeze({ ...base.roomMultipliers[7], 'bottom-left': 30 }),
+    9: Object.freeze({ ...base.roomMultipliers[9], 'bottom-left': 45 })
+  });
 
   function roomCellMultiplier(lines, id, col, row) {
     if (!base.roomCellTier(lines, id, col, row)) return 0;
     const center = base.roomCenterCell(lines, id);
-    if (col === center.col && row === center.row) return base.roomMultipliers[lines][id];
+    if (col === center.col && row === center.row) return roomMultipliers[lines][id];
     const ring = Math.max(Math.abs(col - center.col), Math.abs(row - center.row));
     const values = roomSideMultipliers[lines][id];
     return values[Math.min(ring - 1, values.length - 1)];
@@ -72,7 +80,21 @@ window.BalloroV4Rules = Object.freeze((() => {
     return col === center.col && row === center.row;
   }
 
-  return { ...base, pocketCells, pocketKindAt, yellowMultiplier: 10, centerMultipliers, rings, cellTier, cellMultiplier,
-    roomSideMultipliers, roomCellMultiplier, hasMultiplierFire,
-    neutralTierWeights, releaseTierWeights };
+  // Presentation only: compare a temporarily boosted main cell with the
+  // normal center, not its currently boosted/purple value. Math uses the
+  // permanent center identity above and never this decoration helper.
+  function hasMultiplierTopSymbol(lines, col, row, displayedMultiplier) {
+    if (hasMultiplierFire(lines, col, row)) return true;
+    const baseValue = cellMultiplier(lines, col, row);
+    return baseValue > 0 && displayedMultiplier > baseValue
+      && displayedMultiplier >= centerMultipliers[lines];
+  }
+
+  return Object.freeze({ ...base, mathVersion, pocketCells, pocketKindAt, yellowMultiplier: 10, centerMultipliers, rings, cellTier, cellMultiplier,
+    roomMultipliers,
+    roomSideMultipliers, roomCellMultiplier, hasMultiplierFire, hasMultiplierTopSymbol,
+    neutralTierWeights, releaseTierWeights });
+}
+return { v2: createVersion() };
 })());
+window.BalloroV4Rules = window.BalloroPayoutVersions.v2;

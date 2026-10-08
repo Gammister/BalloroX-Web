@@ -3,7 +3,9 @@ const avatars = Array.from({ length: 50 }, (_, index) => ({
   row: Math.floor(index / 10)
 }));
 
-let GRID_SIZE = 5;
+// Retain old line links, but not the retired V1 profile/switch.
+let GRID_SIZE = [5, 7, 9].includes(Number(new URLSearchParams(location.search).get('comparisonLines')))
+  ? Number(new URLSearchParams(location.search).get('comparisonLines')) : 5;
 const BET_STEPS = [0.75, 1, 2, 5, 10, 25, 50, 100, 250, 500, 750, 1000];
 const FIXED_PHYSICS_STEP = window.PuckLuckMath?.FIXED_TIMESTEP || 1 / 120;
 const AUTO_PLAY_ROUND_GAP_MS = 300;
@@ -23,6 +25,8 @@ const GAME_MECHANICS_VARIANT = document.location.pathname.endsWith("/billiard.ht
 // A rare visual variant of an already-authorized pocket result. This does not change
 // the mathematical pocket probability or any payout; it only selects a faster valid path.
 const EARLY_POCKET_ENTRY_VISUAL_PROBABILITY = 0.08;
+// Presentation-only rollback: false restores green walls under the red flash.
+const MAIN_RED_BIG_WIN_WALLS_ENABLED = true;
 const PURPLE_POCKET_MULTIPLIER = 10;
 const PURPLE_NEON_RENDERED_PIXEL_SOFT_LIMIT = 820000;
 const PURPLE_NEON_RENDERED_PIXEL_HARD_LIMIT = 1400000;
@@ -51,6 +55,7 @@ const V4_PURPLE_FIELD_ENTER_MS = MULTI_PLUS_NEON_DURATION_MS / 2;
 const V4_PURPLE_FIELD_EXIT_MS = MULTI_PLUS_NEON_DURATION_MS / 2;
 const MULTI_PLUS_NEON_STEP_MS = 250;
 const MULTI_PLUS_NEON_STOP_FLASH_MS = 320;
+const YELLOW_FIELD_RETURN_MS = V4_PURPLE_FIELD_EXIT_MS;
 const FIELD_POCKET_PULL_MAX_DURATION_SECONDS = 0.32;
 const MULTI_PLUS_REVEAL_DURATION_MS = MULTI_PLUS_NEON_DURATION_MS + MULTI_PLUS_NEON_STOP_FLASH_MS;
 const MAX_RESULT_SOUND_LEVELS = 9;
@@ -65,6 +70,7 @@ const fixedBonusTrajectoryMetrics = new Map();
 
 const state = {
   bankroll: 100000,
+  lineMaximumNotice: null,
   avatarIndex: 0,
   language: "en",
   animationsEnabled: true,
@@ -93,13 +99,17 @@ const state = {
   v3LastWinAmount: 0,
   v3WinLabelSerial: 0,
   v3HoldTimer: null,
+  v3HoldSpeedTimer: null,
+  v3HoldFast: false,
   v3CooldownTimer: null,
   v3BonusLock: null,
   v3BonusPuck: null,
   v3BonusQueue: [],
   v4HeldPurpleField: false,
   v4HeldYellowCells: null,
+  yellowFieldReturn: null,
   v3PocketSymbolCycle: { diamond: false, crown: false, lemon: false, blue: false },
+  v4PocketSymbolAppearance: {},
   launchPrepared: false,
   launchPreparedSlot: null,
   launchButtonPrimed: false,
@@ -109,7 +119,7 @@ const state = {
   activeBetPerPuck: 0,
   roundWinAmount: 0,
   puckCount: 1,
-  riskLevel: "low",
+  riskLevel: window.PuckLuckMath?.riskForLines(GRID_SIZE) || "low",
   layoutMode: "configurator_5",
   gameplayTestRows: [],
   crownsCollected: 0,
@@ -130,6 +140,8 @@ const state = {
   multiPlusNeonFlashUntil: 0,
   lastStarBoostSoundAt: 0,
   lastFrameAt: 0,
+  physicsFrame: null,
+  physicsFrameRoundId: null,
   roundId: 0,
   roundOutcome: null,
   fieldPocket: null,
@@ -305,7 +317,57 @@ function getSecretRoomBaseMultiplier() {
 }
 
 function isMultiPlusVisualActive() {
-  return Boolean(state.multiPlusActive);
+  return Boolean(state.multiPlusActive || getCarriedYellowCells().length);
+}
+
+function getCarriedYellowCells() {
+  if (!window.BalloroMvpMath?.enabled()) return [];
+  const candidates = [state.v3BonusPuck, ...state.pucks, ...(playControls?.pause.winners || [])];
+  const owner = candidates.find(puck => puck?.v3YellowCells?.length
+    && (!puck.stopped || playControls?.pause.winners.has(puck)
+      || (puck.result && hasUnfinishedV3FieldReward(puck))));
+  return owner?.v3YellowCells || [];
+}
+
+function updateYellowFieldReturn(now) {
+  if (!window.BalloroBonusUI?.isV4) return false;
+  const cells = state.multiPlusActive ? state.multiPlusFinalCells : getCarriedYellowCells();
+  if (cells?.length) {
+    // Keep a presentation snapshot, separate from each ball's payout mask.
+    state.yellowFieldReturn = { cells: cells.map(cell => ({ ...cell })), startedAt: null };
+    return false;
+  }
+  const restoring = state.yellowFieldReturn;
+  if (!restoring) return false;
+  if (state.multiPlusActive) return false;
+  if (restoring.startedAt === null) restoring.startedAt = now;
+  if (now - restoring.startedAt < YELLOW_FIELD_RETURN_MS) return true;
+  state.yellowFieldReturn = null;
+  updateBetButtons();
+  return false;
+}
+
+function isYellowCellReturning(col, row) {
+  const restoring = state.yellowFieldReturn;
+  if (!restoring || restoring.startedAt === null) return false;
+  const now = window.BalloroGameLifecycle?.now() ?? performance.now();
+  return now - restoring.startedAt < YELLOW_FIELD_RETURN_MS / 2
+    && restoring.cells.some(cell => cell.col === col && cell.row === row);
+}
+
+function drawYellowFieldReturn(now) {
+  const restoring = state.yellowFieldReturn;
+  if (!restoring || restoring.startedAt === null) return;
+  const progress = clamp((now - restoring.startedAt) / YELLOW_FIELD_RETURN_MS, 0, 1);
+  const pulse = Math.sin(Math.PI * progress);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = pulse;
+  for (const cell of restoring.cells) {
+    drawCell(cell.col, cell.row, 'rgba(255, 214, 52, 0.34)',
+      'rgba(255, 214, 52, 0.98)', 4);
+  }
+  ctx.restore();
 }
 
 function isX10BoostActive() {
@@ -320,6 +382,8 @@ let v3FieldTransitionFrame = null;
 const V3_FIELD_SWEEP_MS = 190;
 
 function isX10VisualActive() {
+  // A photo hold is visual only. Logical bonus completion keeps running.
+  if (playControls?.pause.active && [...playControls.pause.winners].some(puck => puck.result?.x10Boosted)) return true;
   if (window.BalloroBonusUI?.isV4 && state.v4HeldPurpleField) return true;
   if (window.BalloroBonusUI?.isV2) return Boolean(state.x10BoostActivated);
   return isX10BoostActive()
@@ -342,6 +406,7 @@ function createRoundSeed() {
 }
 
 function getAudioContext() {
+  if (window.BalloroGameLifecycle?.suspended) return null;
   if (!state.audioContext) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) {
@@ -390,7 +455,7 @@ function stopBackgroundMusic() {
 }
 
 function startBackgroundMusic() {
-  if (!state.musicEnabled) return;
+  if (!state.musicEnabled || window.BalloroGameEntry?.blocked || window.BalloroGameLifecycle?.suspended) return;
   const music = createBackgroundMusicElement();
   if (!music) return;
   const audio = getAudioContext();
@@ -477,7 +542,7 @@ function playWallHitSound(speed = 0) {
     return;
   }
 
-  const nowMs = performance.now();
+  const nowMs = (window.BalloroGameLifecycle?.now() ?? performance.now());
   if (nowMs - state.lastWallHitSoundAt < 55) {
     return;
   }
@@ -512,6 +577,37 @@ function playWallHitSound(speed = 0) {
   gain.connect(getAudioOutput(audio));
   oscillator.start(now);
   oscillator.stop(now + 0.1);
+}
+
+function playPocketQueueAdvanceSound() {
+  if (state.soundEffectsMuted) return;
+  const audio = getAudioContext();
+  if (!audio) return;
+  if (audio.state === "suspended") audio.resume();
+  const now = audio.currentTime;
+  // A warm ascending two-note handoff, without the low descending impact
+  // of the pocket-entry cue. Only plays as a queued ball takes its turn.
+  [440, 660].forEach((frequency, index) => {
+    const start = now + index * .065;
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(.07, start + .008);
+    gain.gain.exponentialRampToValueAtTime(.0001, start + .13);
+    oscillator.connect(gain);
+    gain.connect(getAudioOutput(audio));
+    oscillator.start(start);
+    oscillator.stop(start + .14);
+  });
+}
+
+function playPocketCaptureSound(puck) {
+  if (puck.v3PocketQueueAdvancing) {
+    puck.v3PocketQueueAdvancing = false;
+    playPocketQueueAdvanceSound();
+  } else playPocketDropSound();
 }
 
 function playPocketDropSound() {
@@ -810,7 +906,7 @@ function playV3SoftMultiplierWinSound(multiplier, startDelay = 0, colorTier = nu
 
 function playMultiplierResultSound(multiplier, bonusActive = false, premium = false, v3ColorTier = null) {
   if (multiplier <= 0) return;
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   const soundCount = Math.max(1, Math.min(
     MAX_RESULT_SOUND_LEVELS,
     state.roundOutcome?.puck_results?.length || state.puckCount || 1
@@ -821,12 +917,14 @@ function playMultiplierResultSound(multiplier, bonusActive = false, premium = fa
   const delayMs = Math.max(0, state.nextMultiplierSoundAt - now);
   state.nextMultiplierSoundAt = now + delayMs + 105;
   state.lastMultiplierSoundAt = now + delayMs;
-  if (window.BalloroBonusUI?.isV3 && !bonusActive && multiplier < 10) {
-    // Colour/value, not the cell category or boost flag, chooses the cue.
+  const displayedMultiplier = multiplier * (bonusActive ? 10 : 1);
+  if (window.BalloroBonusUI?.isV3 && !bonusActive && displayedMultiplier < 10) {
+    // Small ordinary wins stay soft. Purple retains its special cue below
+    // 10x too; the separate big-win controller still enforces the 10x gate.
     if (!state.soundEffectsMuted) {
       state.winSoundEndsAt = Math.max(state.winSoundEndsAt, now + delayMs + 300);
     }
-    playV3SoftMultiplierWinSound(multiplier, delayMs / 1000, multiplier > 1 ? 1 : 0);
+    playV3SoftMultiplierWinSound(displayedMultiplier, delayMs / 1000, displayedMultiplier > 1 ? 1 : 0);
     return;
   }
   if (!state.soundEffectsMuted) duckBackgroundMusic(bonusActive ? 1500 : 800);
@@ -901,7 +999,7 @@ function playBonusStarSound(starStep = 1) {
 }
 
 function playBonusCompleteSound() {
-  state.lastStarBoostSoundAt = performance.now();
+  state.lastStarBoostSoundAt = (window.BalloroGameLifecycle?.now() ?? performance.now());
   if (state.soundEffectsMuted) return;
   const audio = getAudioContext();
   if (!audio) return;
@@ -976,7 +1074,7 @@ function playBonusCompleteSound() {
 }
 
 function playMultiPlusSound() {
-  if (performance.now() - state.lastStarBoostSoundAt < 700 || state.soundEffectsMuted) return;
+  if ((window.BalloroGameLifecycle?.now() ?? performance.now()) - state.lastStarBoostSoundAt < 700 || state.soundEffectsMuted) return;
   const audio = getAudioContext();
   if (!audio) return;
   if (audio.state === "suspended") audio.resume();
@@ -1256,7 +1354,7 @@ function showRankPromotion(place) {
     notice=document.createElement('div');notice.id='rankPromotion';
     notice.setAttribute('role','button');notice.setAttribute('aria-live','polite');notice.tabIndex=0;
     const openTop=()=>{
-      if(!matchMedia('(max-width:720px)').matches || typeof desktopUi==='undefined')return;
+      if(typeof desktopUi==='undefined' || isBalloroDesktopLayout())return;
       clearTimeout(rankPromotionTimer);notice.hidden=true;
       desktopUi.openTop?.();
     };
@@ -1522,6 +1620,7 @@ function bubbleBonusCounter() {
 }
 
 function setupCanvas() {
+  const previousField = { ...state.field };
   const ratio = window.devicePixelRatio || 1;
   const { width, height } = els.canvas.getBoundingClientRect();
   const pixelWidth = Math.max(1, Math.round(width * ratio));
@@ -1563,83 +1662,109 @@ function setupCanvas() {
   if (document.body.classList.contains('slot-ui')) {
     const footer = document.querySelector('.bet-panel').getBoundingClientRect();
     const canvasRect = els.canvas.getBoundingClientRect();
-    let centerY = window.innerHeight / 2 - canvasRect.top;
+    const desktop = isBalloroDesktopLayout();
     const radiusRatio = mathConfig ? mathConfig.puck_radius : 1 / (2 * GRID_SIZE);
-    // Keep the main diamond centred and reserve space for the two lower rooms.
-    const lowerSpace = footer.top - canvasRect.top - centerY - 16;
-    const assemblyRatio = 1.4 * CHANCE_ROOM_CORNER_Y_SHARE + .4 + radiusRatio * 2.5 / Math.SQRT2;
-    let radius = Math.max(1, Math.min(width * .48, centerY - 200,
-      (lowerSpace - CHANCE_ROOM_GAP_PX * CHANCE_ROOM_CORNER_Y_SHARE) / assemblyRatio));
-    if(width<=720){
-      const bonusUiV2 = window.BalloroBonusUI?.isV2;
-      radius=width*(bonusUiV2 ? .49 : .48);
-      if (bonusUiV2) {
-        const footerTop = footer.top - canvasRect.top - 6;
-        radius = Math.min(radius, Math.max(1,
-          (footerTop - 134 - CHANCE_ROOM_V2_WALL_OFFSET_PX) / 2.4));
-      }
-      // Mobile presentation may overlap transient labels with the board. Keep
-      // the full-width diamond and use the space immediately above the footer.
-      const visibleAssemblyRatio=1.4*CHANCE_ROOM_CORNER_Y_SHARE+.4;
-      centerY=footer.top-canvasRect.top-6-radius*visibleAssemblyRatio
-        -CHANCE_ROOM_GAP_PX*CHANCE_ROOM_CORNER_Y_SHARE;
-      centerY=Math.max(radius+(bonusUiV2 ? 134 : 70),centerY);
-      if (bonusUiV2) {
-        const dockBottom = 134;
-        const footerTop = footer.top - canvasRect.top - 6;
-        // V2 previews the launch puck at the rooms' shared upper entry, so it
-        // does not need the old wave reserve below the lower room vertices.
-        const lowerExtent = radius * 1.4 + CHANCE_ROOM_V2_WALL_OFFSET_PX;
-        const highestCenter = footerTop - lowerExtent;
-        const lowestCenter = dockBottom + radius;
-        if (highestCenter >= lowestCenter) {
-          const balancedCenter = (lowestCenter + highestCenter) / 2;
-          const visualDrop = clamp(height * 0.025, 16, 24);
-          centerY = Math.min(highestCenter, balancedCenter + visualDrop);
-        }
-      }
+    const stage = els.canvas.closest('.mine-stage');
+    const dockStyle = getComputedStyle(stage, '::before');
+    const dockBottom = Math.max(
+      stage.getBoundingClientRect().top - canvasRect.top
+        + (Number.parseFloat(dockStyle.top) || 0) + (Number.parseFloat(dockStyle.height) || 0),
+      ...[...document.querySelectorAll('[data-bonus-help]')]
+        .map(node => node.getBoundingClientRect().bottom - canvasRect.top));
+    const labelHeight = Number.parseFloat(winLabelStyle.lineHeight) || winLabelHeight * 1.15;
+    const statusStyle = getComputedStyle(document.getElementById('playControlStatus'));
+    // Symmetric gaps are measured from the visible dock to the win text.
+    // Reserve two status lines in both gaps, even while hidden: a notice must
+    // not move a live board or cover the SCs on a short screen.
+    const statusReserve = (Number.parseFloat(statusStyle.lineHeight) || 19) * 2 + 24;
+    const bottom = footer.top - canvasRect.top - labelHeight - 4;
+    let horizontalRadius = width * .49;
+    if (desktop && desktopUi.enabled) {
+      const leftPanel = document.getElementById('desktopRounds');
+      const rightPanel = document.getElementById('desktopTop');
+      // Layout positions do not change when a table is collapsed or animating.
+      horizontalRadius = Math.min(horizontalRadius,
+        window.innerWidth / 2 - (leftPanel.offsetLeft + leftPanel.offsetWidth) - 36,
+        rightPanel.offsetLeft - window.innerWidth / 2 - 36);
     }
-    if (width > 720) {
-      // Transparent footer space is usable. Test the actual controls against
-      // all three diamonds, keeping the main centre fixed throughout the fit.
-      const obstacles = [...document.querySelectorAll('[data-bonus-help], .sound-button, .purple-leaderboard, .desktop-logo, .desktop-panel, .slot-controls > .slot-circle, .bet-action, .bank, .slot-total')]
-        .filter(element => !(document.body.classList.contains('desktop-ui-experiment') && element.matches('[data-bonus-help]')))
-        .map(element => element.matches('.desktop-panel')
-          ? {left:element.offsetLeft,top:element.offsetTop,right:element.offsetLeft+element.offsetWidth,
-            bottom:element.offsetTop+element.offsetHeight,width:element.offsetWidth,height:element.offsetHeight}
-          : element.getBoundingClientRect()).filter(rect => rect.width && rect.height)
-        .map(rect => ({left:rect.left-canvasRect.left-12,right:rect.right-canvasRect.left+12,
-          top:rect.top-canvasRect.top-12,bottom:rect.bottom-canvasRect.top+12}));
-      const maximum = Math.min(width*.48, centerY-200,
-        (height-centerY-16-CHANCE_ROOM_GAP_PX*CHANCE_ROOM_CORNER_Y_SHARE)/assemblyRatio);
-      const fits = candidate => {
-        const distance = candidate*1.4+CHANCE_ROOM_GAP_PX;
-        const rooms = [-1,1].map(side => ({x:width/2+side*distance*CHANCE_ROOM_CORNER_X_SHARE,
-          y:centerY+distance*CHANCE_ROOM_CORNER_Y_SHARE,r:candidate*.4}));
-        const diamonds = [{x:width/2,y:centerY,r:candidate},...rooms];
-        const wave = candidate/Math.SQRT2*radiusRatio*2.5;
-        return obstacles.every(rect => diamonds.every(d =>
-          Math.abs(d.x-clamp(d.x,rect.left,rect.right))+Math.abs(d.y-clamp(d.y,rect.top,rect.bottom))>d.r)
-          && rooms.every(d => Math.hypot(d.x-clamp(d.x,rect.left,rect.right),
-            d.y+d.r-clamp(d.y+d.r,rect.top,rect.bottom))>wave));
-      };
-      for (let candidate=maximum; candidate>radius; candidate-=1) {
-        if (fits(candidate)) {radius=candidate;break;}
-      }
-    }
-    state.field.half = radius / Math.SQRT2;
+    const layout = fitBalloroBoardAssembly({width, horizontalRadius,
+      top: dockBottom, bottom, clearance: statusReserve});
+    state.field.half = layout.radius / Math.SQRT2;
     state.field.grid = state.field.half * 2 / GRID_SIZE;
     state.field.puckRadius = state.field.half * radiusRatio;
-    state.field.cy = centerY;
-    els.roundWinLabel.style.top='auto';
-    els.roundWinLabel.style.bottom = `${height - (footer.top - canvasRect.top) + 4}px`;
+    state.field.cy = layout.cy;
+    els.roundWinLabel.style.top = 'auto';
+    els.roundWinLabel.style.bottom = String(height - (footer.top - canvasRect.top) + 4) + 'px';
   }
   fitBonusCountersToField();
+  rescaleLiveBoardGeometry(previousField);
   positionBonusUiV2Logo();
+  positionPlayControlStatus();
+  fitSpinContinueLabel();
   if ((window.BalloroBonusUI?.isV2 || window.BalloroBonusUI?.isV3) && els.versionSwitcher) {
     const apexY = state.field.cy - state.field.half * Math.SQRT2;
     els.versionSwitcher.style.top = `${Math.max(12, Math.round(apexY + 18))}px`;
   }
+}
+
+function rescaleLiveBoardGeometry(previousField) {
+  const scale = state.field.half / previousField.half;
+  if (!(previousField.half > 0) || !Number.isFinite(scale)) return;
+  if (scale === 1 && previousField.cx === state.field.cx && previousField.cy === state.field.cy) return;
+  const scaled = new Set();
+  const scaleValues = (object, keys) => {
+    if (!object || scaled.has(object)) return;
+    scaled.add(object);
+    for (const key of keys) if (Number.isFinite(object[key])) object[key] *= scale;
+  };
+  // Saved trajectory frames, chosen outcomes, clocks, visits and payouts are
+  // immutable here. Only field-space positions/velocities change with its size.
+  const pucks = new Set([...state.pucks, ...bigWinEffect.winners,
+    ...(playControls?.pause.winners || []), ...resumedWinPresentation.keys(),
+    ...state.v3BonusQueue.map(entry => entry.puck), state.v3BonusPuck,
+    state.multiPlusCapturedPuck, state.chanceCapturedPuck]);
+  for (const puck of pucks) {
+    if (!puck) continue;
+    scaleValues(puck, ['x', 'y', 'previousX', 'previousY', 'vx', 'vy', 'speed']);
+    for (const capture of [puck.multiPlusCapture, puck.v3QueuePull, puck.chance?.pocketCapture])
+      scaleValues(capture, ['startX', 'startY', 'targetX', 'targetY']);
+    scaleValues(puck.secretRoom?.captureStart, ['x', 'y']);
+    if (scale !== 1 || previousField.cx !== state.field.cx || previousField.cy !== state.field.cy)
+      window.BalloroQuickTrail?.clear(puck);
+  }
+  for (const token of [...state.bonusStars, state.multiPlusToken]) scaleValues(token, ['x', 'y', 'radius']);
+  const moveScreenPoint = point => {
+    if (!point) return;
+    point.x = state.field.cx + (point.x - previousField.cx) * scale;
+    point.y = state.field.cy + (point.y - previousField.cy) * scale;
+  };
+  for (const burst of state.starBursts) moveScreenPoint(burst);
+  for (const flyIn of state.counterFlyIns) {
+    moveScreenPoint(flyIn.source);
+    flyIn.sourceSize *= scale;
+    flyIn.liftSize *= scale;
+    const counter = flyIn.kind === 'diamond' ? els.crownCounter
+      : flyIn.kind === 'lemon' ? els.multiPlusCounter
+        : flyIn.kind === 'crown' ? els.chanceBonusCounter : els.pocketBonusCounter;
+    const target = getCanvasRelativeCenter(counter);
+    if (target) flyIn.target = target;
+  }
+  if (v3FieldTransition?.vertical) {
+    const radius = state.field.half * Math.SQRT2;
+    v3FieldTransition.top = state.field.cy - radius;
+    v3FieldTransition.bottom = Math.max(...CHANCE_ROOM_IDS.flatMap(id =>
+      getChanceRoomGeometry(id).vertices.map(point => point.y)));
+  }
+}
+
+function handleGameViewportResize() {
+  window.BalloroGameLifecycle?.pauseForResize();
+  setupCanvas();
+  fitBrandTitle();
+  fitLocalizedUiText();
+  // Resizing is not a new round. In particular, never clear committed shots,
+  // redraw their outcome, reset bonus queues or discard unsettled winnings.
+  render({ frozenSnapshot: true });
 }
 
 function positionBonusUiV2Logo() {
@@ -2247,9 +2372,10 @@ function secretRoomLocalPoint(zone, u, v) {
 
 function createFieldBorderGradient(corners, bonusGridActive) {
   const gradient = ctx.createLinearGradient(corners[3].x, corners[3].y, corners[1].x, corners[1].y);
-  gradient.addColorStop(0, bonusGridActive ? "#4c2a61" : "#096a3a");
-  gradient.addColorStop(0.5, bonusGridActive ? "#8454ae" : "#20b36c");
-  gradient.addColorStop(1, bonusGridActive ? "#5d3774" : "#0b7b44");
+  const redWin = !bonusGridActive && isMainRedBigWinWallActive();
+  gradient.addColorStop(0, bonusGridActive ? "#4c2a61" : redWin ? "#90232b" : "#096a3a");
+  gradient.addColorStop(0.5, bonusGridActive ? "#8454ae" : redWin ? "#ff4b4b" : "#20b36c");
+  gradient.addColorStop(1, bonusGridActive ? "#5d3774" : redWin ? "#a92b32" : "#0b7b44");
   return gradient;
 }
 
@@ -2279,15 +2405,11 @@ function drawSecretMultiplierCell(zone, bonusGridActive) {
   cells.forEach((cell) => {
     const center = secretRoomLocalPoint(zone, cell.u, cell.v);
     const screenCenter = toScreen(center.x, center.y);
-    let fontSize = Math.max(11, Math.min(34, state.field.grid * 0.38));
+    const fontSize = Math.max(11, Math.min(34, state.field.grid * 0.38));
     ctx.fillStyle = multiplierColor;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-    while (ctx.measureText(label).width > state.field.grid * 0.92 && fontSize > 9) {
-      fontSize -= 1;
-      ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-    }
     drawPurpleNeonMultiplierText(label, screenCenter.x, screenCenter.y, multiplierColor);
   });
 }
@@ -2343,7 +2465,7 @@ function drawSecretRoomPuckCells(zone) {
 function drawSecretRoom(zone, bonusGridActive, innerGridColor, borderGradient) {
   if (!state.openSecretZones.has(zone.id)) return;
   const openedAt = state.secretZoneOpenTimes[zone.id] || 0;
-  const reveal = clamp((performance.now() - openedAt) / 420, 0, 1);
+  const reveal = clamp(((window.BalloroGameLifecycle?.now() ?? performance.now()) - openedAt) / 420, 0, 1);
 
   ctx.save();
   ctx.globalAlpha = 0.12 + reveal * 0.88;
@@ -2515,7 +2637,7 @@ function drawPurpleReadyWaves(point, radius, pulse) {
 }
 
 function drawSecretPocketVortex(point, radius) {
-  const time = performance.now() * 0.0012;
+  const time = (window.BalloroGameLifecycle?.now() ?? performance.now()) * 0.0012;
   const segments = 14;
   ctx.save();
   ctx.beginPath();
@@ -2652,7 +2774,7 @@ function getV2PocketVisual(kind) {
 }
 
 const v2PocketSymbolImages = Object.fromEntries(Object.entries({
-  lemon: "assets/duckies-star.svg",
+  lemon: "assets/duckies-star.svg?v=20261004-symmetric",
   crown: "assets/duckies-fire.png",
   blue: "assets/duckies-cactus.svg"
 }).map(([kind, src]) => {
@@ -2679,7 +2801,7 @@ function getV2PocketSymbolDrawBounds(kind, size) {
 function drawV2PocketSymbolGlint(kind, point, size) {
   // One shared phase makes every pocket symbol sparkle together, without
   // scanning the whole field or keeping a per-symbol animation timer.
-  const sweepTime = performance.now() % V2_POCKET_SYMBOL_GLINT_INTERVAL_MS;
+  const sweepTime = (window.BalloroGameLifecycle?.now() ?? performance.now()) % V2_POCKET_SYMBOL_GLINT_INTERVAL_MS;
   if (sweepTime >= 650) return;
   const mask = v2GlintCanvas.getContext("2d");
   mask.clearRect(0, 0, 64, 64);
@@ -2743,6 +2865,24 @@ function drawV2PocketSymbol(kind, point, radius, bubble, glint = true) {
   if (glint) drawV2PocketSymbolGlint(kind, point, size);
 }
 
+function getV4PocketSymbolReturnScale(kind, visible, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
+  if (!window.BalloroBonusUI?.isV4) return visible ? 1 : 0;
+  state.v4PocketSymbolAppearance ||= {};
+  const item = state.v4PocketSymbolAppearance[kind] ||= { visible, appearedAt: null };
+  if (visible && !item.visible) item.appearedAt = now;
+  item.visible = visible;
+  if (!visible) return 0;
+  if (!state.animationsEnabled) return 1;
+  if (item.appearedAt === null) return 1; // No entrance effect on initial load.
+  const progress = clamp((now - item.appearedAt) / 170, 0, 1);
+  return 1 - Math.pow(1 - progress, 3);
+}
+
+function drawV4ReturningPocketSymbol(kind, point, radius, bubble, visible) {
+  const scale = getV4PocketSymbolReturnScale(kind, visible);
+  if (scale > 0) drawV2PocketSymbol(kind, point, radius, { ...bubble, scale: bubble.scale * scale });
+}
+
 function getV4PocketIdleScale(kind, bubble, occupied) {
   if (!window.BalloroBonusUI?.isV4 || occupied || state.v3PocketSymbolCycle[kind]) return 1;
   return bubble?.scale ?? 1;
@@ -2754,6 +2894,13 @@ function applyV4MultiplierBounce(center, enabled) {
   ctx.translate(center.x, center.y);
   ctx.scale(scale, scale);
   ctx.translate(-center.x, -center.y);
+}
+
+function hasV4MainMultiplierTopSymbol(col, row, displayedMultiplier) {
+  if (!window.BalloroBonusUI?.isV4) return false;
+  const rules = window.BalloroV4Rules;
+  return rules.hasMultiplierTopSymbol?.(GRID_SIZE, col, row, displayedMultiplier)
+    ?? rules.hasMultiplierFire(GRID_SIZE, col, row);
 }
 
 function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, outerGlowColor = null,
@@ -2782,11 +2929,11 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
   ctx.save();
   if (isPreparing) {
     if (usesFieldPocketMechanics()) {
-      const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
+      const pulse = 0.5 + Math.sin((window.BalloroGameLifecycle?.now() ?? performance.now()) / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
       if (v2Visual) v2Visual.waves(point, radius, pulse);
       else drawBlueReadyWaves(point, radius, pulse);
     } else {
-      const pulse = 0.5 + Math.sin(performance.now() / 145) * 0.5;
+      const pulse = 0.5 + Math.sin((window.BalloroGameLifecycle?.now() ?? performance.now()) / 145) * 0.5;
       drawWhiteReadyWaves(point, radius, pulse);
     }
   } else if (bonusGridActive && !v2Visual) {
@@ -2796,10 +2943,9 @@ function drawSecretPocket(zone, pocketStrokeColor, bonusGridActive = false, oute
     drawPulsingFieldPocketSurface(point, radius * pocketScale, collectibleBubble,
       v2Visual?.palette || BLUE_FIELD_POCKET_PALETTE,
       activePocketStrokeColor, v2Visual?.glow || outerGlowColor || "rgba(117, 217, 255, 0.29)");
-    if (!pocket?.consumed && !state.v3PocketSymbolCycle[symbolKind]
-      && !state.counterFlyIns.some((flyIn) => flyIn.kind === symbolKind)) {
-      drawV2PocketSymbol(symbolKind, point, radius, collectibleBubble);
-    }
+    drawV4ReturningPocketSymbol(symbolKind, point, radius, collectibleBubble,
+      !pocket?.consumed && !state.v3PocketSymbolCycle[symbolKind]
+      && !state.counterFlyIns.some((flyIn) => flyIn.kind === symbolKind));
   } else {
     const hole = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
     hole.addColorStop(0, "#090b10");
@@ -2967,7 +3113,7 @@ function getChanceRoomMultiplier(id) {
   return state.chanceRoomMultipliers[id] || getRiskBands().outer;
 }
 
-function getChancePreviewBlink(now = performance.now()) {
+function getChancePreviewBlink(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   // Readiness blinking belongs to the ball in the red pocket, not the SC preview.
   if (window.BalloroBonusUI?.isV4) return { alpha: 1, ready: false };
   return { alpha: getPocketReadyPuckAlpha({ pocketReadyPreview: true }, now), ready: false };
@@ -3000,7 +3146,7 @@ function drawChanceRoomPreviewPuck(point) {
   ctx.strokeStyle = "rgba(22, 25, 25, 0.94)";
   ctx.stroke();
   ctx.restore();
-  const waveProgress = (performance.now() % 700) / 700;
+  const waveProgress = ((window.BalloroGameLifecycle?.now() ?? performance.now()) % 700) / 700;
   ctx.beginPath();
   ctx.arc(point.x, point.y, radius * (1.05 + waveProgress * 0.8), 0, Math.PI * 2);
   ctx.strokeStyle = `rgba(255, 74, 82, ${0.85 * (1 - waveProgress)})`;
@@ -3012,6 +3158,10 @@ function drawChanceRoomPreviewPuck(point) {
 }
 
 function isChanceRoomDimmed(id) {
+  // Keep the winning room and its ball bright for a photo hold, without
+  // retaining live bonus flags or delaying completion of the pocket queue.
+  if (playControls?.pause.active
+    && [...playControls.pause.winners].some(puck => puck.result?.chanceRoom && puck.chance?.roomId === id)) return false;
   const selected = state.chancePhase !== "spinning" && state.chanceSelectedRoomId === id;
   const spinning = state.chancePhase === "spinning" && CHANCE_ROOM_IDS[state.chanceSpinRoomIndex] === id;
   const won = state.chanceRoomOutcome?.roomId === id && state.chanceRoomOutcome.won;
@@ -3020,7 +3170,7 @@ function isChanceRoomDimmed(id) {
   return !active;
 }
 
-function getChanceFinalCueStrength(id, now = performance.now()) {
+function getChanceFinalCueStrength(id, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (state.chanceFinalCueRoomId !== id || now >= state.chanceFinalCueUntil) return 0;
   const elapsed = Math.max(0, now - state.chanceFinalCueStartedAt);
   if (elapsed < 150) return 1 - elapsed / 150;
@@ -3118,12 +3268,8 @@ function drawChanceRooms(sweep = null) {
   const bonusGridActive = isX10VisualActive();
   CHANCE_ROOM_IDS.forEach((id) => {
     const room = getChanceRoomGeometry(id);
-    const selected = state.chancePhase !== "spinning" && state.chanceSelectedRoomId === id;
-    const spinning = state.chancePhase === "spinning" && CHANCE_ROOM_IDS[state.chanceSpinRoomIndex] === id;
-    const won = state.chanceRoomOutcome?.roomId === id && state.chanceRoomOutcome.won;
-    const completed = state.chanceCompletedRoomIds.has(id);
-    const active = spinning || selected || won || completed;
     const dimmed = isChanceRoomDimmed(id);
+    const active = !dimmed;
     ctx.save();
     tracePolygon(room.vertices);
     ctx.fillStyle = bonusGridActive
@@ -3148,9 +3294,11 @@ function drawChanceRooms(sweep = null) {
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    const roomPuck = state.pucks.find((puck) => puck.chance?.roomId === id
-      && ["inside", "settled"].includes(puck.chance.phase)) || null;
-    if (roomPuck?.chance && ["inside", "settled"].includes(roomPuck.chance.phase)) {
+    // Presentation winners survive logical bonus completion and live-list
+    // pruning. Highlight their actual cells, including concurrent room wins.
+    const roomPucks = getCellPresentationPucks().filter((puck) => puck.chance?.roomId === id
+      && ["inside", "settled"].includes(puck.chance.phase));
+    for (const roomPuck of roomPucks) {
       const presentationFrame = getChancePresentationFrame(roomPuck);
       const cellCol = clamp(Math.floor((presentationFrame[0] + 1) * gridSize / 2), 0, gridSize - 1);
       const cellRow = clamp(Math.floor((presentationFrame[1] + 1) * gridSize / 2), 0, gridSize - 1);
@@ -3162,9 +3310,11 @@ function drawChanceRooms(sweep = null) {
         chanceRoomLocalToScreen(room, u0, v0), chanceRoomLocalToScreen(room, u1, v0),
         chanceRoomLocalToScreen(room, u1, v1), chanceRoomLocalToScreen(room, u0, v1)
       ];
-      const winningCell = roomPuck.chance.phase === "settled" && state.chanceRoomOutcome?.won;
+      const winningCell = roomPuck.chance.phase === "settled"
+        && (isBigWinFlashing(roomPuck) || state.chanceRoomOutcome?.won);
       if (roomPuck.chance.phase === "inside" || winningCell) {
         ctx.save();
+        if (isBigWinFlashing(roomPuck)) ctx.globalAlpha = 1;
         if (winningCell) applyBigWinCellFlash(id);
         if (winningCell && bonusGridActive) {
           tracePolygon(puckCellCorners);
@@ -3221,13 +3371,8 @@ function drawChanceRooms(sweep = null) {
       const multiplierColor = cellBonusActive ? getBonusMultiplierColor(roomMultiplier)
         : getMultiplierColor(roomMultiplier);
       ctx.fillStyle = multiplierColor;
-      const maxTextWidth = room.halfDiagonal * 1.32 / gridSize;
-      let fontSize = Math.max(18, Math.min(78, state.field.grid * 0.41));
+      const fontSize = Math.max(18, Math.min(78, state.field.grid * 0.41));
       ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-      while (ctx.measureText(multiplierText).width > maxTextWidth && fontSize > 12) {
-        fontSize -= 1;
-        ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-      }
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.save();
@@ -3284,12 +3429,8 @@ function drawChanceRoomBordersOverlay() {
   const bonusGridActive = isX10VisualActive();
   CHANCE_ROOM_IDS.forEach((id) => {
     const room = getChanceRoomGeometry(id);
-    const selected = state.chancePhase !== "spinning" && state.chanceSelectedRoomId === id;
-    const spinning = state.chancePhase === "spinning" && CHANCE_ROOM_IDS[state.chanceSpinRoomIndex] === id;
-    const won = state.chanceRoomOutcome?.roomId === id && state.chanceRoomOutcome.won;
-    const completed = state.chanceCompletedRoomIds.has(id);
-    const active = spinning || selected || won || completed;
     const dimmed = isChanceRoomDimmed(id);
+    const active = !dimmed;
     ctx.save();
     ctx.globalAlpha = dimmed ? 0.22 : 1;
     traceChanceRoomVisibleBorder(room);
@@ -3347,16 +3488,15 @@ function drawChancePocket() {
     waveActive || state.chancePocket?.consumed);
   ctx.save();
   if (waveActive) {
-    const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
+    const pulse = 0.5 + Math.sin((window.BalloroGameLifecycle?.now() ?? performance.now()) / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
     (visual?.waves || drawRedReadyWaves)(pocket.point, radius, pulse);
   }
   drawPulsingFieldPocketSurface(pocket.point, radius * pocketScale, collectibleBubble,
     visual?.palette || RED_FIELD_POCKET_PALETTE,
     visual?.stroke || "rgb(255, 74, 82)", visual?.glow || "rgba(255, 48, 58, 0.29)");
-  if (!state.chancePocket?.consumed && !state.v3PocketSymbolCycle.crown
-    && !state.counterFlyIns.some((flyIn) => flyIn.kind === "crown")) {
-    drawV2PocketSymbol("crown", pocket.point, radius, collectibleBubble);
-  }
+  drawV4ReturningPocketSymbol("crown", pocket.point, radius, collectibleBubble,
+    !state.chancePocket?.consumed && !state.v3PocketSymbolCycle.crown
+    && !state.counterFlyIns.some((flyIn) => flyIn.kind === "crown"));
   ctx.restore();
 }
 
@@ -3375,6 +3515,7 @@ function puckHasPendingCellReward(puck) {
 }
 
 function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid, sweep = null) {
+  // Keep the base digit size even when a large multiplier extends beyond its cell.
   // Build the moving-ball cell index once, not once per label (up to 81 cells).
   // This affects opacity only; payout/collision state remains authoritative.
   const pendingCells = window.BalloroBonusUI?.isV4 ? new Set(state.pucks
@@ -3390,8 +3531,7 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
       : { y: center.y, alpha: 1 };
     const displayedMultiplier = bonusGridActive ? group.multiplier * 10 : group.multiplier;
     const text = getFieldMultiplierText(displayedMultiplier, group.category);
-    const maxTextWidth = grid * group.size * 1.02;
-    let fontSize = Math.max(18, Math.min(78, grid * group.size * 0.41));
+    const fontSize = Math.max(18, Math.min(78, grid * group.size * 0.41));
     const multiplierColor = bonusGridActive
       ? getBonusMultiplierColor(group.multiplier)
       : getV3FieldMultiplierColor(group.col, group.row, group.multiplier);
@@ -3399,10 +3539,6 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-    while (ctx.measureText(text).width > maxTextWidth && fontSize > 12) {
-      fontSize -= 1;
-      ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-    }
     ctx.save();
     const hasPuck = state.pucks.some((puck) => {
       if (puckIsUsingSecretRoom(puck)) return false;
@@ -3416,14 +3552,14 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
     ctx.globalAlpha = (window.BalloroBonusUI?.isV4 ? hasPuck ? 1 : 0.5
       : window.BalloroBonusUI?.isV3 ? 0.5
       : bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
-    applyV4MultiplierBounce({ x: center.x, y: reveal.y },
-      window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, group.col, group.row));
+    const hasTopSymbol = hasV4MainMultiplierTopSymbol(group.col, group.row, displayedMultiplier);
+    applyV4MultiplierBounce({ x: center.x, y: reveal.y }, hasTopSymbol);
     if (bonusGridActive) {
       drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
     } else {
       drawStyledMultiplierText(ctx, "fillText", text, center.x, reveal.y);
     }
-    if (window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, group.col, group.row)) {
+    if (hasTopSymbol) {
       drawChanceMultiplierCrown("main", { x: center.x, y: reveal.y }, fontSize, multiplierColor, bonusGridActive);
     }
     ctx.restore();
@@ -3454,18 +3590,13 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
       const cellBonusActive = sweep ? getV3CellVisualActive(sweep, col, row) : bonusGridActive;
       const displayedMultiplier = cellBonusActive ? multiplier * 10 : multiplier;
       const text = getFieldMultiplierText(displayedMultiplier, category);
-      const maxTextWidth = grid * 1.02;
-      let fontSize = Math.max(10, Math.min(42, grid * 0.42));
+      const fontSize = Math.max(10, Math.min(42, grid * 0.42));
       const multiplierColor = cellBonusActive ? getBonusMultiplierColor(multiplier)
         : getV3FieldMultiplierColor(col, row, multiplier);
       ctx.fillStyle = multiplierColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-      while (ctx.measureText(text).width > maxTextWidth && fontSize > 9) {
-        fontSize -= 1;
-        ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-      }
       ctx.save();
       const hasPuck = pendingCells ? pendingCells.has(`${col}_${row}`) : state.pucks.some((puck) => {
         if (puckIsUsingSecretRoom(puck)) return false;
@@ -3476,14 +3607,14 @@ function drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, h
       ctx.globalAlpha = (window.BalloroBonusUI?.isV4 ? hasPuck ? 1 : 0.5
         : window.BalloroBonusUI?.isV3 ? 0.5
         : bonusGridActive || hasPuck ? 1 : 0.5) * reveal.alpha;
-      applyV4MultiplierBounce({ x: center.x, y: reveal.y },
-        window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, col, row));
+      const hasTopSymbol = hasV4MainMultiplierTopSymbol(col, row, displayedMultiplier);
+      applyV4MultiplierBounce({ x: center.x, y: reveal.y }, hasTopSymbol);
       if (cellBonusActive) {
         drawPurpleNeonMultiplierText(text, center.x, reveal.y, multiplierColor);
       } else {
         drawStyledMultiplierText(ctx, "fillText", text, center.x, reveal.y);
       }
-      if (window.BalloroBonusUI?.isV4 && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, col, row)) {
+      if (hasTopSymbol) {
         drawChanceMultiplierCrown("main", { x: center.x, y: reveal.y }, fontSize, multiplierColor, cellBonusActive);
       }
       ctx.restore();
@@ -3586,15 +3717,17 @@ function drawField(clearCanvas = true, sweep = null) {
     );
   });
 
-  state.settledCells.forEach((cell) => {
-    if (!cell.squareWin) return;
-    const settledPuck = state.pucks[cell.puckIndex];
+  getMainWinningPresentationCells().forEach((storedCell) => {
+    if (!storedCell.squareWin) return;
+    const settledPuck = storedCell.presentationPuck || state.pucks[storedCell.puckIndex];
+    const flashingBigWin = isBigWinFlashing(settledPuck);
+    const cell = flashingBigWin ? { ...storedCell, ...getCellFromPoint(settledPuck.x, settledPuck.y) } : storedCell;
     const ordinaryV3Win = window.BalloroBonusUI?.isV3 && settledPuck
       && !cell.purpleBoost && !bigWinEffect.winners.has(settledPuck);
     const flashElapsed = ordinaryV3Win
-      ? performance.now() - settledPuck.resultRevealStartedAt : 0;
+      ? (window.BalloroGameLifecycle?.now() ?? performance.now()) - settledPuck.resultRevealStartedAt : 0;
     const winFlashDuration = window.BalloroBonusUI?.isV4 ? 325 : 650;
-    const puckFade = ordinaryV3Win
+    const puckFade = flashingBigWin ? 1 : ordinaryV3Win
       ? Math.sin(Math.PI * clamp(flashElapsed / winFlashDuration, 0, 1))
       : window.BalloroBonusUI?.isV3
         ? (settledPuck ? getV3PuckFade(settledPuck) : 0) : 1;
@@ -3755,6 +3888,10 @@ function getCellMultiplier(col, row) {
 }
 
 function getDisplayedCellMultiplier(col, row) {
+  if (isYellowCellReturning(col, row)) {
+    const rules = window.BalloroV4Rules;
+    return Math.round(rules.cellMultiplier(GRID_SIZE, col, row) * rules.yellowMultiplier * 10) / 10;
+  }
   const held = window.BalloroBonusUI?.isV4 && !state.multiPlusActive
     && state.v4HeldYellowCells?.some(cell => cell.col === col && cell.row === row);
   if (held) {
@@ -3826,16 +3963,21 @@ function withColorAlpha(color, alpha) {
   return color.replace(/,\s*[\d.]+\)$/, `, ${alpha})`);
 }
 
-function getMultiplierColor(multiplier) {
+function getMultiplierColor(multiplier, yellowBoost = false) {
   if (window.BalloroBonusUI?.isV3) {
-    return window.BalloroMultiplierPresentation.color(multiplier);
+    return window.BalloroMultiplierPresentation.color(multiplier, false,
+      Boolean(window.BalloroBonusUI?.isV4 && yellowBoost));
   }
   const color = interpolateMultiplierColor(multiplier);
   return `hsla(${color.hue.toFixed(1)}, ${color.saturation.toFixed(1)}%, ${color.lightness.toFixed(1)}%, 1)`;
 }
 
 function getV3FieldMultiplierColor(col, row, multiplier) {
-  return getMultiplierColor(multiplier);
+  const yellowBoost = window.BalloroBonusUI?.isV4
+    && (isYellowCellReturning(col, row)
+      || (isMultiPlusVisualActive() && getActiveMultiPlusCells().some(cell => cell.col === col && cell.row === row))
+      || (!state.multiPlusActive && state.v4HeldYellowCells?.some(cell => cell.col === col && cell.row === row)));
+  return getMultiplierColor(multiplier, yellowBoost);
 }
 
 function getV3WinSoundTier(col, row) {
@@ -3924,7 +4066,7 @@ function getCollectibleIdleBubble(seed = 0) {
   if (!state.animationsEnabled) {
     return { scale: 1, glowScale: 1, glowAlpha: 1 };
   }
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   const mainWave = Math.sin(now / 260 + seed);
   const beatWave = Math.sin(now / 132 + seed * 0.45 + 0.7);
   const softWave = Math.sin(now / 540 + seed * 0.73 + 1.4);
@@ -3947,7 +4089,7 @@ function isPocketReadyPuck(puck) {
     || (puck.waitingForPocket && !puck.v3QueuePull));
 }
 
-function getPocketReadyPuckAlpha(puck, now = performance.now()) {
+function getPocketReadyPuckAlpha(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   const waiting = isPocketReadyPuck(puck);
   if (!window.BalloroReadyBlink) return waiting ? (now % 200 < 100 ? 1 : 0) : 1;
   return window.BalloroReadyBlink.sample(puck.readyBlinkOwner || puck, waiting, now).alpha;
@@ -3969,7 +4111,7 @@ function drawPuck(puck, index) {
   ctx.save();
   ctx.globalAlpha *= getPocketReadyPuckAlpha(puck);
   if (window.BalloroBonusUI?.isV3 && puck.stopped) {
-    ctx.globalAlpha *= getV3PuckFade(puck);
+    ctx.globalAlpha *= isBigWinHeld(puck) ? 1 : getResumedWinAlpha(puck, true) ?? getV3PuckFade(puck);
     if (ctx.globalAlpha <= 0) { ctx.restore(); return; }
   }
   if (chanceRoomDimmed) ctx.globalAlpha *= 0.2;
@@ -4079,10 +4221,23 @@ function drawPucks() {
   // holding Spin, show only the separate visual ball with ready waves; the
   // recorded ball becomes visible on release when playback actually starts.
   if (window.BalloroRoundTapes?.enabled && state.launchPrepared && !state.running) return;
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   state.pucks.forEach((puck) => drawQuickPuckTrail(puck, now));
-  state.pucks.forEach((puck, index) => drawPuck(puck, index));
+  const visiblePucks = getPresentationPucks();
+  visiblePucks.forEach((puck, index) => drawPuck(puck, index));
   if (window.BalloroBonusUI?.isV3) drawV3PocketQueueIndicators();
+}
+
+function countV3WaitingPocketPucks(kind, zoneId, point, range, capturedPuck = null) {
+  return state.pucks.filter((puck) => {
+    if (puck === capturedPuck) return false;
+    // A released bonus ball can join another queue with its old release flags.
+    // Explicit queue membership takes precedence over those flight flags.
+    if (puck.waitingForPocket) return puck.waitingForPocket.kind === kind
+      && (kind !== "blue" || puck.waitingForPocket.zoneId === zoneId);
+    return puck.stopped && !puck.chance && !puck.secretRoom && !puck.pocketRelease
+      && Math.hypot(puck.x - point.x, puck.y - point.y) <= range;
+  }).length;
 }
 
 function drawV3PocketQueueIndicators() {
@@ -4093,29 +4248,29 @@ function drawV3PocketQueueIndicators() {
     if (!pocket?.consumed) continue;
     const normalized = getFieldPocketNormalized(pocket);
     const point = { x: normalized.x * state.field.half, y: normalized.y * state.field.half };
-    const count = state.pucks.filter((puck) => puck !== state.v3BonusPuck
-      && !puck.chance && !puck.secretRoom && !puck.pocketRelease
-      && ((puck.waitingForPocket?.kind === "blue" && puck.waitingForPocket.zoneId === zoneId)
-        || (puck.stopped && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2 - 1))).length;
-    if (count) entries.push({ point, count });
+    const waiting = countV3WaitingPocketPucks("blue", zoneId, point, radius * 2 - 1);
+    const held = state.pucks.some((puck) => !puck.waitingForPocket
+      && puck.secretRoom?.zoneId === zoneId
+      && ["capturing", "pocket_wait"].includes(puck.secretRoom.phase));
+    if (waiting) entries.push({ point, count: waiting + Number(held) });
   }
   if (state.chancePocket?.consumed) {
     const pocket = getChancePocketGeometry();
     const point = { x: pocket.normalized.x * state.field.half,
       y: pocket.normalized.y * state.field.half };
-    const count = state.pucks.filter((puck) => !puck.chance && !puck.secretRoom
-      && !puck.pocketRelease && ((puck.waitingForPocket?.kind === "red")
-        || (puck.stopped && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius * 2 - 1))).length;
-    if (count) entries.push({ point, count, kind: "red" });
+    const waiting = countV3WaitingPocketPucks("red", null, point, radius * 2 - 1);
+    const held = Boolean(state.chanceCapturedPuck
+      && !state.chanceCapturedPuck.waitingForPocket
+      && ["capturing", "captured", "sinking"].includes(state.chanceCapturedPuck.chance?.phase));
+    if (waiting) entries.push({ point, count: waiting + Number(held), kind: "red" });
   }
-  if (state.multiPlusToken?.consumed && state.multiPlusCapturedPuck) {
+  if (state.multiPlusToken?.consumed) {
     const point = state.multiPlusToken;
-    const count = state.pucks.filter((puck) => puck !== state.multiPlusCapturedPuck
-      && !puck.chance && !puck.secretRoom
-      && (puck.waitingForPocket?.kind === "yellow" || (puck.stopped
-        && !puck.pocketRelease
-        && Math.hypot(puck.x - point.x, puck.y - point.y) <= radius + point.radius - 1))).length;
-    if (count) entries.push({ point, count });
+    const waiting = countV3WaitingPocketPucks("yellow", null, point,
+      radius + point.radius - 1, state.multiPlusCapturedPuck);
+    const held = Boolean(state.multiPlusCapturedPuck
+      && ["capturing", "captured", "revealing"].includes(state.multiPlusPhase));
+    if (waiting) entries.push({ point, count: waiting + Number(held) });
   }
   for (const { point, count, kind } of entries) {
     const screen = toScreen(point.x, point.y);
@@ -4126,6 +4281,7 @@ function drawV3PocketQueueIndicators() {
       drawPuck({ x: point.x, y: point.y, pocketDepth: 0, stopped: false,
         pocketReadyPreview: true, waitingForPocket: kind === "red" ? { kind } : null }, -1);
     }
+    if (count < 2) continue;
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -4137,7 +4293,7 @@ function drawV3PocketQueueIndicators() {
     const labelY = screen.y - radius * 2;
     ctx.strokeText(String(count), screen.x, labelY);
     ctx.fillStyle = "#fff";
-    ctx.fillText(String(count), screen.x, labelY);
+    drawStyledMultiplierText(ctx, "fillText", String(count), screen.x, labelY);
     ctx.restore();
   }
 }
@@ -4160,7 +4316,7 @@ function drawLaunchPrimePreview() {
   }
   const launchPuckPreview = getLaunchPrimePuck();
   const point = toScreen(launchPuckPreview.x, launchPuckPreview.y);
-  const pulse = 0.5 + Math.sin(performance.now() / 145) * 0.5;
+  const pulse = 0.5 + Math.sin((window.BalloroGameLifecycle?.now() ?? performance.now()) / 145) * 0.5;
   drawWhiteReadyWaves(point, state.field.puckRadius, pulse);
   drawPuck(launchPuckPreview, 0);
 }
@@ -4227,21 +4383,20 @@ function drawMultiPlusToken() {
 
   ctx.save();
   if (["capturing", "captured", "revealing"].includes(state.multiPlusPhase)) {
-    const pulse = 0.5 + Math.sin(performance.now() / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
+    const pulse = 0.5 + Math.sin((window.BalloroGameLifecycle?.now() ?? performance.now()) / BLUE_POCKET_WAVE_TIME_SCALE_MS) * 0.5;
     (visual?.waves || drawYellowReadyWaves)(point, radius, pulse);
   }
   drawPulsingFieldPocketSurface(point, radius * pocketScale, bubble,
     visual?.palette || YELLOW_FIELD_POCKET_PALETTE,
     visual?.stroke || "rgb(255, 213, 61)", visual?.glow || "rgba(255, 213, 61, 0.29)");
-  if (!token.consumed && !token.collected && !state.v3PocketSymbolCycle.lemon
-    && !state.counterFlyIns.some((flyIn) => flyIn.kind === "lemon")) {
-    drawV2PocketSymbol("lemon", point, radius, bubble);
-  }
+  drawV4ReturningPocketSymbol("lemon", point, radius, bubble,
+    !token.consumed && !token.collected && !state.v3PocketSymbolCycle.lemon
+    && !state.counterFlyIns.some((flyIn) => flyIn.kind === "lemon"));
   ctx.restore();
 }
 
 function drawStarBursts() {
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   state.starBursts.forEach((burst) => {
@@ -4295,8 +4450,9 @@ function drawStarBursts() {
 
 function animateStarBursts() {
   state.starEffectFrame = null;
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (!state.animationsEnabled) return;
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   state.starBursts = state.starBursts.filter((burst) => now - burst.startedAt < burst.duration);
   if (!state.running) {
     render();
@@ -4309,7 +4465,7 @@ function animateStarBursts() {
 // Counter fly-in animation experiment. Remove this block to roll back the visual
 // pickup-to-counter motion without touching bonus math.
 function getPendingCounterFlyInCount(kind) {
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   return state.counterFlyIns.filter((flyIn) => flyIn.kind === kind && now - flyIn.startedAt < flyIn.duration).length;
 }
 
@@ -4394,7 +4550,7 @@ function createCounterFlyInElement(kind) {
   element.style.opacity = "0";
   element.style.transform = "translate3d(-1000px, -1000px, 0)";
   element.innerHTML = kind === "lemon"
-    ? '<img src="assets/duckies-star.svg" alt="">'
+    ? '<img src="assets/duckies-star.svg?v=20261004-symmetric" alt="">'
     : kind === "crown"
     ? '<img src="assets/duckies-fire.png" alt="">'
     : kind === "diamond"
@@ -4436,7 +4592,7 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
     liftSize: window.BalloroBonusUI?.isV2 && kind === "lemon"
       ? Math.max(sourceSize, state.field.puckRadius) : sourceSize,
     targetSize,
-    startedAt: performance.now(),
+    startedAt: (window.BalloroGameLifecycle?.now() ?? performance.now()),
     holdDuration: window.BalloroBonusUI?.isV2 ? 315 : COUNTER_PICKUP_HOLD_DURATION_MS,
     flightDuration: window.BalloroBonusUI?.isV2 ? 300 : COUNTER_FLY_IN_DURATION_MS,
     duration: window.BalloroBonusUI?.isV2 ? 615
@@ -4451,6 +4607,7 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
 }
 
 function getCounterFlyInMotion(flyIn, now) {
+  const source = flyIn.source;
   const elapsed = Math.max(0, now - flyIn.startedAt);
   const v2Icon = window.BalloroBonusUI?.isV2;
   const holdLift = v2Icon ? Math.max(38, state.field.puckRadius * 2.15)
@@ -4465,8 +4622,8 @@ function getCounterFlyInMotion(flyIn, now) {
       : 0;
     const liftedSize = flyIn.liftSize * (v2Icon ? 1.35 : 2);
     return {
-      x: flyIn.source.x,
-      y: flyIn.source.y - holdLift * (riseEased + jumpOvershoot) - hover,
+      x: source.x,
+      y: source.y - holdLift * (riseEased + jumpOvershoot) - hover,
       size: flyIn.sourceSize + (liftedSize - flyIn.sourceSize) * riseEased,
       alpha: 1,
       rotationDegrees: flyIn.kind === "multiPlus" ? Math.sin(holdProgress * Math.PI * 2) * 6 : 0
@@ -4475,8 +4632,8 @@ function getCounterFlyInMotion(flyIn, now) {
 
   const progress = clamp((elapsed - flyIn.holdDuration) / flyIn.flightDuration, 0, 1);
   const eased = 1 - Math.pow(1 - progress, 3);
-  const flightStartY = flyIn.source.y - holdLift;
-  const x = flyIn.source.x + (flyIn.target.x - flyIn.source.x) * eased;
+  const flightStartY = source.y - holdLift;
+  const x = source.x + (flyIn.target.x - source.x) * eased;
   const y = flightStartY + (flyIn.target.y - flightStartY) * eased;
   const arcLift = Math.sin(progress * Math.PI) * Math.max(18, state.field.puckRadius * 1.1);
   const startSize = flyIn.liftSize * (v2Icon ? 1.35 : 2);
@@ -4571,7 +4728,7 @@ function drawCounterFlyIns() {
   if (!state.counterFlyIns.length || !state.animationsEnabled) {
     return;
   }
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
   state.counterFlyIns.forEach((flyIn) => {
@@ -4593,8 +4750,9 @@ function drawCounterFlyIns() {
 
 function animateCounterFlyIns() {
   state.counterFlyInFrame = null;
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (!state.animationsEnabled) return;
-  const now = performance.now();
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   const callbacks = [];
   let completedFlyIn = false;
   state.counterFlyIns.forEach((flyIn) => syncCounterFlyInElement(flyIn, now));
@@ -4631,8 +4789,10 @@ function hasVisibleCollectibles() {
     || (usesFieldPocketMechanics() && Boolean(state.fieldPocket || state.bluePocket));
 }
 
-function animateCollectibleIdle(timestamp = performance.now()) {
+function animateCollectibleIdle(timestamp = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   state.collectibleIdleFrame = null;
+  if (window.BalloroGameLifecycle?.suspended) return;
+  timestamp = window.BalloroGameLifecycle?.now() ?? timestamp;
   if (!state.animationsEnabled || state.running || !hasVisibleCollectibles()) {
     return;
   }
@@ -4646,6 +4806,7 @@ function animateCollectibleIdle(timestamp = performance.now()) {
 }
 
 function startCollectibleIdleAnimation() {
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (!state.animationsEnabled || state.running || !hasVisibleCollectibles()) {
     return;
   }
@@ -4656,7 +4817,8 @@ function startCollectibleIdleAnimation() {
 
 function animateResultReveal() {
   state.resultRevealFrame = null;
-  const now = performance.now();
+  if (window.BalloroGameLifecycle?.suspended) return;
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   if (window.BalloroBonusUI?.isV3) finishV3ChancePresentation(now);
   const revealDuration = window.BalloroBonusUI?.isV3
     ? window.BalloroV3Rules.resultDelayMs + window.BalloroV3Rules.resultFadeMs
@@ -4664,19 +4826,23 @@ function animateResultReveal() {
   const fieldRevealActive = state.multiPlusActive
     && state.multiPlusActivatedAt > 0
     && now - state.multiPlusActivatedAt < RESULT_BOOST_REVEAL_DURATION_MS;
-  const revealActive = now - bigWinEffect.startedAt < BIG_WIN_DURATION_MS || fieldRevealActive
+  const revealActive = Boolean(playControls?.pause.active) || resumedWinPresentation.size > 0 || now - bigWinEffect.startedAt < BIG_WIN_DURATION_MS || fieldRevealActive
     || (window.BalloroBonusUI?.isV3 && state.pucks.some((puck) => puck.stopped
       && (getV3PuckFade(puck, now) > 0 || getV3MultiplierFade(puck, now) > 0)))
     || state.pucks.some((puck) => puck.result?.multiplier > 0
     && (now - (puck.resultRevealStartedAt || 0) < revealDuration
       || now - (puck.result.boostRevealStartedAt || 0) < RESULT_BOOST_REVEAL_DURATION_MS));
-  if (!state.running) render();
+  if (!state.running && (!playControls?.pause.active || now - (playControls.pause.lastRenderAt || 0) >= 50)) {
+    if (playControls?.pause.active) playControls.pause.lastRenderAt = now;
+    render();
+  }
   if (revealActive) {
     state.resultRevealFrame = requestAnimationFrame(animateResultReveal);
   }
 }
 
 function startResultRevealAnimation() {
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (!state.animationsEnabled) {
     render();
     return;
@@ -4688,7 +4854,7 @@ function startResultRevealAnimation() {
 
 function getMultiplierRevealMotion(startedAt, endY, col = -1, row = -1) {
   if (!state.animationsEnabled || !startedAt) return { y: endY, alpha: 1 };
-  const elapsed = performance.now() - startedAt;
+  const elapsed = (window.BalloroGameLifecycle?.now() ?? performance.now()) - startedAt;
   if (state.multiPlusPhase === "revealing") {
     return { y: endY, alpha: 0 };
   }
@@ -4697,7 +4863,7 @@ function getMultiplierRevealMotion(startedAt, endY, col = -1, row = -1) {
   return { y: endY + (1 - eased) * 26, alpha: progress };
 }
 
-function drawMultiPlusRoomsBlinkVisual(now = performance.now()) {
+function drawMultiPlusRoomsBlinkVisual(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (state.multiPlusPhase !== "revealing" || !state.multiPlusActivatedAt) return;
   if (!state.multiPlusNeonCells.length) return;
   const { half, grid } = state.field;
@@ -4729,16 +4895,16 @@ function drawMultiPlusRoomsBlinkVisual(now = performance.now()) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const fontSize = Math.max(11, Math.min(42, grid * 0.42));
-    const hasTopSymbol = window.BalloroBonusUI?.isV4
-      && window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, cell.col, cell.row);
+    const purple = isX10VisualActive();
+    const displayedMultiplier = cell.multiplier * (purple ? 10 : 1);
+    const hasTopSymbol = hasV4MainMultiplierTopSymbol(cell.col, cell.row, displayedMultiplier);
     applyV4MultiplierBounce(center, hasTopSymbol);
     ctx.font = `1000 ${fontSize}px Inter, system-ui, sans-serif`;
-    const purple = isX10VisualActive();
-    const multiplierColor = purple ? getBonusMultiplierColor(cell.multiplier) : getMultiplierColor(cell.multiplier);
+    const multiplierColor = purple ? getBonusMultiplierColor(cell.multiplier) : getMultiplierColor(cell.multiplier, true);
     ctx.fillStyle = multiplierColor;
     ctx.shadowColor = multiplierColor;
     ctx.shadowBlur = flash ? 26 : 14 + pulse * 12;
-    drawStyledMultiplierText(ctx, "fillText", getFieldMultiplierText(cell.multiplier * (purple ? 10 : 1), "multi_plus"), center.x, center.y);
+    drawStyledMultiplierText(ctx, "fillText", getFieldMultiplierText(displayedMultiplier, "multi_plus"), center.x, center.y);
     if (hasTopSymbol) {
       drawChanceMultiplierCrown("main", center, fontSize, multiplierColor, purple);
     }
@@ -4752,7 +4918,7 @@ function spawnStarBurst(star, theme = "purple") {
   state.starBursts.push({
     x: point.x,
     y: point.y,
-    startedAt: performance.now(),
+    startedAt: (window.BalloroGameLifecycle?.now() ?? performance.now()),
     duration: 430,
     theme,
     particles: Array.from({ length: 10 }, (_, index) => ({
@@ -4761,7 +4927,7 @@ function spawnStarBurst(star, theme = "purple") {
       size: randomBetween(1.4, 2.8)
     }))
   });
-  if (state.starEffectFrame === null) {
+  if (state.starEffectFrame === null && !window.BalloroGameLifecycle?.suspended) {
     state.starEffectFrame = requestAnimationFrame(animateStarBursts);
   }
 }
@@ -4867,16 +5033,21 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const resultPucks = state.pucks.filter((puck) => puck.result?.multiplier > 0);
+  const resultPucks = getPresentationPucks().filter((puck) => puck.result?.multiplier > 0);
   const getRevealMotion = (puck, point) => {
     if (window.BalloroBonusUI?.isV3) {
-      const now = performance.now();
-      const fade = getV3MultiplierFade(puck);
+      const held = isBigWinHeld(puck);
+      const releasedAt = resumedWinPresentation.get(puck);
+      if (!held && releasedAt !== undefined) {
+        return { y: point.y - 34 - Math.max(0, (window.BalloroGameLifecycle?.now() ?? performance.now()) - releasedAt) * 0.012, alpha: getResumedWinAlpha(puck) };
+      }
+      const now = held ? Math.min((window.BalloroGameLifecycle?.now() ?? performance.now()), puck.resultRevealStartedAt + RESULT_BOOST_REVEAL_DURATION_MS) : (window.BalloroGameLifecycle?.now() ?? performance.now());
+      const fade = held ? 1 : getV3MultiplierFade(puck);
       const progress = !state.animationsEnabled || !puck.resultRevealStartedAt ? 1
         : clamp((now - puck.resultRevealStartedAt)
           / RESULT_BOOST_REVEAL_DURATION_MS, 0, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
-      const rise = !state.animationsEnabled || !puck.resultRevealStartedAt ? 0
+      const rise = held || !state.animationsEnabled || !puck.resultRevealStartedAt ? 0
         : Math.max(0, now - puck.resultRevealStartedAt - window.BalloroV3Rules.resultDelayMs)
           * 0.012;
       return {
@@ -4886,14 +5057,14 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
     }
     const endY = point.y - 34;
     if (!state.animationsEnabled || !puck.resultRevealStartedAt) return { y: endY, alpha: 1 };
-    const progress = clamp((performance.now() - puck.resultRevealStartedAt)
+    const progress = clamp(((window.BalloroGameLifecycle?.now() ?? performance.now()) - puck.resultRevealStartedAt)
       / RESULT_BOOST_REVEAL_DURATION_MS, 0, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
     return { y: endY + (1 - eased) * 26, alpha: progress };
   };
   const getBoostRevealMotion = (puck, point) => {
     if (!state.animationsEnabled || !puck.result?.boostRevealStartedAt) return null;
-    const elapsed = performance.now() - puck.result.boostRevealStartedAt;
+    const elapsed = (window.BalloroGameLifecycle?.now() ?? performance.now()) - puck.result.boostRevealStartedAt;
     const progress = clamp(elapsed / RESULT_BOOST_REVEAL_DURATION_MS, 0, 1);
     const eased = 1 - Math.pow(1 - progress, 3);
     return {
@@ -4939,11 +5110,15 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
         y: boostReveal?.newY ?? reveal.y,
         baseY: boostReveal?.newY ?? reveal.y,
         alpha: reveal.alpha
-          * (bigWinEffect.winners.has(puck) && performance.now() - bigWinEffect.startedAt < BIG_WIN_DURATION_MS
+          * (isBigWinFlashing(puck)
             && state.animationsEnabled ? 0.35 + 0.65 * getBigWinPulse() : 1),
+        resultMultiplier,
         resultText,
         resultColor,
         font,
+        fontSize,
+        winSymbol: window.BalloroBonusUI?.isV4 && Boolean(puck.result.topSymbol),
+        purpleSymbol: puck.result.topSymbol === 'diamond',
         boostReveal: boostReveal ? {
           oldText: getMultiplierText(puck.result.multiplier),
           oldColor: getMultiplierColor(puck.result.multiplier),
@@ -4989,38 +5164,47 @@ function drawResultOverlay({ glows = true, text = true } = {}) {
     if (item.boostReveal) item.boostReveal.oldY += item.y - item.baseY;
   });
 
+  // Sort paint layers only, after the unchanged chronological placement.
+  // During an x10 crossfade, each visible number uses its own displayed value.
+  const resultLayers = resultItems.flatMap((item) => item.boostReveal ? [{
+    ...item,
+    resultMultiplier: item.puck.result.multiplier,
+    resultText: item.boostReveal.oldText,
+    resultColor: item.boostReveal.oldColor,
+    font: item.boostReveal.oldFont,
+    y: item.boostReveal.oldY,
+    alpha: item.boostReveal.alpha,
+    winSymbol: false,
+    boostOld: true
+  }, item] : [item])
+    .sort((a, b) => a.resultMultiplier - b.resultMultiplier
+      || a.appearedAt - b.appearedAt);
+
   if (glows) {
-    resultItems.forEach((item) => {
-      if (item.boostReveal) {
-        ctx.save();
-        ctx.globalAlpha = item.boostReveal.alpha;
-        drawWinningGlow(item.boostReveal.oldText, item.x, item.boostReveal.oldY,
-          item.boostReveal.oldColor, item.boostReveal.oldFont, false);
-        ctx.restore();
-      }
+    resultLayers.forEach((item) => {
       ctx.save();
       ctx.globalAlpha = item.alpha;
-      drawWinningGlow(item.resultText, item.x, item.y, item.resultColor, item.font, bonusVisualActive);
+      drawWinningGlow(item.resultText, item.x, item.y, item.resultColor, item.font,
+        bonusVisualActive && !item.boostOld);
       ctx.restore();
     });
   }
   if (text) {
-    resultItems.forEach((item) => {
-      if (item.boostReveal) {
-        ctx.save();
-        ctx.globalAlpha = item.boostReveal.alpha;
-        drawWinningText(item.boostReveal.oldText, item.x, item.boostReveal.oldY,
-          item.boostReveal.oldColor, item.boostReveal.oldFont,
-          "rgba(0, 0, 0, 0.92)", 6, null);
-        ctx.restore();
-      }
-      const outlineColor = bonusVisualActive ? "rgba(238, 202, 255, 0.98)" : "rgba(0, 0, 0, 0.92)";
-      const outlineWidth = bonusVisualActive ? 2.5 : 6;
-      const outerOutlineColor = bonusVisualActive ? "rgba(0, 0, 0, 0.94)" : null;
+    resultLayers.forEach((item) => {
+      const bonusOutline = bonusVisualActive && !item.boostOld;
+      const outlineColor = bonusOutline ? "rgba(238, 202, 255, 0.98)" : "rgba(0, 0, 0, 0.92)";
+      const outlineWidth = bonusOutline ? 2.5 : 6;
+      const outerOutlineColor = bonusOutline ? "rgba(0, 0, 0, 0.94)" : null;
       ctx.save();
       ctx.globalAlpha = item.alpha;
       drawWinningText(item.resultText, item.x, item.y, item.resultColor, item.font,
         outlineColor, outlineWidth, outerOutlineColor);
+      if (item.winSymbol) {
+        // Same anchor, alpha, pulse, rise and fade as the floating number;
+        // reuse field fire/diamond artwork without a separate idle animation.
+        drawChanceMultiplierCrown("main", { x: item.x, y: item.y },
+          item.fontSize, item.resultColor, item.purpleSymbol);
+      }
       ctx.restore();
     });
   }
@@ -5034,6 +5218,25 @@ function classifyResult(multiplier, category = "") {
   return { key: bigWin ? "big_win" : "win", label: bigWin ? "BIG WIN" : "WIN", color: null, celebrate: true };
 }
 
+// Snapshot the actual cell decoration at settlement, not the premium tier.
+// Photo holds and later board restoration must not invent/change that symbol.
+function captureResultCellSymbol(puck) {
+  if (!window.BalloroBonusUI?.isV4 || !puck.result) return;
+  const purple = isX10VisualActive();
+  let decorated = false;
+  if (puck.result.chanceRoom && puck.chance?.roomId) {
+    const size = getChanceRoomGridSize();
+    const col = clamp(Math.floor((puck.chance.u + 1) * size / 2), 0, size - 1);
+    const row = clamp(Math.floor((puck.chance.v + 1) * size / 2), 0, size - 1);
+    decorated = window.BalloroV4Rules.hasMultiplierFire(GRID_SIZE, col, row, puck.chance.roomId);
+  } else {
+    const { col, row } = getCellFromPoint(puck.x, puck.y);
+    decorated = hasV4MainMultiplierTopSymbol(col, row,
+      getDisplayedCellMultiplier(col, row) * (purple ? 10 : 1));
+  }
+  puck.result.topSymbol = decorated ? purple ? 'diamond' : 'fire' : null;
+}
+
 const BIG_WIN_DURATION_MS = 2600;
 let bigWinEffect = { roundId: null, count: 0, startedAt: -Infinity, winners: new Set(), seenWinners: new Set(), boostedWinners: new Set(), voices: [] };
 
@@ -5044,12 +5247,12 @@ function getV3ResultFadeElapsed(puck, now) {
   return now - puck.resultRevealStartedAt - Math.max(rules.resultDelayMs, winnerHold);
 }
 
-function getV3ResultFade(puck, now = performance.now()) {
+function getV3ResultFade(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (!puck.stopped || !puck.resultRevealStartedAt) return 1;
   return 1 - clamp(getV3ResultFadeElapsed(puck, now) / window.BalloroV3Rules.resultFadeMs, 0, 1);
 }
 
-function getV3PuckFade(puck, now = performance.now()) {
+function getV3PuckFade(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (!puck.stopped || !puck.resultRevealStartedAt) return 1;
   const ordinaryFieldWin = puck.result?.multiplier > 0 && !puck.result.secretRoom
     && !puck.result.x10Boosted && !bigWinEffect.winners.has(puck);
@@ -5058,7 +5261,7 @@ function getV3PuckFade(puck, now = performance.now()) {
   return 1 - clamp(getV3ResultFadeElapsed(puck, now) / duration, 0, 1);
 }
 
-function getV3MultiplierFade(puck, now = performance.now()) {
+function getV3MultiplierFade(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (!puck.stopped || !puck.resultRevealStartedAt) return 1;
   if (!(puck.result?.multiplier > 0)) return getV3ResultFade(puck, now);
   const boosted = puck.result.x10Boosted
@@ -5069,7 +5272,17 @@ function getV3MultiplierFade(puck, now = performance.now()) {
   return 1 - clamp(getV3ResultFadeElapsed(puck, now) / duration, 0, 1);
 }
 
-function hasUnfinishedV3PurpleReward(now = performance.now()) {
+function hasUnfinishedV3FieldReward(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
+  // Yellow and purple boards share the same shortened reward hold. This does
+  // not speed up the floating multiplier, ball fade or victory music itself.
+  const fieldRewardNow = window.BalloroBonusUI?.isV4 && puck.resultRevealStartedAt
+    ? puck.resultRevealStartedAt + (now - puck.resultRevealStartedAt) * 2 : now;
+  return puck.result.multiplier > 0
+    ? getV3MultiplierFade(puck, fieldRewardNow) > 0
+    : getV3PuckFade(puck, fieldRewardNow) > 0;
+}
+
+function hasUnfinishedV3PurpleReward(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   return state.pucks.some((puck) => {
     if (!puck.v3PurpleBonus) return false;
     if (!puck.stopped || puck.waitingForPocket || puck.v3QueuePull
@@ -5078,17 +5291,11 @@ function hasUnfinishedV3PurpleReward(now = performance.now()) {
       || (puck.chance && puck.chance.phase !== "settled")
       || state.v3BonusQueue.some((entry) => entry.puck === puck)) return true;
     if (!puck.result) return false;
-    // Shorten only the completed reward's purple-board hold. Floating text,
-    // ball fading and victory music retain their original presentation clocks.
-    const fieldRewardNow = window.BalloroBonusUI?.isV4 && puck.resultRevealStartedAt
-      ? puck.resultRevealStartedAt + (now - puck.resultRevealStartedAt) * 2 : now;
-    return puck.result.multiplier > 0
-      ? getV3MultiplierFade(puck, fieldRewardNow) > 0
-      : getV3PuckFade(puck, fieldRewardNow) > 0;
+    return hasUnfinishedV3FieldReward(puck, now);
   });
 }
 
-function finishV3PurplePresentation(now = performance.now()) {
+function finishV3PurplePresentation(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (!window.BalloroBonusUI?.isV3 || !state.x10BoostActivated
     || hasUnfinishedV3PurpleReward(now)) return;
   // V4 now restores the board with the reverse cell sequence after rewards.
@@ -5131,7 +5338,7 @@ function playBigWinFanfare(level) {
   });
 }
 
-function updateBigWinEffect(now = performance.now()) {
+function updateBigWinEffect(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (bigWinEffect.roundId !== state.roundId && !window.BalloroBonusUI?.isV3) {
     stopBigWinSound();
     bigWinEffect = { roundId: state.roundId, count: 0, startedAt: -Infinity, winners: new Set(), seenWinners: new Set(), boostedWinners: new Set(), voices: [] };
@@ -5147,7 +5354,7 @@ function updateBigWinEffect(now = performance.now()) {
       : result.chanceRoom
       || (["outer", "middle", "center"].includes(result.category)
         && result.multiplier >= getMainFieldMaximumMultiplier());
-    if (!premium && !boostEncore) return;
+    if (!premium && (window.BalloroBonusUI?.isV3 || !boostEncore)) return;
     if (window.BalloroBonusUI?.isV3 && now - bigWinEffect.startedAt >= BIG_WIN_DURATION_MS) {
       bigWinEffect.winners.clear();
       bigWinEffect.count = 0;
@@ -5157,26 +5364,66 @@ function updateBigWinEffect(now = performance.now()) {
     if(result.x10Boosted)bigWinEffect.boostedWinners.add(puck);
     bigWinEffect.count += 1;
     bigWinEffect.startedAt = now;
+    playControls?.bigWin(puck, playPreferences.pauseBigWin);
+    if (playControls?.pause.active) updateBetButtons();
     playBigWinFanfare(Math.min(3, bigWinEffect.count));
     startResultRevealAnimation();
   });
 }
 
-function getBigWinPulse(now = performance.now()) {
+function isBigWinFlashing(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
+  if (!puck) return false;
+  if (isBigWinHeld(puck)) return true;
   const elapsed = now - bigWinEffect.startedAt;
+  return bigWinEffect.winners.has(puck) && elapsed >= 0 && elapsed < BIG_WIN_DURATION_MS;
+}
+
+function getCellPresentationPucks() {
+  // A timed celebration can outlive a ball's ordinary fade and live-list
+  // pruning. Retain only its cell cue, not its ball or floating label.
+  return [...new Set([...getPresentationPucks(), ...[...bigWinEffect.winners].filter(puck => isBigWinFlashing(puck))])];
+}
+
+function getMainWinningPresentationCells() {
+  const cells = state.settledCells.slice();
+  const represented = new Set(cells.map(cell => state.pucks[cell.puckIndex]));
+  for (const puck of getCellPresentationPucks()) {
+    if (!isBigWinFlashing(puck) || puck.result?.chanceRoom || puck.result?.secretRoom
+      || represented.has(puck)) continue;
+    cells.push({ ...getCellFromPoint(puck.x, puck.y), squareWin: true,
+      purpleBoost: Boolean(puck.result.x10Boosted || puck.result.purpleBoost), presentationPuck: puck });
+  }
+  return cells;
+}
+
+function getBigWinPulse(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
+  const elapsed = now - bigWinEffect.startedAt;
+  if (playControls?.pause.active) {
+    if (!state.animationsEnabled || matchMedia('(prefers-reduced-motion: reduce)').matches) return 0.7;
+    return 0.5 + 0.5 * Math.cos(elapsed / 1000 * Math.PI * 5);
+  }
   if (!state.animationsEnabled || elapsed < 0 || elapsed >= BIG_WIN_DURATION_MS) return 0;
   return (0.5 + 0.5 * Math.cos(elapsed / 1000 * Math.PI * 5))
     * Math.min(1, (BIG_WIN_DURATION_MS - elapsed) / 350);
 }
 
 function getBigWinWallRoomIds() {
-  return new Set([...bigWinEffect.winners].map((puck) =>
+  return new Set([...new Set([...bigWinEffect.winners, ...(playControls?.pause.winners || [])])].map((puck) =>
     puck.result.chanceRoom ? puck.chance?.roomId : "main").filter(Boolean));
 }
 
-function applyBigWinCellFlash(roomId, now = performance.now()) {
+function isMainRedBigWinWallActive() {
+  if (!MAIN_RED_BIG_WIN_WALLS_ENABLED || isX10VisualActive()
+    || (!state.animationsEnabled && !playControls?.pause.active)) return false;
+  return [...new Set([...bigWinEffect.winners, ...(playControls?.pause.winners || [])])]
+    .some(puck => isBigWinFlashing(puck) && puck.result
+      && !puck.result.chanceRoom && !puck.result.secretRoom
+      && !puck.result.x10Boosted && !puck.result.purpleBoost);
+}
+
+function applyBigWinCellFlash(roomId, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   const elapsed = now - bigWinEffect.startedAt;
-  if (!state.animationsEnabled || elapsed < 0 || elapsed >= BIG_WIN_DURATION_MS
+  if ((!playControls?.pause.active && (!state.animationsEnabled || elapsed < 0 || elapsed >= BIG_WIN_DURATION_MS))
       || !getBigWinWallRoomIds().has(roomId)) return;
   const pulse = getBigWinPulse(now);
   ctx.globalAlpha *= 0.18 + pulse * 0.82;
@@ -5193,7 +5440,7 @@ function drawBigWinWalls() {
   const purple = isX10VisualActive();
   if (winningRooms.has("main")) {
     outlines.push({ vertices: [toScreen(-half, -half), toScreen(half, -half),
-      toScreen(half, half), toScreen(-half, half)], color: purple ? "#ca68ff" : "#1bb866", room: null });
+      toScreen(half, half), toScreen(-half, half)], color: purple ? "#ca68ff" : "#ff4b4b", room: null });
   }
   CHANCE_ROOM_IDS.filter((id) => winningRooms.has(id)).forEach((id) => {
     const room = getChanceRoomGeometry(id);
@@ -5251,8 +5498,18 @@ function drawV4FieldSwitchFlash(now, active) {
   return true;
 }
 
-function getV3FieldSweep(now) {
+function getV3FieldSweep(now, frozenSnapshot = false) {
   if (!window.BalloroBonusUI?.isV3) return null;
+  if (frozenSnapshot) {
+    // Read the last transition only: a resize snapshot must not initiate a
+    // transition/sound, clear a bonus or schedule another animation frame.
+    if (!v3FieldTransition) return null;
+    const duration = v3FieldTransition.vertical
+      ? (v3FieldTransition.to ? V4_PURPLE_FIELD_ENTER_MS : V4_PURPLE_FIELD_EXIT_MS) : V3_FIELD_SWEEP_MS;
+    const progress = clamp((now - v3FieldTransition.startedAt) / duration, 0, 1);
+    return progress >= 1 ? null : { ...v3FieldTransition,
+      progress: v3FieldTransition.vertical ? progress : progress * progress * (3 - 2 * progress) };
+  }
   const active = isX10VisualActive();
   if (window.BalloroBonusUI?.isV4 && v3LastFieldVisualState !== null
     && active !== v3LastFieldVisualState) {
@@ -5337,21 +5594,27 @@ function updateBonusReadySound(now) {
     blink, now, state.soundEffectsMuted || document.hidden);
 }
 
-function render() {
-  const now = performance.now();
-  updateBonusReadySound(now);
+function render({ frozenSnapshot = false } = {}) {
+  const suspended = Boolean(window.BalloroGameLifecycle?.suspended);
+  if (suspended && !frozenSnapshot) return;
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
+  const yellowReturning = !suspended && updateYellowFieldReturn(now);
+  if (!suspended) updateBonusReadySound(now);
   const bonusGridActive = isX10VisualActive();
   document.body.classList.toggle("x10-visual-active", bonusGridActive);
-  updateBigWinEffect();
-  updatePocketBonusCounter();
-  updateChanceBonusCounter();
+  if (!suspended) {
+    updateBigWinEffect();
+    updatePocketBonusCounter();
+    updateChanceBonusCounter();
+  }
   const { half, grid } = state.field;
   const mergedMultiplierCells = buildMergedMultiplierCells();
-  const sweep = getV3FieldSweep(now);
+  const sweep = getV3FieldSweep(now, suspended);
   drawField(true, sweep);
+  drawYellowFieldReturn(now);
   drawMainFieldMultiplierLabels(mergedMultiplierCells, bonusGridActive, half, grid, sweep);
   const wallFlash = !window.BalloroBonusUI?.isV4 && drawV4FieldSwitchFlash(now, bonusGridActive);
-  if ((sweep || wallFlash) && v3FieldTransitionFrame === null) {
+  if (!suspended && (sweep || wallFlash || (yellowReturning && !state.running)) && v3FieldTransitionFrame === null) {
     v3FieldTransitionFrame = requestAnimationFrame(() => {
       v3FieldTransitionFrame = null;
       render();
@@ -6030,11 +6293,11 @@ function randomPrototypeUnit() {
   return Math.random();
 }
 
-function buildRandomPrototypeTrajectory(startPoint = null, angleCenter = -135) {
+function buildRandomPrototypeTrajectory(startPoint = null, angleCenter = -135, sourcePuck = null) {
   if (window.BalloroSavedPaths?.enabled) {
     if (window.BalloroBonusUI?.isV3) {
       return startPoint
-        ? window.BalloroSavedPaths.fieldV3Release(GRID_SIZE,startPoint,randomPrototypeUnit())
+        ? window.BalloroSavedPaths.fieldV3Release(GRID_SIZE,startPoint,randomPrototypeUnit(),sourcePuck?.v3PocketVisits)
         : window.BalloroSavedPaths.fieldV3(GRID_SIZE,randomPrototypeUnit(),randomPrototypeUnit());
     }
     return window.BalloroSavedPaths.field(GRID_SIZE, startPoint, randomPrototypeUnit());
@@ -6074,7 +6337,7 @@ function buildRandomPrototypeTrajectory(startPoint = null, angleCenter = -135) {
 }
 
 function selectV3RepeatedPurpleRelease(startPoint, puck) {
-  if (window.BalloroMvpMath?.enabled()) return buildRandomPrototypeTrajectory(startPoint, -135);
+  if (window.BalloroMvpMath?.enabled()) return buildRandomPrototypeTrajectory(startPoint, -135, puck);
   const previous = puck.v3LastPurpleReleaseDirection;
   let mostDifferent = null;
   let widestTurn = -1;
@@ -6094,8 +6357,10 @@ function selectV3RepeatedPurpleRelease(startPoint, puck) {
   return mostDifferent;
 }
 
-function isV3BonusLaunchBlocked() {
+function isV3BonusLaunchBlocked({ presentationOnly = false } = {}) {
   return Boolean(state.v3BonusLock || state.x10BoostActivated
+    || (!presentationOnly && window.BalloroBonusUI?.isV4 && (state.multiPlusActive
+      || getCarriedYellowCells().length || state.yellowFieldReturn))
     || (window.BalloroBonusUI?.isV4 && v3FieldTransition?.vertical && !v3FieldTransition.to));
 }
 
@@ -7199,8 +7464,9 @@ function upgradeSettledResultToX10(puck, { animate = true, playSound = true } = 
   result.basePayout = basePayout;
   result.x10Boosted = true;
   result.boostFromMultiplier = result.multiplier;
-  result.boostRevealStartedAt = animate && state.animationsEnabled ? performance.now() : 0;
+  result.boostRevealStartedAt = animate && state.animationsEnabled ? (window.BalloroGameLifecycle?.now() ?? performance.now()) : 0;
   result.payout = boostedPayout;
+  captureResultCellSymbol(puck);
   const payoutDelta = boostedPayout - basePayout;
   if (payoutDelta > 0) {
     state.bankroll += payoutDelta;
@@ -7342,7 +7608,8 @@ function upgradeSettledResultToMultiPlus(puck) {
   result.payout = payout;
   result.multiPlusBoosted = true;
   result.x10Boosted = x10Boosted;
-  puck.resultRevealStartedAt = performance.now();
+  captureResultCellSymbol(puck);
+  puck.resultRevealStartedAt = (window.BalloroGameLifecycle?.now() ?? performance.now());
   state.bankroll += payout;
   state.roundWinAmount += payout;
 
@@ -7371,6 +7638,7 @@ function collectMultiPlus(puck = null, allowUnplanned = false) {
   const token = state.multiPlusToken;
   if (!token || token.consumed || token.collected || (!token.shouldCollect && !allowUnplanned)) return;
   if (!puck || state.multiPlusCapturedPuck) return;
+  if (!registerMvpPocketVisit(puck, "lemon")) return;
   const firstV3Symbol = window.BalloroBonusUI?.isV3
     ? claimV3ExclusiveBonus("lemon", puck) : false;
   token.consumed = true;
@@ -7414,10 +7682,35 @@ function createFieldPocketPullCapture(puck, targetX, targetY) {
   };
 }
 
+function canCaptureMvpPocket(puck, kind) {
+  return !window.BalloroBonusUI?.isV4 || !window.BalloroMvpMath?.enabled()
+    || puck.v3ReservedPocketVisit === kind
+    || window.BalloroMvpMath.canEnterPocket(puck.v3PocketVisits, kind);
+}
+
+function registerMvpPocketVisit(puck, kind, queued = false) {
+  if (!window.BalloroBonusUI?.isV4 || !window.BalloroMvpMath?.enabled()) return true;
+  // A queued arrival is already one entry; transfer into the ready pocket
+  // must not count it again. Immutable updates keep sibling histories separate.
+  if (puck.v3ReservedPocketVisit === kind) {
+    if (!queued) puck.v3ReservedPocketVisit = null;
+    return true;
+  }
+  if (!canCaptureMvpPocket(puck, kind)) return false;
+  puck.v3PocketVisits = window.BalloroMvpMath.enterPocket(puck.v3PocketVisits, kind);
+  puck.v3ReservedPocketVisit = queued ? kind : null;
+  return true;
+}
+
 function queueV3PocketPuck(puck, kind, point, zoneId = null) {
+  playControls?.bonus(puck.v3ShotId);
   if (!window.BalloroBonusUI?.isV3 || puck.waitingForPocket || puck.v3QueuePull) return false;
+  const mathKind = kind === "blue" ? zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond"
+    : kind === "yellow" ? "lemon" : "crown";
+  if (!registerMvpPocketVisit(puck, mathKind, true)) return false;
   puck.authoritativeResult = null;
-  puck.waitingForPocket = { kind, zoneId, enteredAt: performance.now() };
+  puck.v3PocketQueueAdvancing = false;
+  puck.waitingForPocket = { kind, zoneId, enteredAt: (window.BalloroGameLifecycle?.now() ?? performance.now()) };
   puck.v3QueuePull = createFieldPocketPullCapture(puck, point.x, point.y);
   claimV3ExclusiveBonus(kind === "blue"
     ? zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond"
@@ -7444,7 +7737,7 @@ function stepFieldPocketPullCapture(puck, capture) {
   puck.vx = 0;
   puck.vy = 0;
   puck.speed = 0;
-  playPocketDropSound();
+  playPocketCaptureSound(puck);
   return true;
 }
 
@@ -7497,7 +7790,8 @@ function getMultiPlusNeonCandidateCells() {
 
 function getActiveMultiPlusCells() {
   // The chase is presentation only: no extra cell pays until its position is locked.
-  const cells = state.multiPlusFinalCells !== null ? state.multiPlusFinalCells
+  const cells = !state.multiPlusActive && getCarriedYellowCells().length ? getCarriedYellowCells()
+    : state.multiPlusFinalCells !== null ? state.multiPlusFinalCells
     : POCKET_TEST_RANDOM_PHYSICS ? [] : getMathConfiguration()?.multi_plus?.sectors ?? [];
   return cells.filter((cell) => !isBluePocketCoveringCell(cell));
 }
@@ -7513,6 +7807,9 @@ function moveMultiPlusNeonCells(now, final = false) {
   if (final) {
     state.multiPlusFinalCells = (state.multiPlusMvpPlan?.cells || state.multiPlusNeonCells)
       .map((cell) => ({ ...cell }));
+    if (window.BalloroBonusUI?.isV4) {
+      state.yellowFieldReturn = { cells: state.multiPlusFinalCells.map(cell => ({ ...cell })), startedAt: null };
+    }
     if (state.multiPlusMvpPlan) state.multiPlusNeonCells = state.multiPlusFinalCells.map(cell => ({ ...cell }));
     return;
   }
@@ -7567,7 +7864,8 @@ function moveMultiPlusNeonCells(now, final = false) {
 function maybeAdvanceMultiPlus(now) {
   const puck = state.multiPlusCapturedPuck;
   if (!puck) return;
-  if (window.BalloroBonusUI?.isV3 && state.v3BonusLock !== "lemon") return;
+  if (window.BalloroBonusUI?.isV3 && (state.v3BonusLock !== "lemon"
+    || state.v3BonusPuck !== puck)) return;
   if (state.multiPlusPhase === "captured") {
     if (window.BalloroBonusUI?.isV2 && state.multiPlusToken?.v2SymbolPending) return;
     const visualStopSpeed = state.field.half * 0.075;
@@ -7590,7 +7888,7 @@ function maybeAdvanceMultiPlus(now) {
     state.multiPlusMvpPlan = window.BalloroMvpMath?.enabled()
       ? window.BalloroSavedPaths.yellowV2Plan(GRID_SIZE,
         { x: state.multiPlusToken.x / state.field.half, y: state.multiPlusToken.y / state.field.half },
-        randomPrototypeUnit) : null;
+        randomPrototypeUnit, puck.v3PocketVisits) : null;
     moveMultiPlusNeonCells(now);
     updateMultiPlusCounter();
     playMultiPlusSound();
@@ -7628,7 +7926,7 @@ function releaseMultiPlusCapturedPuck(puck) {
     y: state.multiPlusToken.y / state.field.half
   };
   const releaseTrajectory = state.multiPlusMvpPlan?.trajectory || (POCKET_TEST_RANDOM_PHYSICS
-    ? buildRandomPrototypeTrajectory(releaseStartPoint, -135)
+    ? buildRandomPrototypeTrajectory(releaseStartPoint, -135, puck)
     : planRuntimeFieldPocketTrajectory({
       result: puck.authoritativeResult,
       seed: ((puck.authoritativeResult?.visual_seed || state.roundOutcome?.seed || 1)
@@ -7638,6 +7936,12 @@ function releaseMultiPlusCapturedPuck(puck) {
       releaseIndex,
       avoidPockets: [releaseStartPoint]
     }));
+  if (window.BalloroMvpMath?.enabled()) {
+    // The selected cells belong to this branch, including its green children.
+    // A later yellow entry replaces the mask; it never stacks another x10.
+    puck.v3YellowCells = (state.multiPlusMvpPlan?.cells || state.multiPlusFinalCells || [])
+      .map(cell => ({ ...cell }));
+  }
   state.multiPlusMvpPlan = null;
   if (!releaseTrajectory) {
     throw new Error("EX MULTI single-ball release trajectory is unavailable");
@@ -7667,12 +7971,13 @@ function resetPucks({ force = false } = {}) {
   if (window.BalloroRoundTapes?.busy && !force) return;
   state.v4HeldPurpleField = false;
   state.v4HeldYellowCells = null;
-  if (state.v3HoldTimer) window.clearTimeout(state.v3HoldTimer);
-  state.v3HoldTimer = null;
+  state.yellowFieldReturn = null;
+  stopHeldPaidLaunches();
   state.v3BonusLock = null;
   state.v3BonusPuck = null;
   state.v3BonusQueue = [];
   state.v3PocketSymbolCycle = { diamond: false, crown: false, lemon: false, blue: false };
+  state.v4PocketSymbolAppearance = {};
   state.v3Shots.clear();
   state.v3LastWinAmount = 0;
   if (state.winPresentationUnlockTimer !== null) {
@@ -7773,13 +8078,17 @@ function prepareLaunchRound(slot, { debit = true } = {}) {
     return false;
   }
 
-  if (state.bankroll < totalBet) {
+  // Free static-field preparation (line changes/resize) is not a wager.
+  // Keep the full board and all pockets visible regardless of the balance;
+  // actual paid launches retain their balance check before any debit.
+  if (debit && state.bankroll < totalBet) {
     openPopup(els.topUpPopup);
     return false;
   }
   // Retained bonus boards are presentation only; a new paid shot is normal.
   state.v4HeldPurpleField = false;
   state.v4HeldYellowCells = null;
+  state.yellowFieldReturn = null;
 
   const roundSeed = createRoundSeed();
   const roundOutcome = window.PuckLuckMath?.createRound({
@@ -7987,6 +8296,7 @@ function prepareV3StaticField() {
 }
 
 function launchPuck(slot) {
+  if (window.BalloroGameEntry?.blocked) return false;
   if (window.BalloroBonusUI?.isV3) return launchV3Pucks(slot);
   if (window.BalloroRoundTapes?.enabled) return window.BalloroRoundTapes.launch(slot);
   if (window.BalloroSavedPaths?.enabled && !window.BalloroSavedPaths.has(GRID_SIZE)) {
@@ -8018,7 +8328,7 @@ function launchPuck(slot) {
   state.launchPreparedSlot = null;
   state.roundId += 1;
   const roundId = state.roundId;
-  state.lastFrameAt = performance.now();
+  state.lastFrameAt = (window.BalloroGameLifecycle?.now() ?? performance.now());
   state.physicsAccumulator = 0;
   if (state.autoPlay && Number.isFinite(state.autoRoundsRemaining)) {
     state.autoRoundsRemaining = Math.max(0, state.autoRoundsRemaining - 1);
@@ -8033,13 +8343,14 @@ function launchPuck(slot) {
 
   updateBetButtons();
   render();
-  requestAnimationFrame((time) => tick(time, roundId));
+  scheduleGameTick(roundId);
 }
 
 function launchV3Pucks(slot) {
-  const now = performance.now();
+  if (window.BalloroGameEntry?.blocked || window.BalloroGameLifecycle?.suspended) return false;
+  const now = (window.BalloroGameLifecycle?.now() ?? performance.now());
   const interval = getV3LaunchIntervalMs();
-  if (!slot || isV3BonusLaunchBlocked()
+  if (!slot || playControls?.pause.active || isV3BonusLaunchBlocked()
     || (state.v3LastLaunchAt > 0 && now - state.v3LastLaunchAt < interval)) return false;
   const bet = parseBet(slot);
   // V3 offers one paid ball per launch, including autoplay and held spin.
@@ -8047,10 +8358,11 @@ function launchV3Pucks(slot) {
   const count = 1;
   const totalBet = bet * count;
   if (!(bet > 0)) return false;
-  if (state.bankroll < totalBet) {
-    openPopup(els.topUpPopup);
-    return false;
-  }
+  if (state.autoPlay && !playControls?.canLaunch(totalBet)) return false;
+  let permitted = false;
+  try { permitted = BalloroPlayControls.policy.canPlaceBet({ stake: totalBet, autoplay: state.autoPlay }) === true; } catch (_) { /* fail closed */ }
+  if (!permitted) { if (state.autoPlay) stopControlledAuto('policy'); return false; }
+  if (!requirePaidLaunchBalance(totalBet)) return false;
   state.v4HeldPurpleField = false;
   state.v4HeldYellowCells = null;
   // Prepare the field only once. A subsequent launch is another paid bet on
@@ -8065,6 +8377,8 @@ function launchV3Pucks(slot) {
     updateBank();
   }
   const wasRunning = state.running;
+  state.lineMaximumNotice = null;
+  if (!state.autoPlay) playControls?.acknowledge();
   state.activeSlot = slot;
   state.activeBetPerPuck = bet;
   state.v3LastWinAmount = 0;
@@ -8101,13 +8415,14 @@ function launchV3Pucks(slot) {
   if (state.autoPlay && Number.isFinite(state.autoRoundsRemaining)) {
     state.autoRoundsRemaining = Math.max(0, state.autoRoundsRemaining - 1);
   }
+  if (state.autoPlay) playControls.launched(shotId, totalBet);
   playLaunchSound();
   if (!wasRunning) {
     state.running = true;
     state.roundId += 1;
     state.lastFrameAt = now;
     state.physicsAccumulator = 0;
-    requestAnimationFrame((time) => tick(time, state.roundId));
+    scheduleGameTick(state.roundId);
   }
   updateBetButtons();
   render();
@@ -8115,9 +8430,10 @@ function launchV3Pucks(slot) {
 }
 
 function getV3LaunchIntervalMs() {
-  return state.quickPlay
+  const interval = state.quickPlay
     ? window.BalloroV3Rules.quickLaunchIntervalMs
     : window.BalloroV3Rules.launchIntervalMs;
+  return Math.max(interval, BalloroPlayControls.policy.minLaunchIntervalMs);
 }
 
 function nudgeVelocity(puck) {
@@ -8328,6 +8644,9 @@ function buildPocketReleaseTrajectoryPlans(roundOutcome) {
 function createPocketReleasePuck(source, zone, releaseIndex, outcomePlan) {
   const releasePuck = {
     ...source,
+    v3PocketVisits: { ...source.v3PocketVisits },
+    v3YellowCells: source.v3YellowCells?.map(cell => ({ ...cell })),
+    v3ReservedPocketVisit: null,
     visualRngState: (outcomePlan?.visual_seed || (source.visualRngState ^ Math.imul(releaseIndex, 0x9e3779b1))) >>> 0,
     authoritativeResult: normalizeAuthoritativeResult(outcomePlan),
     replayFrame: 0,
@@ -8392,6 +8711,9 @@ function parkSecretRoomPuck(puck) {
     if (pocket) pocket.consumed = true;
     if (window.BalloroBonusUI?.isV2 && !window.BalloroBonusUI?.isV3) visit.bonusSymbolPending = true;
   }
+  if (!registerMvpPocketVisit(puck, visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond")) {
+    throw new Error("Selected trajectory exceeded its inherited pocket entry limit");
+  }
   if (window.BalloroBonusUI?.isV3) {
     visit.bonusSymbolPending = claimV3ExclusiveBonus(
       visit.zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond", puck);
@@ -8423,7 +8745,7 @@ function startSecretRoomPocketSymbolPickup(visit, zone) {
       visit.bonusSymbolPending = false;
       visit.v2BonusActivated = activated;
       if (state.bluePocket) state.bluePocket.symbolArrived = true;
-      if (activated) visit.blueLaunchReadyAt = performance.now() + V2_CACTUS_POST_ACTIVATION_HOLD_MS;
+      if (activated) visit.blueLaunchReadyAt = (window.BalloroGameLifecycle?.now() ?? performance.now()) + V2_CACTUS_POST_ACTIVATION_HOLD_MS;
     });
   } else {
     recordV2PocketPickup("diamond", zone.hole.x, zone.hole.y, state.field.puckRadius,
@@ -8461,7 +8783,7 @@ function beginSecretRoomVisit(puck) {
       const startPoint = { x: zone.hole.x / state.field.half, y: zone.hole.y / state.field.half };
       const trajectory = repeatedPurpleVisit
         ? selectV3RepeatedPurpleRelease(startPoint, puck)
-        : buildRandomPrototypeTrajectory(startPoint, -135);
+        : buildRandomPrototypeTrajectory(startPoint, -135, puck);
       if (window.BalloroBonusUI?.isV3) {
         const first = trajectory.frames[0];
         puck.v3LastPurpleReleaseDirection = Math.atan2(first[4], first[3]);
@@ -8476,7 +8798,7 @@ function beginSecretRoomVisit(puck) {
     if (window.BalloroBonusUI?.isV3) puck.pocketBallKind = "diamond";
     if (window.BalloroBonusUI?.isV3) puck.purplePocketExitRequired = true;
     state.openSecretZones.add(visit.zoneId);
-    state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
+    state.secretZoneOpenTimes[visit.zoneId] ||= (window.BalloroGameLifecycle?.now() ?? performance.now());
     playLaunchSound();
     return;
   }
@@ -8487,7 +8809,7 @@ function beginSecretRoomVisit(puck) {
     const released = [puck, ...[1, 2].map((offset) =>
       createPocketReleasePuck(puck, zone, releaseStartIndex + offset, null))];
     released.forEach((releasePuck, offset) => {
-      const trajectory = buildRandomPrototypeTrajectory(startPoint, -135);
+      const trajectory = buildRandomPrototypeTrajectory(startPoint, -135, releasePuck);
       preparePocketReleasePuck(releasePuck, zone, releaseStartIndex + offset, null, trajectory);
       releasePuck.authoritativeResult = null;
       releasePuck.bluePocketExitRequired = true;
@@ -8500,7 +8822,7 @@ function beginSecretRoomVisit(puck) {
     });
     // V3 leaves the green pocket occupied until all three released balls finish.
     state.openSecretZones.add(visit.zoneId);
-    state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
+    state.secretZoneOpenTimes[visit.zoneId] ||= (window.BalloroGameLifecycle?.now() ?? performance.now());
     playLaunchSound();
     return;
   }
@@ -8522,7 +8844,7 @@ function beginSecretRoomVisit(puck) {
   if (window.BalloroBonusUI?.isV3) puck.pocketBallKind = "blue";
   state.pucks.push(...extraPucks);
   state.openSecretZones.add(visit.zoneId);
-  state.secretZoneOpenTimes[visit.zoneId] ||= performance.now();
+  state.secretZoneOpenTimes[visit.zoneId] ||= (window.BalloroGameLifecycle?.now() ?? performance.now());
   playLaunchSound();
 }
 
@@ -8551,7 +8873,7 @@ function stepSecretRoomPuck(puck) {
       puck.vx = 0;
       puck.vy = 0;
       puck.speed = 0;
-      playPocketDropSound();
+      playPocketCaptureSound(puck);
       if (window.BalloroBonusUI?.isV2 && !window.BalloroBonusUI?.isV3) {
         startSecretRoomPocketSymbolPickup(visit, zone);
       }
@@ -8578,6 +8900,7 @@ function captureFieldPocketPuckByTouch(puck, atRest = false) {
     [BLUE_FIELD_POCKET_ZONE_ID, state.bluePocket]];
   for (const [zoneId, pocketState] of pockets) {
     if (!pocketState || pocketState.consumed) continue;
+    if (!canCaptureMvpPocket(puck, zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond")) continue;
     const pocket = getFieldPocketNormalized(pocketState);
     // A ball expelled by the green pocket must leave that pocket before it can
     // re-enter it. This guard must not suppress capture by the purple pocket.
@@ -8646,6 +8969,7 @@ function captureChancePuck(puck, allowStationaryOverlap = false, slowApproach = 
   if (!window.BalloroBonusUI?.isV2 && !captured && state.chancePocket.forced && state.pucks.indexOf(puck) === 0
     && puck.replayFrame >= state.chancePocket.forceFrameIndex) captured = true;
   if (!captured) return false;
+  if (!registerMvpPocketVisit(puck, "crown")) return false;
 
   state.chancePocket.consumed = true;
   const firstV3Symbol = window.BalloroBonusUI?.isV3
@@ -8659,7 +8983,7 @@ function captureChancePuck(puck, allowStationaryOverlap = false, slowApproach = 
   const targetY = pocket.normalized.y * state.field.half;
   puck.chance = {
     phase: "capturing",
-    capturedAt: performance.now(),
+    capturedAt: (window.BalloroGameLifecycle?.now() ?? performance.now()),
     waveStartedAt: 0,
     roomId: null,
     pocketCapture: createFieldPocketPullCapture(puck, targetX, targetY)
@@ -8702,7 +9026,7 @@ function stepChanceRoomPuck(puck) {
   }
   if (["captured", "spinning", "final_cue"].includes(chance.phase)) return true;
   if (chance.phase === "sinking") {
-    const progress = clamp((performance.now() - chance.sinkStartedAt) / CHANCE_SINK_DURATION_MS, 0, 1);
+    const progress = clamp(((window.BalloroGameLifecycle?.now() ?? performance.now()) - chance.sinkStartedAt) / CHANCE_SINK_DURATION_MS, 0, 1);
     puck.pocketDepth = 0.55 + progress * 0.45;
     if (progress >= 1) {
       if (state.chancePocket) state.chancePocket.finished = true;
@@ -8720,7 +9044,7 @@ function stepChanceRoomPuck(puck) {
         updateChanceBonusCounter();
         playLaunchSound();
       } else {
-        startChanceRoomSpin(puck, performance.now());
+        startChanceRoomSpin(puck, (window.BalloroGameLifecycle?.now() ?? performance.now()));
       }
     }
     return true;
@@ -8775,7 +9099,7 @@ function stepChanceRoomPuck(puck) {
   puck.stopped = true;
   updateBank();
   puck.speed = 0;
-  puck.resultRevealStartedAt = performance.now();
+  puck.resultRevealStartedAt = (window.BalloroGameLifecycle?.now() ?? performance.now());
   puck.result = {
     category: won ? "chance" : "empty",
     multiplier,
@@ -8787,6 +9111,7 @@ function stepChanceRoomPuck(puck) {
     chanceRoomTier
   };
   chance.phase = "settled";
+  captureResultCellSymbol(puck);
   state.chanceRoomOutcome = { roomId: chance.roomId, won, multiplier, chanceRoomTier };
   state.chanceCompletedRoomIds.add(chance.roomId);
   if (state.chanceCapturedPuck === puck) {
@@ -8806,7 +9131,8 @@ function stepChanceRoomPuck(puck) {
 function maybeAdvanceChance(now) {
   const puck = state.chanceCapturedPuck;
   if (!puck) return;
-  if (window.BalloroBonusUI?.isV3 && state.v3BonusLock !== "crown") return;
+  if (window.BalloroBonusUI?.isV3 && (state.v3BonusLock !== "crown"
+    || state.v3BonusPuck !== puck)) return;
   if (state.chancePhase === "captured") {
     if (window.BalloroBonusUI?.isV2 && puck.v2SymbolPending) return;
     const otherActivity = state.pucks.some((item) => item !== puck && !item.stopped);
@@ -8828,6 +9154,9 @@ function maybeAdvanceChance(now) {
     return;
   }
   if (state.chancePhase !== "spinning") return;
+  // A completed older SC presentation may clear shared UI state while a
+  // queued ball prepares. Its already chosen destination belongs to the ball.
+  state.chanceSelectedRoomId = puck.chance.selectedRoomId ?? state.chanceSelectedRoomId;
   const progress = clamp((now - state.chanceSpinStartedAt) / CHANCE_SPIN_DURATION_MS, 0, 1);
   if (progress >= 1) {
     state.chanceSpinRoomIndex = CHANCE_ROOM_IDS.indexOf(state.chanceSelectedRoomId);
@@ -8855,6 +9184,7 @@ function startChanceRoomSpin(puck, now) {
   state.chanceSelectedRoomId = window.BalloroMvpMath?.enabled()
     ? CHANCE_ROOM_IDS[Math.floor(randomPrototypeUnit() * CHANCE_ROOM_IDS.length)]
     : CHANCE_ROOM_IDS[rng.int(CHANCE_ROOM_IDS.length)];
+  puck.chance.selectedRoomId = state.chanceSelectedRoomId;
   // Fractional travel reaches the final room before the bell; integer travel
   // keeps the final jump until the bell. Vary presentation, not the chosen payout.
   const holdFinalRoom = Math.random() < 0.5;
@@ -8878,7 +9208,8 @@ function launchChanceRoomPuck(puck) {
   state.chancePhase = "idle";
   state.chanceFinalCueUntil = 0;
   updateChanceBonusCounter();
-  chance.roomId = state.chanceSelectedRoomId;
+  chance.roomId = chance.selectedRoomId ?? state.chanceSelectedRoomId;
+  state.chanceSelectedRoomId = chance.roomId;
   const sharedEntry = window.BalloroBonusUI?.isV2;
   const entry = getChanceRoomEntryLocal(chance.roomId, 0.82);
   chance.u = entry.u;
@@ -9143,11 +9474,26 @@ function stepReplayPuck(puck) {
 function getResultCell(puck) {
   const actual = getCellFromPoint(puck.x, puck.y);
   const actualCategory = getCellCategory(actual.col, actual.row);
-  const actualMultiplier = getCellMultiplier(actual.col, actual.row);
+  const actualMultiplier = getPuckCellMultiplier(puck, actual.col, actual.row);
   if (puck.authoritativeResult && !POCKET_TEST_RANDOM_PHYSICS) {
     return { ...puck.authoritativeResult };
   }
-  return { col: actual.col, row: actual.row, category: actualCategory, multiplier: actualMultiplier };
+  const category = window.BalloroMvpMath?.enabled() ? getPuckCellCategory(puck, actual.col, actual.row) : actualCategory;
+  return { col: actual.col, row: actual.row, category, multiplier: actualMultiplier };
+}
+
+function getPuckCellMultiplier(puck, col, row) {
+  if (!window.BalloroMvpMath?.enabled()) return getCellMultiplier(col, row);
+  const rules = window.BalloroV4Rules;
+  const boosted = puck.v3YellowCells?.some(cell => cell.col === col && cell.row === row);
+  return Math.round(rules.cellMultiplier(GRID_SIZE, col, row) * (boosted ? rules.yellowMultiplier : 1) * 10) / 10;
+}
+
+function getPuckCellCategory(puck, col, row) {
+  if (window.BalloroV4Rules.pocketKindAt(GRID_SIZE, col, row)) return "empty";
+  if (puck.v3YellowCells?.some(cell => cell.col === col && cell.row === row)) return "multi_plus";
+  const mid = (GRID_SIZE - 1) / 2, ring = Math.max(Math.abs(col - mid), Math.abs(row - mid));
+  return ring === 0 ? "center" : ring === 1 ? "middle" : "outer";
 }
 
 function getCellCategory(col, row) {
@@ -9173,7 +9519,7 @@ function getCellCategory(col, row) {
 function settleSecretPuck(puck) {
   const actual = getCellFromPoint(puck.x, puck.y);
   const actualCategory = getCellCategory(actual.col, actual.row);
-  const multiplier = getCellMultiplier(actual.col, actual.row);
+  const multiplier = getPuckCellMultiplier(puck, actual.col, actual.row);
   const diagnostic = state.trajectoryDiagnostics[state.pucks.indexOf(puck)];
   if (diagnostic) {
     diagnostic.actual_sector = actual;
@@ -9198,7 +9544,7 @@ function settleSecretPuck(puck) {
   puck.speed = 0;
   puck.secretRoom.phase = "settled";
   puck.pocketRelease = true;
-  puck.resultRevealStartedAt = performance.now();
+  puck.resultRevealStartedAt = (window.BalloroGameLifecycle?.now() ?? performance.now());
   puck.result = {
     col: actual.col,
     row: actual.row,
@@ -9211,6 +9557,7 @@ function settleSecretPuck(puck) {
     pocketRelease: true,
     secretZoneId: puck.secretRoom.zoneId
   };
+  captureResultCellSymbol(puck);
   if (multiplier > 0) {
     state.settledCells.push({
       col: actual.col,
@@ -9256,8 +9603,9 @@ function settlePuck(puck) {
   puck.vx = 0;
   puck.vy = 0;
   puck.speed = 0;
-  puck.resultRevealStartedAt = performance.now();
+  puck.resultRevealStartedAt = (window.BalloroGameLifecycle?.now() ?? performance.now());
   puck.result = { ...result, multiplier, payout, basePayout, x10Boosted, multiPlusBoosted };
+  captureResultCellSymbol(puck);
   const v3SoundTier = window.BalloroBonusUI?.isV3
     ? getV3WinSoundTier(result.col, result.row) : null;
   playMultiplierResultSound(multiplier, x10Boosted,
@@ -9331,7 +9679,7 @@ function settleRound() {
   }
   state.activeSlot = null;
   state.activeBetPerPuck = 0;
-  state.roundSettledAt = performance.now();
+  state.roundSettledAt = (window.BalloroGameLifecycle?.now() ?? performance.now());
   updateBank();
   updateBetButtons();
   updateRoundWinLabel();
@@ -9343,7 +9691,7 @@ function settleRound() {
     state.winPresentationUnlockTimer = null;
   }
   const unlockDelay = Math.max(0,
-    getAutoPlayReadyAt() - AUTO_PLAY_ROUND_GAP_MS - performance.now());
+    getAutoPlayReadyAt() - AUTO_PLAY_ROUND_GAP_MS - (window.BalloroGameLifecycle?.now() ?? performance.now()));
   if (unlockDelay > 0) {
     state.winPresentationUnlockTimer = window.setTimeout(() => {
       state.winPresentationUnlockTimer = null;
@@ -9435,7 +9783,8 @@ function captureWaitingPucksForAvailablePockets() {
       const point = getFieldPocketNormalized(pocketState);
       const queued = state.pucks.filter((puck) => puck.stopped
         && puck.waitingForPocket?.kind === "blue"
-        && puck.waitingForPocket.zoneId === zoneId)
+        && puck.waitingForPocket.zoneId === zoneId
+        && (!state.v3BonusLock || puck === state.v3BonusPuck))
         .sort((a, b) => a.waitingForPocket.enteredAt - b.waitingForPocket.enteredAt)[0];
       const waiting = queued || findStoppedPuckInPocketRange(
         { x: point.x * state.field.half, y: point.y * state.field.half },
@@ -9445,6 +9794,7 @@ function captureWaitingPucksForAvailablePockets() {
       );
       if (waiting) {
         reopenSettledPuckForPocketCapture(waiting);
+        waiting.v3PocketQueueAdvancing = Boolean(queued);
         waiting.waitingForPocket = null;
         waiting.pocketDepth = 0;
         captureFieldPocketPuckByTouch(waiting, true);
@@ -9457,7 +9807,8 @@ function captureWaitingPucksForAvailablePockets() {
     && (!window.BalloroBonusUI?.isV3 || !state.v3BonusLock || state.v3BonusLock === "lemon")) {
     const queuedYellow = window.BalloroBonusUI?.isV3
       ? state.pucks.filter((puck) => puck.stopped
-        && puck.waitingForPocket?.kind === "yellow")
+        && puck.waitingForPocket?.kind === "yellow"
+        && (!state.v3BonusLock || puck === state.v3BonusPuck))
         .sort((a, b) => a.waitingForPocket.enteredAt - b.waitingForPocket.enteredAt)[0] : null;
     const yellowPuck = queuedYellow || findStoppedPuckInPocketRange(
       token,
@@ -9468,6 +9819,7 @@ function captureWaitingPucksForAvailablePockets() {
     );
     if (yellowPuck) {
       reopenSettledPuckForPocketCapture(yellowPuck);
+      yellowPuck.v3PocketQueueAdvancing = Boolean(queuedYellow);
       yellowPuck.waitingForPocket = null;
       yellowPuck.pocketDepth = 0;
       collectMultiPlus(yellowPuck, true);
@@ -9479,7 +9831,8 @@ function captureWaitingPucksForAvailablePockets() {
     && (!window.BalloroBonusUI?.isV3 || !state.v3BonusLock || state.v3BonusLock === "crown")) {
     const pocket = getChancePocketGeometry();
     const queuedRedPuck = state.pucks.filter((puck) => puck.stopped
-      && puck.waitingForPocket?.kind === "red")
+      && puck.waitingForPocket?.kind === "red"
+      && (!state.v3BonusLock || puck === state.v3BonusPuck))
       .sort((first, second) => first.waitingForPocket.enteredAt
         - second.waitingForPocket.enteredAt)[0];
     const redPuck = queuedRedPuck || findStoppedPuckInPocketRange(
@@ -9492,6 +9845,7 @@ function captureWaitingPucksForAvailablePockets() {
     );
     if (redPuck) {
       reopenSettledPuckForPocketCapture(redPuck);
+      redPuck.v3PocketQueueAdvancing = Boolean(queuedRedPuck);
       redPuck.waitingForPocket = null;
       redPuck.pocketDepth = 0;
       captureChancePuck(redPuck, true);
@@ -9547,7 +9901,22 @@ function getLiveBonusPreparationStep() {
   return FIXED_PHYSICS_STEP / getLiveBallPlaybackSpeed();
 }
 
+function scheduleGameTick(roundId) {
+  if (window.BalloroGameLifecycle?.suspended || !state.running || roundId !== state.roundId) return;
+  if (state.physicsFrame !== null) {
+    if (state.physicsFrameRoundId === roundId) return;
+    cancelAnimationFrame(state.physicsFrame);
+  }
+  state.physicsFrameRoundId = roundId;
+  state.physicsFrame = requestAnimationFrame((time) => {
+    state.physicsFrame = null;
+    tick(time, roundId);
+  });
+}
+
 function tick(now, roundId) {
+  if (window.BalloroGameLifecycle?.suspended) return;
+  now = window.BalloroGameLifecycle?.now() ?? now;
   if (!state.running || roundId !== state.roundId) {
     return;
   }
@@ -9581,7 +9950,7 @@ function tick(now, roundId) {
     if (window.BalloroBonusUI?.isV3) {
       if (state.v3BonusLock || state.x10BoostActivated
         || state.chanceSelectedRoomId || state.chanceCapturedPuck) {
-        requestAnimationFrame((time) => tick(time, roundId));
+        scheduleGameTick(roundId);
         return;
       }
       state.running = false;
@@ -9596,12 +9965,16 @@ function tick(now, roundId) {
     return;
   }
 
-  requestAnimationFrame((time) => tick(time, roundId));
+  scheduleGameTick(roundId);
 }
 
 function finishV3ExclusiveBonus(now) {
   if (!state.v3BonusLock || state.v3BonusLock === "pending" || !state.v3BonusPuck) return;
-  const transferred = state.v3BonusPuck.waitingForPocket
+  const waitingKind = state.v3BonusPuck.waitingForPocket && (state.v3BonusPuck.waitingForPocket.kind === "yellow"
+    ? "lemon" : state.v3BonusPuck.waitingForPocket.kind === "red" ? "crown"
+      : state.v3BonusPuck.waitingForPocket.zoneId === BLUE_FIELD_POCKET_ZONE_ID ? "blue" : "diamond");
+  if (waitingKind === state.v3BonusLock) return;
+  const transferred = (waitingKind && waitingKind !== state.v3BonusLock)
     || state.v3BonusQueue.some((entry) => entry.puck === state.v3BonusPuck
       && entry.kind !== state.v3BonusLock);
   if (state.v3BonusLock === "blue") {
@@ -9619,7 +9992,8 @@ function finishV3ExclusiveBonus(now) {
   } else if (!state.v3BonusPuck.stopped && !transferred) {
     return;
   }
-  // Yellow can release the launch lock as the result starts fading. Purple
+  // Yellow releases this pocket lock as the result starts fading; the paid
+  // launch gate still waits for its field-return flash. Purple
   // holds through the victory cue and the ball's fade, but not the much longer
   // floating multiplier tail.
   if (state.v3BonusLock !== "blue" && !transferred) {
@@ -9633,9 +10007,7 @@ function finishV3ExclusiveBonus(now) {
       state.fieldPocket.finished = false;
     }
   } else if (state.v3BonusLock === "lemon") {
-    if (window.BalloroBonusUI?.isV4 && !state.autoPlay && !state.v3HoldTimer) {
-      state.v4HeldYellowCells = state.multiPlusFinalCells?.map(cell => ({ ...cell })) || null;
-    }
+    // The common return flash replaces the old manual-only indefinite hold.
     state.multiPlusActive = false;
     state.multiPlusFinalCells = null;
     if (state.multiPlusToken) {
@@ -9716,18 +10088,21 @@ function finalizeV3Shots() {
         balls: shot.count, stake: shot.stake, payout });
     }
     state.v3Shots.delete(shotId);
+    playControls?.settled(shotId, payout);
+    if (playControls?.pause.active) updateBetButtons();
     renderHistory();
   }
 }
 
 function claimV3ExclusiveBonus(kind, puck) {
+  playControls?.bonus(puck.v3ShotId);
   // A released ball can enter the same pocket again: that is a new visit,
   // even though the previous visit is still the active bonus for this puck.
   if ((state.v3BonusPuck === puck && state.v3BonusLock === kind && !puck.waitingForPocket)
     || state.v3BonusQueue.some((entry) => entry.puck === puck && entry.kind === kind)) return false;
   const firstSymbol = !state.v3PocketSymbolCycle[kind];
   state.v3PocketSymbolCycle[kind] = true;
-  state.v3BonusQueue.push({ kind, puck, enteredAt: performance.now() });
+  state.v3BonusQueue.push({ kind, puck, enteredAt: (window.BalloroGameLifecycle?.now() ?? performance.now()) });
   if (!state.v3BonusLock) state.v3BonusLock = "pending";
   updateBetButtons();
   return firstSymbol;
@@ -9740,7 +10115,15 @@ function advanceV3BonusQueue() {
     && !["capturing", "pocket_wait"].includes(puck.secretRoom?.phase));
   if (otherBallMoving) return;
   const priority = { blue: 0, lemon: 1, crown: 2, diamond: 3 };
+  const ready = (entry) => entry.kind === "lemon" ? entry.puck === state.multiPlusCapturedPuck
+    : entry.kind === "crown" ? entry.puck === state.chanceCapturedPuck
+      : ["capturing", "pocket_wait"].includes(entry.puck.secretRoom?.phase)
+        && entry.puck.secretRoom.zoneId === (entry.kind === "blue" ? BLUE_FIELD_POCKET_ZONE_ID : FIELD_POCKET_ZONE_ID);
+  // A ball already occupying a pocket must be served before parked arrivals
+  // for that same pocket. Otherwise its live preparation could be cleared by
+  // completing the lock of a still-queued ball.
   state.v3BonusQueue.sort((a, b) => priority[a.kind] - priority[b.kind]
+    || Number(ready(b)) - Number(ready(a))
     || a.enteredAt - b.enteredAt);
   const next = state.v3BonusQueue.shift();
   state.v3BonusLock = next.kind;
@@ -9767,6 +10150,42 @@ function closePopup(popup) {
 
 function updateBank() {
   els.bankedLoot.textContent = formatMoney(state.bankroll);
+}
+
+function guardFundingOpeningRelease() {
+  const cleanup = () => {
+    document.removeEventListener('click', ignoreRelease, true);
+    document.removeEventListener('pointerdown', cleanup, true);
+    document.removeEventListener('pointercancel', cleanup, true);
+    document.removeEventListener('keydown', cleanup, true);
+    window.removeEventListener('blur', cleanup);
+  };
+  const ignoreRelease = (event) => {
+    cleanup();
+    if (event.detail > 0) { event.preventDefault(); event.stopImmediatePropagation(); }
+  };
+  // Exhaustion can open the modal while the old Spin contact is still down.
+  // Swallow only that release click, never the next deliberate interaction.
+  document.addEventListener('click', ignoreRelease, true);
+  document.addEventListener('pointerdown', cleanup, true);
+  document.addEventListener('pointercancel', cleanup, true);
+  document.addEventListener('keydown', cleanup, true);
+  window.addEventListener('blur', cleanup);
+}
+
+// Funding is an action, not a disabled Spin dead end. Already paid balls and
+// bonus chains remain untouched; top-up never restarts paid play by itself.
+function requirePaidLaunchBalance(stake) {
+  if (window.BalloroGameLifecycle?.suspended) return false;
+  if (!(stake > 0)) return false;
+  if (state.bankroll >= stake && state.bankroll >= BET_STEPS[0]) return true;
+  if (state.v3HoldTimer && els.topUpPopup.classList.contains('hidden')) guardFundingOpeningRelease();
+  stopHeldPaidLaunches();
+  playControls?.release();
+  if (state.autoPlay) stopControlledAuto('balance');
+  if (els.topUpPopup.classList.contains('hidden')) openPopup(els.topUpPopup);
+  updateBetButtons();
+  return false;
 }
 
 function updateRoundWinLabel() {
@@ -9810,26 +10229,30 @@ function getAutoPlayReadyAt() {
   return endsAt + AUTO_PLAY_ROUND_GAP_MS;
 }
 
-function isWinPresentationActive(now = performance.now()) {
+function isWinPresentationActive(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
   if (!(state.roundWinAmount > 0)) return false;
   return now < getAutoPlayReadyAt() - AUTO_PLAY_ROUND_GAP_MS;
 }
 
 function runAutoPlayTick() {
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (window.BalloroBonusUI?.isV3) {
     if (!state.autoPlay) return;
+    if (playControls?.pause.active || playControls?.check()) return;
     if (state.autoRoundsRemaining === 0) {
-      setAutoPlay(false);
+      stopControlledAuto('count');
       updateSlotUi();
       return;
     }
     const slot = els.betSlots[0];
-    if (!slot || state.bankroll < parseBet(slot) * state.puckCount) {
-      setAutoPlay(false);
-      openPopup(els.topUpPopup);
+    if (!slot || !(parseBet(slot) > 0)) {
+      stopControlledAuto('balance');
       return;
     }
-    if (slot && !isV3BonusLaunchBlocked()) launchV3Pucks(slot);
+    if (!isV3BonusLaunchBlocked()) {
+      if (!requirePaidLaunchBalance(parseBet(slot))) return;
+      launchV3Pucks(slot);
+    }
     scheduleNextAutoPlayRound();
     return;
   }
@@ -9842,7 +10265,7 @@ function runAutoPlayTick() {
     return;
   }
   // Recheck after the timer: another winner can restart the celebration.
-  if (performance.now() < getAutoPlayReadyAt()) {
+  if ((window.BalloroGameLifecycle?.now() ?? performance.now()) < getAutoPlayReadyAt()) {
     scheduleNextAutoPlayRound();
     return;
   }
@@ -9865,11 +10288,12 @@ function runAutoPlayTick() {
 }
 
 function scheduleNextAutoPlayRound() {
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (window.BalloroBonusUI?.isV3) {
-    if (!state.autoPlay) return;
+    if (!state.autoPlay || playControls?.pause.active) return;
     if (state.autoPlayTimer) window.clearTimeout(state.autoPlayTimer);
     const wait = isV3BonusLaunchBlocked() ? 50
-      : Math.max(0, state.v3LastLaunchAt + getV3LaunchIntervalMs() - performance.now());
+      : Math.max(0, state.v3LastLaunchAt + getV3LaunchIntervalMs() - (window.BalloroGameLifecycle?.now() ?? performance.now()));
     state.autoPlayTimer = window.setTimeout(() => {
       state.autoPlayTimer = null;
       runAutoPlayTick();
@@ -9881,10 +10305,22 @@ function scheduleNextAutoPlayRound() {
   state.autoPlayTimer = window.setTimeout(() => {
     state.autoPlayTimer = null;
     runAutoPlayTick();
-  }, Math.max(AUTO_PLAY_ROUND_GAP_MS, getAutoPlayReadyAt() - performance.now()));
+  }, Math.max(AUTO_PLAY_ROUND_GAP_MS, getAutoPlayReadyAt() - (window.BalloroGameLifecycle?.now() ?? performance.now())));
 }
 
 function setAutoPlay(enabled) {
+  if (enabled && window.BalloroGameEntry?.blocked) return;
+  if (enabled && window.BalloroGameLifecycle?.suspended) return;
+  if (enabled && !BalloroPlayControls.policy.autoplay) return;
+  if (enabled && BalloroPlayControls.policy.requireLossLimit
+    && (!playControls?.session?.active || !playControls.session.limits.loss)) return;
+  if (enabled && playControls && !playControls.session?.active) {
+    const requested = state.autoRoundsRemaining > 0 ? state.autoRoundsRemaining : selectedAutoRounds;
+    const count = requested === Infinity && BalloroPlayControls.policy.infiniteAutoplay
+      ? Infinity : Math.min(BalloroPlayControls.policy.maxAutoCount, requested);
+    playControls.start(count);
+    state.autoRoundsRemaining = count;
+  }
   state.autoPlay = enabled;
   els.autoPlayToggle.classList.toggle("active", enabled);
   els.autoPlayToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
@@ -9955,7 +10391,8 @@ function updateBetButtons() {
   if (typeof updateSlotUi === "function") updateSlotUi();
   const winPresentationActive = isWinPresentationActive();
   const v3 = Boolean(window.BalloroBonusUI?.isV3);
-  const controlsLocked = state.running || state.launchPrepared || (v3 ? isV3BonusLaunchBlocked() : winPresentationActive);
+  const photoPaused = Boolean(playControls?.pause.active);
+  const controlsLocked = photoPaused || state.running || state.launchPrepared || (v3 ? isV3BonusLaunchBlocked() : winPresentationActive);
   els.autoPlayToggle.classList.toggle("active", state.autoPlay);
   els.autoPlayToggle.setAttribute("aria-pressed", state.autoPlay ? "true" : "false");
 
@@ -9964,14 +10401,19 @@ function updateBetButtons() {
     const action = slot.querySelector(".bet-action");
     const input = slot.querySelector(".bet-value");
     const betStepButtons = slot.querySelectorAll(".bet-round-button");
-    const unableToBet = !(value > 0) || state.bankroll < value * state.puckCount;
-    action.disabled = v3 ? isV3BonusLaunchBlocked() || unableToBet
+    action.disabled = v3 ? window.BalloroGameLifecycle?.suspended || isV3BonusLaunchBlocked({ presentationOnly: photoPaused }) || (photoPaused ? state.v3Shots.size > 0 || playControls.pause.mustRelease : !(value > 0))
       : state.running || winPresentationActive;
-    action.setAttribute("aria-label", "Запустить шары");
-    action.classList.toggle("is-auto-firing", v3 && (state.autoPlay || Boolean(state.v3HoldTimer)));
+    const autoHeld = v3 && state.autoPlay && !photoPaused;
+    const resumeLabel = t(state.autoPlay ? 'resumeAutoplay' : 'resumePlay');
+    action.setAttribute("aria-label", t(photoPaused ? (state.autoPlay ? 'resumeAutoplay' : 'resumePlay') : autoHeld ? 'autoPlaying' : 'launchBall').replace(/\n/g, ' '));
+    action.setAttribute('aria-disabled', String(action.disabled || autoHeld));
+    action.tabIndex = autoHeld ? -1 : 0;
+    action.classList.toggle('is-win-paused', photoPaused);
+    action.classList.toggle('is-auto-held', autoHeld);
+    action.classList.toggle("is-auto-firing", v3 && !photoPaused && (state.autoPlay || Boolean(state.v3HoldTimer)));
     action.classList.toggle("is-held", v3 && Boolean(state.v3HoldTimer));
     action.classList.toggle("is-cooling-down", v3 && !state.autoPlay && !state.v3HoldTimer
-      && performance.now() - state.v3LastLaunchAt < getV3LaunchIntervalMs());
+      && (window.BalloroGameLifecycle?.now() ?? performance.now()) - state.v3LastLaunchAt < getV3LaunchIntervalMs());
     action.classList.remove("waiting", "cashout", "mining");
     slot.querySelector(".bet-box").classList.toggle("is-locked", controlsLocked);
     input.disabled = controlsLocked;
@@ -9987,7 +10429,7 @@ function updateBetButtons() {
     }
 
     action.querySelector("span").textContent = t("bet");
-    action.querySelector("small").textContent = `${formatStake(value * state.puckCount)} USD`;
+    action.querySelector("small").textContent = photoPaused ? resumeLabel : `${formatStake(value * state.puckCount)} USD`;
   });
 
   els.puckCountButtons.forEach((button) => {
@@ -10008,6 +10450,11 @@ function updateBetButtons() {
     button.disabled = versionLocked;
     button.setAttribute("aria-pressed", String(button.dataset.bonusUiVersion === window.BalloroBonusUI?.version));
   });
+  if (!photoPaused) {
+    resumeSpinArrowPosition();
+    if (v3) syncSpinArrowSpeed();
+  }
+  updatePlayControlsUi();
 }
 
 const LAYOUT_BUTTON_LABELS = {
@@ -10078,6 +10525,7 @@ function exportGameplayTestCsv() {
 }
 
 function canPrimeLaunch(slot) {
+  if (window.BalloroGameEntry?.blocked || window.BalloroGameLifecycle?.suspended) return false;
   if (window.BalloroBonusUI?.isV3) {
     return Boolean(slot && !isV3BonusLaunchBlocked() && parseBet(slot) > 0
       && state.bankroll >= parseBet(slot) * state.puckCount);
@@ -10102,6 +10550,7 @@ function stopLaunchPrimeAnimation({ rerender = true } = {}) {
 
 function animateLaunchPrime() {
   state.launchPrimeFrame = null;
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (!state.launchButtonPrimed || state.running) {
     return;
   }
@@ -10110,6 +10559,7 @@ function animateLaunchPrime() {
 }
 
 function startLaunchPrimeAnimation() {
+  if (window.BalloroGameLifecycle?.suspended) return;
   if (state.launchPrimeFrame === null) {
     state.launchPrimeFrame = requestAnimationFrame(animateLaunchPrime);
   }
@@ -10122,6 +10572,7 @@ function setupBetControls() {
     const increase = slot.querySelector(".increase-bet");
     const action = slot.querySelector(".bet-action");
     let previousExperimentBet = parseBet(slot);
+    let fundingContact = false;
 
     function resetProgressIfExperimentBetChanged() {
       if (!window.BalloroPocketExperiment) return;
@@ -10159,19 +10610,31 @@ function setupBetControls() {
     action.addEventListener("pointerdown", async (event) => {
       if (window.BalloroBonusUI?.isV3) {
         if (event.button !== undefined && event.button !== 0) return;
+        fundingContact = false;
+        if (playControls?.pause.active) {
+          // Manual confirmation does not bet. Autoplay resumes its next shot
+          // now, and must not become a manual hold if that shot ends autoplay.
+          const resumingAutoplay = state.autoPlay;
+          if (tryResumeBigWin() && BalloroPlayControls.policy.heldSpin && !resumingAutoplay) {
+            try { action.setPointerCapture?.(event.pointerId); } catch (_) { /* ignore */ }
+            startV3HeldLaunch(slot, { afterResume: true });
+          }
+          return;
+        }
+        if (state.autoPlay) return;
+        // Open funding on the completed click, not down: the modal must not
+        // put its confirmation/cancel buttons underneath an unfinished tap.
+        if (!isV3BonusLaunchBlocked() && parseBet(slot) > 0 && state.bankroll < parseBet(slot)) {
+          fundingContact = true;
+          return;
+        }
         if (!canPrimeLaunch(slot)) return;
+        playControls?.press();
         try { action.setPointerCapture?.(event.pointerId); } catch (_) { /* ignore */ }
+        const wasAutoplay = state.autoPlay;
         launchV3Pucks(slot);
-        if (state.v3HoldTimer) window.clearTimeout(state.v3HoldTimer);
-        const repeatHeldLaunch = () => {
-          if (!state.v3HoldTimer) return;
-          if (!isV3BonusLaunchBlocked() && canPrimeLaunch(slot)) launchV3Pucks(slot);
-          const delay = isV3BonusLaunchBlocked() || !canPrimeLaunch(slot) ? 50
-            : Math.max(1, state.v3LastLaunchAt + getV3LaunchIntervalMs() - performance.now());
-          state.v3HoldTimer = window.setTimeout(repeatHeldLaunch, delay);
-        };
-        state.v3HoldTimer = window.setTimeout(repeatHeldLaunch,
-          Math.max(0, state.v3LastLaunchAt + getV3LaunchIntervalMs() - performance.now()));
+        if (!playControls?.pause.active && !(wasAutoplay && !state.autoPlay)
+          && BalloroPlayControls.policy.heldSpin) startV3HeldLaunch(slot);
         updateBetButtons();
         return;
       }
@@ -10194,8 +10657,8 @@ function setupBetControls() {
       startLaunchPrimeAnimation();
     });
     const endV3Hold = () => {
-      if (state.v3HoldTimer) window.clearTimeout(state.v3HoldTimer);
-      state.v3HoldTimer = null;
+      stopHeldPaidLaunches();
+      playControls?.release();
       updateBetButtons();
     };
     action.addEventListener("pointerup", () => {
@@ -10203,7 +10666,7 @@ function setupBetControls() {
       launchPuck(slot);
     });
     action.addEventListener("pointercancel", () => {
-      if (window.BalloroBonusUI?.isV3) return endV3Hold();
+      if (window.BalloroBonusUI?.isV3) { fundingContact = false; return endV3Hold(); }
       launchPuck(slot);
     });
     action.addEventListener("lostpointercapture", () => {
@@ -10212,7 +10675,16 @@ function setupBetControls() {
     });
     action.addEventListener("click", (event) => {
       if (window.BalloroBonusUI?.isV3) {
-        if (event.detail !== 0) return;
+        if (event.detail !== 0) {
+          if (fundingContact && !state.autoPlay && !playControls?.pause.active && !isV3BonusLaunchBlocked()) {
+            requirePaidLaunchBalance(parseBet(slot));
+          }
+          fundingContact = false;
+          return;
+        }
+        if (playControls?.pause.active) { tryResumeBigWin(); return; }
+        if (state.autoPlay) return;
+        if (!isV3BonusLaunchBlocked() && !requirePaidLaunchBalance(parseBet(slot))) return;
         launchV3Pucks(slot);
         return;
       }
@@ -10243,7 +10715,7 @@ function setupBetControls() {
   });
 
   els.autoPlayToggle.addEventListener("click", () => {
-    if (state.autoPlay) { setAutoPlay(false); updateSlotUi(); }
+    if (state.autoPlay) { stopControlledAuto('user'); updateSlotUi(); }
     else showSlotDialog("autoDialog");
   });
 
@@ -10253,7 +10725,10 @@ function setupBetControls() {
         return;
       }
       const nextGridSize = Number.parseInt(button.dataset.gridSize, 10);
-      if (nextGridSize !== GRID_SIZE) resetV2BonusProgressForLineChange();
+      if (nextGridSize !== GRID_SIZE) {
+        resetV2BonusProgressForLineChange();
+        state.lineMaximumNotice = nextGridSize;
+      }
       GRID_SIZE = nextGridSize;
       state.riskLevel = window.PuckLuckMath?.riskForLines(GRID_SIZE) || "normal";
       setupCanvas();
@@ -10296,6 +10771,7 @@ function setupInteractions() {
   els.exportLayoutTest?.addEventListener("click", exportGameplayTestCsv);
 
   document.addEventListener("keydown", (event) => {
+    if (window.BalloroGameEntry?.blocked) return;
     if (event.altKey && event.key.toLowerCase() === "l") {
       event.preventDefault();
       cycleLayoutMode();
@@ -10337,6 +10813,7 @@ function setupInteractions() {
     if (Number.isFinite(amount) && amount > 0) {
       state.bankroll += amount;
       updateBank();
+      updateBetButtons();
     }
     closePopup(els.topUpPopup);
   });
@@ -10355,14 +10832,7 @@ function setupInteractions() {
     els.historyToggle.setAttribute("aria-expanded", String(state.historyExpanded));
   });
 
-  window.addEventListener("resize", () => {
-    setupCanvas();
-    fitBrandTitle();
-    fitLocalizedUiText();
-    resetPucks();
-    prepareV3StaticField();
-    render();
-  });
+  window.addEventListener("resize", handleGameViewportResize);
 }
 
 function renderInitialFrame() {
@@ -10387,6 +10857,7 @@ function init() {
   setupSlotUi();
   if (typeof setupDesktopUi === 'function') setupDesktopUi();
   setupPlayerPanels();
+  setupPlayControls();
   setupCanvas();
   resetPucks();
   const storedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
@@ -10411,14 +10882,28 @@ function init() {
   updateBetButtons();
   updateLayoutModeButton();
   renderInitialFrame();
-  Promise.all([
-    document.fonts?.ready || Promise.resolve(),
-    document.readyState === "complete" ? Promise.resolve() : new Promise(resolve => window.addEventListener("load", resolve, { once: true }))
-  ]).then(() => requestAnimationFrame(() => {
+  window.BalloroGameEntry.onPlay(() => {
     renderInitialFrame();
-    document.documentElement.classList.add("game-ready");
-    setTimeout(() => document.getElementById("loadingSplash")?.remove(), 300);
-  }));
+    startCollectibleIdleAnimation();
+    ensureBackgroundMusicAfterGesture();
+  });
+  const loadingTasks = [
+    document.fonts?.ready || Promise.resolve(),
+    document.readyState === "complete" ? Promise.resolve() : new Promise(resolve => window.addEventListener("load", resolve, { once: true })),
+    window.BalloroSavedPaths?.enabled ? window.BalloroSavedPaths.load(GRID_SIZE) : Promise.resolve()
+  ];
+  let loadedTasks = 0;
+  Promise.all(loadingTasks.map(task => task.then(() => {
+    window.BalloroGameEntry.progress(++loadedTasks / loadingTasks.length);
+  }))).then(() => {
+    prepareV3StaticField();
+    if (window.BalloroBonusUI?.isV3 && !state.roundOutcome) throw new Error('Initial field is unavailable');
+    renderInitialFrame();
+    window.BalloroGameEntry.ready();
+  }).catch(error => {
+    console.error('Game loading failed', error);
+    window.BalloroGameEntry.fail();
+  });
 }
 
 init();

@@ -141,7 +141,8 @@ h1 {
   text-shadow: 0 5px 0 #3d2c1a, 0 18px 28px var(--shadow);
 }
 
-.brand h1 {
+.brand h1,
+#loadingSplash .splash-logo {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -221,7 +222,8 @@ h1 {
   transform-origin: 50% 58%;
 }
 
-.balloro-logo {
+.balloro-logo,
+#loadingSplash .splash-logo {
   justify-content: flex-start;
   gap: 0 !important;
   padding-left: 0;
@@ -229,7 +231,8 @@ h1 {
   transform-origin: 50% 58%;
 }
 
-.balloro-logo > span {
+.balloro-logo > span,
+#loadingSplash .splash-logo > span {
   display: inline-block;
   white-space: nowrap;
 }
@@ -2027,7 +2030,7 @@ canvas {
     transform: none;
     animation: none;
   }
-  .bet-action:not(.waiting):not(.cashout):not(.mining):not(:disabled):hover {
+  .bet-action:not(.is-held):not(.is-auto-held):not(.waiting):not(.cashout):not(.mining):not(:disabled):hover {
     background: linear-gradient(180deg, #32df22, #15ad0a);
     transition: transform 120ms ease, box-shadow 0ms linear, filter 0ms linear, background 0ms linear;
     animation: betActionHoverPulse 920ms ease-in-out infinite;
@@ -2061,7 +2064,10 @@ canvas {
   }
 }
 
+/* Disabled buttons lose :active even when the mouse/finger is still down. */
 .bet-action.is-pressed:not(.waiting):not(.cashout):not(.mining):not(:disabled),
+.bet-action.is-held:not(.waiting):not(.cashout):not(.mining):not(:disabled),
+.bet-action.is-auto-held:not(.waiting):not(.cashout):not(.mining):not(:disabled),
 .bet-action:not(.waiting):not(.cashout):not(.mining):not(:disabled):active {
   background: linear-gradient(180deg, #18a90c, #0f7e08);
   box-shadow:

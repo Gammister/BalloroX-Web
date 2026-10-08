@@ -155,14 +155,16 @@ window.BalloroSavedPaths = (()=>{
         : source.pools.main[indices[index]];
       return prepare(path);
     },
-    fieldV3Release(lines,start,unit){
+    fieldV3Release(lines,start,unit,pocketVisits = {}){
       if(window.BalloroBonusUI?.isV4){
         const catalog=v4Cache.get(lines);
         const col=Math.round((start.x+1)*lines/2-.5);
         const row=Math.round((start.y+1)*lines/2-.5);
         const kind=v4Rules().pocketKindAt(lines,col,row);
         if(mvpActive()){
-          const item=mvpPick(mvpModel(lines).release[kind],`${lines}/release/${kind}`,unit);
+          const stage=window.BalloroMvpMath.releaseStage(mvpModel(lines).release[kind],pocketVisits,
+            mvpModel(lines).maxPocketVisits);
+          const item=mvpPick(stage,`${lines}/release/${kind}`,unit);
           return v4Hydrate(lines,catalog,item,start,`mvp-${item.id}`);
         }
         const groups=catalog?.release[kind];
@@ -213,9 +215,9 @@ window.BalloroSavedPaths = (()=>{
       const indices=groups[tier];
       return source.rooms[indices[Math.min(indices.length-1,Math.floor(indexUnit*indices.length))]];
     },
-    yellowV2Plan(lines,start,randomUnit){
+    yellowV2Plan(lines,start,randomUnit,pocketVisits = {}){
       if(!mvpActive())return null;
-      const trajectory=this.fieldV3Release(lines,start,randomUnit());
+      const trajectory=this.fieldV3Release(lines,start,randomUnit(),pocketVisits);
       const outcome=trajectory.mvpOutcome;
       const boosted=!outcome.kind&&randomUnit()<window.BalloroMvpMath.yellowHitProbability;
       const end=trajectory.landing_point;

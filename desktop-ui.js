@@ -1,5 +1,20 @@
 /* Reversible desktop-only presentation. Never uses the gameplay RNG or changes payouts. */
 const desktopUi = {enabled:false, rounds:[], visibleRounds:20, demo:[], seed:0x729ab3f1};
+// Same complementary breakpoints as the dock and table CSS: no third layout.
+const BALLORO_DESKTOP_QUERY = '(min-width:1360px) and (min-height:650px)';
+const BALLORO_MOBILE_QUERY = '(max-width:1359px), (max-height:649px)';
+function isBalloroDesktopLayout() { return matchMedia(BALLORO_DESKTOP_QUERY).matches; }
+function fitBalloroBoardAssembly({width, top, bottom, horizontalRadius, clearance = 0}) {
+  // In the current layout the SC bottom lies 1.4 radii + 9px below the centre.
+  // Keep the same breathing room on BOTH sides, including space for notices.
+  // The assembly is asymmetric: centring the main diamond alone is not enough.
+  // On very short landscape viewports notices are wide/one-line. Do not let
+  // an impossible two-line reserve collapse the field to the 1px safety floor.
+  const gap=Math.min(clearance,Math.max(0,(bottom-top-9)*.4));
+  const radius=Math.max(1,Math.min(width*.49,horizontalRadius,(bottom-top-9-gap*2)/2.4));
+  const spare=Math.max(0,bottom-top-9-radius*2.4);
+  return {radius,cy:top+radius+spare*.5};
+}
 function loadMoreDesktopRounds() {
   desktopUi.visibleRounds=Math.min(desktopUi.rounds.length,desktopUi.visibleRounds+20);
   renderDesktopRounds();
@@ -77,7 +92,7 @@ function mobilePlayerCenterScrollTop(rowTop,rowHeight,viewportHeight,maxScroll) 
   return Math.max(0,Math.min(maxScroll,rowTop-(viewportHeight-rowHeight)/2));
 }
 function centerMobileTopPlayer(event) {
-  if(!matchMedia('(max-width:720px)').matches||!event.target.closest('.is-real'))return;
+  if(isBalloroDesktopLayout()||!event.target.closest('.is-real'))return;
   const list=document.getElementById('desktopTopRows');
   const player=list?.querySelector('.is-real');
   if(!list||!player)return;
@@ -110,7 +125,7 @@ function makeDesktopPanel(id,title,side,content) {
   const button=panel.querySelector('button');
   button.setAttribute('aria-controls',`${id}Content`);panel.firstElementChild.id=`${id}Content`;
   panel.addEventListener('click',()=>{
-    if(matchMedia('(max-width:720px)').matches)return;
+    if(!isBalloroDesktopLayout())return;
     if(document.body.classList.contains('history-open')){
       document.body.classList.remove('history-open');return;
     }
@@ -144,11 +159,11 @@ function setupDesktopUi() {
       loadMoreDesktopRounds();
   },{passive:true});
   setupMobileWinScrollbar();
-  const media=matchMedia('(min-width:1360px) and (min-height:650px)');
+  const media=matchMedia(BALLORO_DESKTOP_QUERY);
   let timer;
   const updateDemo=()=>{
     clearInterval(timer);
-    if((!media.matches&&!matchMedia('(max-width:720px)').matches)||document.hidden)return;
+    if(document.hidden)return;
     if(!desktopUi.demo.length)for(let i=0;i<6;i++)addDesktopDemoWin();
     timer=setInterval(addDesktopDemoWin,4200);
   };
@@ -191,7 +206,7 @@ function setupMobileWinScrollbar() {
   update();
 }
 function setupMobileTables() {
-  const mobile=matchMedia('(max-width:720px)');
+  const mobile=matchMedia(BALLORO_MOBILE_QUERY);
   let page=0, start=null;
   const game=document.getElementById('gameScreen');
   const panels=[...document.querySelectorAll('.desktop-panel')];
@@ -241,8 +256,6 @@ function setupMobileTables() {
       panel.classList.remove('is-collapsed');panel.inert=false;panel.firstElementChild.inert=false;
       const tab=panel.querySelector('.desktop-panel-tab');
       tab.textContent='‹';tab.setAttribute('aria-expanded','true');
-      if(!matchMedia('(min-width:1360px) and (min-height:650px)').matches)
-        document.body.classList.add('history-open');
     }
   };
   document.addEventListener('touchstart',event=>{

@@ -78,18 +78,19 @@ function setupSlotUi() {
   bets.append(slot.querySelector('.bet-box'), slot.querySelector('.puck-count-control'), document.querySelector('.field-options'));
   const betOpen = document.createElement('button'); betOpen.id = 'betPickerButton'; betOpen.type = 'button';
   betOpen.className = 'slot-circle'; betOpen.setAttribute('aria-label', 'Выбрать ставку');
-  betOpen.innerHTML = slotIcon('<ellipse cx="24" cy="13" rx="13" ry="6"/><path d="M11 13v22c0 8 26 8 26 0V13M11 23c0 8 26 8 26 0M11 30c0 8 26 8 26 0M19 20v21M29 20v21"/>');
+  betOpen.innerHTML = slotIcon('<ellipse cx="24" cy="13" rx="12" ry="4"/><path d="M12 13v21M36 13v21M12 20a12 4 0 0 0 24 0M12 27a12 4 0 0 0 24 0M12 34a12 4 0 0 0 24 0"/>');
   betOpen.onclick = () => showSlotDialog('betDialog');
   const info = document.createElement('button'); info.type = 'button'; info.className = 'slot-circle'; info.id = 'slotInfo';
-  info.setAttribute('aria-label', 'Правила игры'); info.innerHTML = slotIcon('<path d="M24 22v14M19 36h10"/><circle cx="24" cy="12" r="2" fill="currentColor"/>');
+  info.setAttribute('aria-label', 'Правила игры'); info.innerHTML = slotIcon('<path d="M24 22v14"/><circle cx="24" cy="13" r="2" fill="currentColor" stroke="none"/>');
   info.onclick = () => { closeSlotDialogs(); openPopup(els.rulesScreen); };
   els.menuButton.className = 'slot-circle'; els.menuButton.setAttribute('aria-label', 'Настройки');
   els.menuButton.innerHTML = slotIcon('<path d="M12 14h24M12 24h24M12 34h24"/>');
   els.autoPlayToggle.className = 'slot-circle'; els.autoPlayToggle.setAttribute('aria-label', 'Автоигра');
-  els.autoPlayToggle.innerHTML = slotIcon('<path d="M14 10a17 17 0 1 1-7 15M7 12v13h12"/><path d="m21 16 12 8-12 8z"/>') + '<b id="autoRemaining"></b>';
+  els.autoPlayToggle.innerHTML = slotIcon('<g class="auto-start-icon"><path d="M24 8a16 16 0 1 1-11.3137 4.6863M7.5 12.6863h5.1863v5.1863"/><path d="m21 17 10 7-10 7z" fill="currentColor"/></g><rect class="auto-stop-icon" x="15" y="15" width="18" height="18" rx="2" fill="currentColor" stroke="none"/>') + '<b id="autoRemaining"></b>';
   const controls = document.createElement('nav'); controls.className = 'slot-controls'; controls.setAttribute('aria-label', 'Управление игрой');
-  // Keep the action inside the bet-slot: place the entire slot in the centre.
-  controls.append(els.menuButton, els.autoPlayToggle, slot, betOpen, info);
+  // DOM order also sets the keyboard order: Stake left, Auto/Stop right.
+  // Keep the action inside the bet-slot in the unchanged centre track.
+  controls.append(els.menuButton, betOpen, slot, els.autoPlayToggle, info);
   panel.append(controls);
   slot.querySelector('.bet-side-controls').remove();
   document.querySelector('.bet-slots').remove();
@@ -147,6 +148,7 @@ function setupSlotUi() {
   for (const count of [10,25,50,100,250,500,750,1000,Infinity]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = count === Infinity ? '∞' : String(count);
     button.dataset.rounds = String(count);
+    if (count === Infinity) button.dataset.i18nAria = 'autoEndless';
     button.onclick = () => { selectedAutoRounds = count; updateSlotUi(); };
     document.getElementById('autoRoundChoices').append(button);
   }

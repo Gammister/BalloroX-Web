@@ -1,5 +1,6 @@
 /* Disable the presentation experiment with ?desktopUi=0. */
 .desktop-logo,.desktop-panel{display:none}
+.desktop-ui-experiment .mine-stage>.purple-leaderboard{display:none}
 @media(min-width:0px){
  /* Typography and perspective copied from Balloro X main (.brand h1 / .balloro-logo). */
  .desktop-ui-experiment .desktop-logo{display:flex;align-items:center;min-width:0;max-width:100%;color:#be5cf5;position:absolute;top:12px;left:50%;translate:-50% 0;transform:perspective(260px) rotateX(9deg) scaleY(1.04);transform-origin:48% 58%;font-family:"Chau Philomene One",Inter,"Apple Symbols","Segoe UI Symbol",ui-sans-serif,system-ui,sans-serif;font-weight:400;font-size:48px;letter-spacing:0;white-space:nowrap;overflow:visible;-webkit-text-stroke:2px #050709;paint-order:stroke fill;text-shadow:0 4px 0 rgba(72,25,103,.82),0 12px 22px rgba(190,92,245,.16);z-index:6;margin:0;pointer-events:none}
@@ -18,7 +19,7 @@
  transform:perspective(220px) rotateX(28deg) scaleY(1.10);
  transform-origin:50% 58%;
 }
-@media(max-width:720px){
+@media(max-width:1359px), (max-height:649px){
  .desktop-ui-experiment .desktop-logo{font-size:38px;top:9px}
  .desktop-ui-experiment .mine-stage>.purple-leaderboard{display:none}
  .desktop-ui-experiment .mobile-table-nav{display:block}
@@ -130,7 +131,7 @@
 .desktop-table-scroll::-webkit-scrollbar-thumb{background:#54345d;border-radius:999px}
 .desktop-table-scroll::-webkit-scrollbar-thumb:hover{background:#85529b}
 .mobile-win-scrollbar{display:none}
-@media(max-width:720px){
+@media(max-width:1359px), (max-height:649px){
  .desktop-top-pinned{left:14px;right:14px;pointer-events:auto;cursor:pointer;touch-action:manipulation}
  .desktop-top-pinned.is-top{top:48px}.desktop-top-pinned.is-bottom{bottom:14px}
  .desktop-top-pinned li{font-size:14px}

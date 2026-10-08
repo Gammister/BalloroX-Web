@@ -67,10 +67,18 @@ body.bonus-ui-v2 .v2-blue-symbol,
 body.bonus-ui-v2 .v2-blue-symbol:not(.filled) { fill: #09080d; stroke: #397e9b; filter: none; }
 .counter-flyin-symbol.is-blue { filter: drop-shadow(0 0 6px rgba(106, 218, 255, .7)); }
 
-@media (max-width: 720px) {
+@media (max-width: 1359px), (max-height: 649px) {
   body.bonus-ui-v2 .mobile-table-left,
   body.bonus-ui-v2 .mobile-table-right {
     display: none !important;
+  }
+
+  body.bonus-ui-v2 .desktop-logo,
+  #loadingSplash .splash-logo {
+    transform: perspective(220px) rotateX(18deg) scaleY(1.06);
+    transform-origin: 50% 55%;
+    filter: saturate(.82) brightness(.92);
+    text-shadow: 0 3px 0 rgba(45, 17, 62, .62), 0 8px 16px rgba(190, 92, 245, .09);
   }
 
   body.bonus-ui-v2 .desktop-logo {
@@ -80,10 +88,6 @@ body.bonus-ui-v2 .v2-blue-symbol:not(.filled) { fill: #09080d; stroke: #397e9b; 
     top: max(8px, env(safe-area-inset-top, 0px));
     left: 50%;
     translate: -50% 0;
-    transform: perspective(220px) rotateX(18deg) scaleY(1.06);
-    transform-origin: 50% 55%;
-    filter: saturate(.82) brightness(.92);
-    text-shadow: 0 3px 0 rgba(45, 17, 62, .62), 0 8px 16px rgba(190, 92, 245, .09);
     transition: opacity .24s ease, filter .24s ease, text-shadow .24s ease;
     white-space: nowrap;
     pointer-events: none;
@@ -195,7 +199,7 @@ body.bonus-ui-v2 .v2-blue-symbol:not(.filled) { fill: #09080d; stroke: #397e9b; 
 
 /* Desktop V2 mirrors the mobile information hierarchy without changing the
    independent side-table layout. */
-@media (min-width: 721px) {
+@media (min-width: 1360px) and (min-height: 650px) {
   body.bonus-ui-v2 .mine-stage {
     --desktop-bonus-dock-width: clamp(640px, 50vw, 760px);
   }
@@ -365,7 +369,7 @@ body.bonus-ui-v2 .pocket-bonus-counter.is-active {
   from { filter: brightness(1.05); }
   to { filter: brightness(1.55); }
 }
-@media (max-width: 720px) {
+@media (max-width: 1359px), (max-height: 649px) {
   body.bonus-ui-v2 .crown-bonus-counter,
   body.bonus-ui-v2 .chance-bonus-counter,
   body.bonus-ui-v2 .multi-plus-counter,
@@ -386,9 +390,9 @@ body.bonus-ui-v2 .pocket-bonus-counter.is-active {
   body.bonus-ui-v2 .multi-plus-counter strong,
   body.bonus-ui-v2 .pocket-bonus-counter strong { line-height: 1; }
 }
-@media (min-width: 721px) {
+@media (min-width: 1360px) and (min-height: 650px) {
   body.bonus-ui-v2 .crown-counter { gap: 2px; height: 25px; }
-  body.bonus-ui-v2 .crown-counter span { width: 23px; height: 23px; }
+  body.bonus-ui-v2.pocket-experiment .crown-counter span { width: 29px !important; height: 29px !important; }
   body.bonus-ui-v2 .chance-bonus-icon { width: 75px; flex-basis: 75px; height: 25px; }
   body.bonus-ui-v2 .multi-plus-icon { width: 50px; flex-basis: 50px; height: 25px; }
   body.bonus-ui-v2 .pocket-bonus-icon { width: 25px; height: 25px; flex-basis: 25px; }

@@ -11,21 +11,42 @@
     html:not(.game-ready) .game-shell { visibility: hidden !important; }
     #loadingSplash { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; background: #000; color: #fff; transition: opacity .25s ease; }
     .game-ready #loadingSplash { opacity: 0; pointer-events: none; }
-    #loadingSplash .splash-logo { font: italic 900 clamp(42px, 8vw, 72px)/1 system-ui, sans-serif; letter-spacing: -.06em; text-shadow: 0 5px 0 #27212d, 0 12px 28px #34203f; }
-    #loadingSplash .splash-logo span { color: #b752e7; margin-left: .14em; }
-    #loadingSplash .splash-track { position: absolute; bottom: max(28px, env(safe-area-inset-bottom, 0px)); width: min(240px, 65vw); height: 4px; overflow: hidden; border-radius: 99px; background: #28202c; }
-    #loadingSplash .splash-progress { width: 40%; height: 100%; border-radius: inherit; background: #b752e7; animation: splash-loading 1.1s ease-in-out infinite alternate; }
-    @keyframes splash-loading { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+    #loadingSplash .splash-brand { position: absolute; inset: 0 0 var(--splash-actions-clearance, 160px); display: grid; place-items: center; }
+    #loadingSplash .splash-logo { --brand-font-size: clamp(84px, 16vw, 144px); line-height: 1; }
+    #loadingSplash .splash-actions { position: absolute; bottom: max(28px, env(safe-area-inset-bottom, 0px)); width: min(280px, calc(100% - 48px)); display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    #loadingSplash .splash-promo { margin: 0; color: #fff; font: 800 clamp(21px, 5.5vw, 28px)/1.2 system-ui, sans-serif; white-space: nowrap; text-align: center; }
+    #loadingSplash .splash-promo span { color: #c968f4; }
+    #loadingSplash .splash-control { width: 100%; height: 56px; display: grid; place-items: center; }
+    #loadingSplash .splash-track { width: 100%; height: 4px; overflow: hidden; border-radius: 99px; background: #28202c; }
+    #loadingSplash .splash-progress { width: 0; height: 100%; border-radius: inherit; background: #b752e7; transition: width .2s ease; }
+    #loadingSplash .splash-play { width: 100%; height: 56px; padding: 0 24px; border: 2px solid #85ed55; border-radius: 28px; background: linear-gradient(#39cf0d, #159b04); color: #fff; font: 800 28px/1 system-ui, sans-serif; text-shadow: 0 2px 2px #187d03; box-shadow: inset 0 -4px 0 #0d8003, 0 0 20px #46c91630; cursor: pointer; touch-action: manipulation; }
+    #loadingSplash .splash-play:active { background: #159b04; box-shadow: inset 0 3px 5px #0b670580; }
+    #loadingSplash .splash-play:focus-visible { outline: 3px solid #fff; outline-offset: 5px; }
+    #loadingSplash [hidden] { display: none !important; }
+    #loadingSplash .splash-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    #loadingSplash .splash-error { margin: 0; color: #f4dce9; font: 14px/1.4 system-ui, sans-serif; text-align: center; }
+    @media (prefers-reduced-motion: reduce) { #loadingSplash, #loadingSplash .splash-progress { transition: none; } }
   </style>
-  <link rel="stylesheet" href="style.css?v=5f02b3dadccc">
-  <link rel="stylesheet" href="slot-ui.css?v=e35c6e05903e">
-  <link rel="stylesheet" href="desktop-ui.css?v=63cf882e95ed">
-  <link rel="stylesheet" href="bonus-ui-v2.css?v=cc4e47315e56">
-  <link rel="stylesheet" href="player-panels.css?v=bfe5b510c02b">
+  <link rel="stylesheet" href="style.css?v=d173e44730f8">
+  <link rel="stylesheet" href="slot-ui.css?v=0400bd3db535">
+  <link rel="stylesheet" href="desktop-ui.css?v=8bafb1bba184">
+  <link rel="stylesheet" href="bonus-ui-v2.css?v=4c31dd6e121b">
+  <link rel="stylesheet" href="player-panels.css?v=726ef6058b0b">
+  <link rel="stylesheet" href="play-controls.css?v=10b39c20101b">
 </head>
 <body>
-  <div id="loadingSplash" role="status" aria-label="Загрузка Balloro X"><div class="splash-logo">Balloro<span>X</span></div><div class="splash-track"><div class="splash-progress"></div></div></div>
-  <main class="game-shell">
+  <div id="loadingSplash" role="dialog" aria-modal="true" aria-label="Balloro X">
+    <div class="splash-brand"><div class="splash-logo"><span class="brand-ball">Balloro</span><span class="brand-x">X</span></div></div>
+    <div class="splash-actions">
+      <p class="splash-promo">Win Up to <span>8500x!</span></p>
+      <div class="splash-control">
+        <div id="splashLoadingTrack" class="splash-track" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="splash-progress"></div></div>
+        <button id="splashPlayButton" class="splash-play" type="button" hidden disabled>PLAY</button>
+      </div>
+      <p id="splashLoadStatus" class="splash-status" role="status" aria-live="polite">Loading…</p>
+    </div>
+  </div>
+  <main class="game-shell" inert aria-hidden="true">
     <section class="topbar">
       <div class="brand">
         <div>
@@ -66,28 +87,28 @@
     <section id="rulesScreen" class="rules-screen hidden">
       <div class="rules-card panel">
         <div class="rules-header">
-          <div><h2 class="rules-game-logo" aria-label="Balloro X"><span class="brand-ball">Balloro</span><span class="brand-x">X</span></h2><p class="eyebrow" data-i18n="gameRules">Game rules</p></div>
+          <div><h2 class="rules-game-logo" aria-label="Balloro X"><span class="brand-ball">Balloro</span><span class="brand-x">X</span></h2><p class="eyebrow" data-i18n="gameRules">Rules</p></div>
           <button id="closeRulesButton" class="icon-button" type="button" aria-label="Close">×</button>
         </div>
         <div class="rules-body">
           <div class="rules-grid">
-            <article class="rule-card"><h3 data-i18n="ruleLaunchTitle">One stake — one ball</h3><p data-i18n="ruleLaunchText">Choose your stake and 5, 7 or 9 lines. Tap Spin to launch one ball. Hold it for new launches every second; every 0.5 seconds in Quick Play.</p></article>
-            <article class="rule-card"><h3 data-i18n="ruleWinsTitle">Stopping on a multiplier</h3><p data-i18n="ruleWinsText">The payout is the original stake × the stopping cell multiplier. A return below your stake is a partial return, not a net win. Red and purple results play celebration music and flashing walls.</p></article>
-            <article class="rule-card"><h3 data-i18n="rulePocketTitle">X3 BALLS · green pocket</h3><p data-i18n="rulePocketFieldText">A ball is pulled into the green pocket on the left. The cactus rises and flies to its counter. One symbol is enough: after preparation, the pocket releases three white balls. Their payouts are added together.</p></article>
-            <article class="rule-card"><h3 data-i18n="ruleBoostTitle">X10 BOOST · purple pocket</h3><p data-i18n="ruleBoostText">The top pocket collects one diamond. After it reaches the counter and other balls stop, the field and both rooms turn purple. Then the ball launches; its wins and those of its bonus descendants are multiplied by 10. The effect lasts until the whole chain finishes.</p></article>
-            <article class="rule-card"><h3 data-i18n="ruleMultiTitle">EX MULTI · yellow pocket</h3><p data-i18n="ruleMultiText">The right pocket collects one star. After it reaches the counter and other balls stop, moving highlights select cells and temporarily multiply their values by 10. The pocket releases the ball; a boosted payout requires stopping on an enhanced cell.</p></article>
-            <article class="rule-card"><h3 data-i18n="ruleLuckyTitle">LUCKY SHOT · red pocket</h3><p data-i18n="ruleLuckyText">The bottom pocket collects one flame. The ball blinks in the pocket while preparing, then sinks and appears between the two secret rooms without blinking. The rooms flash, one is selected and the ball launches into it. Every cell in both rooms pays; X10 BOOST also applies there.</p></article>
-            <article class="rule-card"><h3 data-i18n="ruleFieldTitle">5, 7 or 9 lines</h3><p data-i18n="ruleFieldText">Lines change the cells and their multipliers, not the stake per ball. See the current table below. Configuration can only change after active play finishes.</p></article>
-            <article class="rule-card"><h3 data-i18n="ruleAutoTitle">Autoplay</h3><p data-i18n="ruleAutoText">Choose the number of paid shots and start autoplay. Balls launch every 1 s, or every 0.5 s in Quick Play. Bonus preparation and play pause new bets. Bonus launches do not charge a new stake.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleLaunchTitle">One stake — one ball</h3><p data-i18n="ruleLaunchText">Choose a stake per ball, 1–3 balls and 5, 7 or 9 lines. Press SPIN. Holding it repeats bets.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleWinsTitle">Stopping on a multiplier</h3><p data-i18n="ruleWinsText">Stake per ball × its stopping cell multiplier. All ball payouts add up. Less than the stake is a partial return, not profit.</p></article>
+            <article class="rule-card"><h3 data-i18n="rulePocketTitle">3X BALLS · green pocket</h3><p data-i18n="rulePocketFieldText">Three balls replace one. Their payouts add up. No extra stake.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleBoostTitle">10X BOOST · purple pocket</h3><p data-i18n="ruleBoostText">Main and bonus field multipliers become ×10 for this ball and the balls it creates. Another purple hit extends the effect; it does not multiply it again.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleMultiTitle">EX MULTI · yellow pocket</h3><p data-i18n="ruleMultiText">Selected main-field cells get ×10. The ball launches again: it must stop in an enhanced cell for the higher payout.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleLuckyTitle">LUCKY SHOT · red pocket</h3><p data-i18n="ruleLuckyText">The ball sinks, then launches into one of two Bonus fields. Every cell pays. 10X BOOST also applies here.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleFieldTitle">5, 7 or 9 lines</h3><p data-i18n="ruleFieldText">Lines change the field and multipliers, not the stake per ball. Change them between games.</p></article>
+            <article class="rule-card"><h3 data-i18n="ruleAutoTitle">Autoplay</h3><p data-i18n="ruleAutoText">Choose a shot count and optional stop conditions. Bonuses cost no extra stake. Hiding the game pauses it; returning resumes it. After resizing, tap the screen.</p></article>
           </div>
           <section class="rules-about" aria-labelledby="rulesAboutTitle">
             <h3 id="rulesAboutTitle" data-i18n="rulesAboutTitle">Good to know</h3>
-            <p data-i18n="rulesAboutIntro">Field values show the payout as a multiple of the original stake. Colour identifies the multiplier tier; it does not change the payout.</p>
-            <div class="rules-about-block"><h4 data-i18n="rulesHowToWinTitle">Payouts and colours</h4><p data-i18n="rulesHowToWinText">Green: up to 1x. Yellow: above 1x but below 10x. Red: 10x or more. Purple: active X10 BOOST. Only red and purple results trigger a big-win celebration. All bonus descendants belong to their original paid stake.</p></div>
-            <div class="rules-about-block"><h4 data-i18n="rulesRtpTitle">Theoretical RTP</h4><p data-i18n="rulesRtpText">This MVP has a theoretical RTP of 97.45% at 5, 7 and 9 lines, including bonus chains. It is an average over many stakes, not a promise for a session. Probabilities do not adapt to your balance or previous wins.</p></div>
-            <div class="rules-about-block"><h4 data-i18n="rulesMaxWinTitle">Field and secret rooms</h4><p data-i18n="rulesMaxWinText">The table shows normal values without boosts. X10 BOOST multiplies values by 10; EX MULTI temporarily boosts selected cells by another 10. A single-cell multiplier is not a cap on the total payout of a bonus chain.</p></div>
-            <div class="rules-about-block"><h4 data-i18n="rulesVolatilityTitle">Bonus queues</h4><p data-i18n="rulesVolatilityText">New bets lock when bonus collection begins. Already launched balls finish moving. Bonuses resolve in order: green → yellow → red → purple. The number above a pocket counts waiting balls, excluding the current ball. A continuous queue sends its symbol to the counter only once.</p></div>
-            <div class="rules-about-block"><h4 data-i18n="rulesDisclosureTitle">Test build</h4><p data-i18n="rulesDisclosureText">This is a local MVP with a demo balance, not real-money play. Outcomes use fixed probabilities, followed by an existing physically computed trajectory. Animation and speed do not change payouts. Other-player tables are labelled as demo.</p></div>
+            <p data-i18n="rulesAboutIntro">Multipliers shown without bonuses.</p>
+            <div class="rules-about-block"><h4 data-i18n="rulesHowToWinTitle">Payouts and colours</h4><p data-i18n="rulesHowToWinText">10x or more plays music and flashing, including purple wins. Boosted green cells turn yellow from 1x and red from 10x. Purple means 10X BOOST.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesRtpTitle">Theoretical RTP</h4><p data-i18n="rulesRtpText">RTP is 97.45% on all lines, including bonuses. This is an average over many bets, not a guarantee for one game.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesMaxWinTitle">Maximum win</h4><p data-i18n="rulesMaxWinText">Maximum per paid ball: 5 lines — 1,200x with 10X BOOST, then LUCKY SHOT and 120x on the right Bonus field. On 7 / 9 lines: 6,000x / 8,500x with EX MULTI and 10X BOOST, in either order, then a hit on the boosted centre. Each ball can enter at most two pockets in total. Created balls inherit the entries already used.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesVolatilityTitle">Bonus queues</h4><p data-i18n="rulesVolatilityText">Bonuses play in turn; new bets wait for them. Purple and yellow boosts can combine. Yellow only boosts the main field.</p></div>
+            <div class="rules-about-block"><h4 data-i18n="rulesDisclosureTitle">Test build</h4><p data-i18n="rulesDisclosureText">The balance and player tables are for demonstration. Outcomes are random and do not depend on balance or previous wins. Speed does not change payouts.</p></div>
           </section>
         </div>
       </div>
@@ -174,7 +195,7 @@
             <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
             <span><svg class="boost-diamond" viewBox="0 0 100 100"><path class="boost-diamond-outer" d="M9 35L28 9H72L91 35L50 91Z"/><path class="boost-diamond-body" d="M11 35L29 12H71L89 35L50 87Z"/><path class="boost-diamond-facets" d="M11 35H89M29 12L50 35L71 12M11 35L50 87L89 35"/></svg></span>
           </div>
-          <strong><span>x10</span><span>BOOST</span></strong>
+          <strong><span>10X</span><span>BOOST</span></strong>
         </div>
         <div id="multiPlusCounter" class="multi-plus-counter" aria-label="Extra multipliers bonus">
           <span class="multi-plus-icon" aria-hidden="true">
@@ -183,7 +204,7 @@
               <circle class="multi-plus-hole-rim" cx="50" cy="50" r="31"/>
               <circle class="multi-plus-hole-core" cx="50" cy="50" r="21"/>
             </svg>
-            <span class="v2-lemon-slots"><img class="v2-lemon" src="assets/duckies-star.svg" alt=""><img class="v2-lemon" src="assets/duckies-star.svg" alt=""></span>
+            <span class="v2-lemon-slots"><img class="v2-lemon" src="assets/duckies-star.svg?v=20261004-symmetric" alt=""><img class="v2-lemon" src="assets/duckies-star.svg?v=20261004-symmetric" alt=""></span>
           </span>
           <strong><span>EX</span><span>MULTI</span></strong>
         </div>
@@ -196,7 +217,7 @@
             </svg>
             <img class="v2-counter-symbol v2-blue-symbol" src="assets/duckies-cactus.svg" alt="">
           </span>
-          <strong><span>X3</span><span>BALLS</span></strong>
+          <strong><span>3X</span><span>BALLS</span></strong>
         </div>
         <div id="chanceBonusCounter" class="chance-bonus-counter" aria-label="Lucky Shot bonus">
           <span class="chance-bonus-icon" aria-hidden="true">
@@ -280,22 +301,28 @@
   <script src="math/trajectory-planner.js?v=48b05743e419"></script>
   <script src="bonus-ui-v2.js?v=65f69a1910e5"></script>
   <script src="balloro-v3-rules.js?v=529199880ee5"></script>
-  <script src="balloro-v4-rules.js?v=1b355eaba78a"></script>
-  <script src="balloro-mvp-math.js?v=03947b9bd9d2"></script>
+  <script src="balloro-v4-rules.js?v=961091040010"></script>
+  <script src="balloro-mvp-math.js?v=1f8ced409a83"></script>
   <script src="v4-room-paths.js?v=8edf5bce38c9"></script>
-  <script src="player-copy.js?v=1b8b1646d260"></script>
-  <script src="player-panels.js?v=cfb6d84dcc71"></script>
-  <script src="multiplier-presentation.js?v=022555e15643"></script>
-  <script src="slot-ui.js?v=149d058ccab3"></script>
-  <script src="bonus-help.js?v=7b40c9ee4968"></script>
-  <script src="desktop-ui.js?v=74b0a11c76d7"></script>
-  <script>if (location.protocol === 'file:') document.write('<script src="v4-local-catalogs.js?v=15a4f389dccc"><\/script>');</script>
-  <script src="saved-paths.js?v=7f5795b6062f"></script>
+  <script src="player-copy.js?v=44071c356dd7"></script>
+  <script src="play-controls-copy.js?v=a644432dfd6a"></script>
+  <script src="play-session-controls.js?v=cf1c79db7cbf"></script>
+  <script src="game-lifecycle.js?v=9c612d822b6f"></script>
+  <script src="game-entry.js?v=b9eac926c98b"></script>
+  <script src="play-controls-ui.js?v=dc627a4f2134"></script>
+  <script src="player-panels.js?v=c2503fd17fbe"></script>
+  <script src="multiplier-presentation.js?v=5085ce712650"></script>
+  <script src="slot-ui.js?v=dc7e6ef0a969"></script>
+  <script src="bonus-help.js?v=725d3ac66426"></script>
+  <script src="desktop-ui.js?v=374cd07f180f"></script>
+  <script>if (location.protocol === 'file:') document.write('<script src="v4-local-catalogs.js?v=7f900fa10af7"><\/script>');</script>
+  <script src="saved-paths.js?v=e5cd15ac291f"></script>
   <script src="quick-play-timing.js?v=109712471393"></script>
   <script src="quick-motion-trail.js?v=9f26aced2c28"></script>
   <script src="multiplier-style.js?v=feac334aa0a9"></script>
   <script src="pocket-ready-blink.js?v=85b37063edbb"></script>
   <script src="bonus-presentation-sound.js?v=0deb714306a9"></script>
-  <script src="script.js?v=b56a2492d076"></script>
+  <script src="script.js?v=8b3957753f0c"></script>
+  <script src="background-pause-ui.js?v=e77af16f442d"></script>
 </body>
 </html>
