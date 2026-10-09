@@ -105,9 +105,35 @@
     // Its 9-line 1.1x inner ring needs a lower share to fund the larger prizes.
     const v2 = rules.mathVersion === 'v2';
     const maxPocketVisits = visitLimit(options.maxPocketVisits ?? (v2 ? pocketVisitLimit : 0));
+    const valueWeighted = v2 && lines === 5;
+    // Isolated five-line test: one common inverse-value power for every
+    // numeric outcome class in main/release/rooms. Fixed pocket probabilities
+    // and inherited bonus mechanics stay intact. Calibrate the whole paid tree,
+    // never add independent bonus RTPs. Other line counts use the old code.
+    if (valueWeighted && options.valueExponent === undefined) {
+      let low=0, high=4;
+      const evaluate=valueExponent=>createModel(lines,catalog,rules,oldRules,{...options,valueExponent});
+      if(evaluate(low).theoreticalRtp<targetRtp || evaluate(high).theoreticalRtp>targetRtp)
+        throw Error('Five-line RTP outside monotone value-weighted support');
+      for(let i=0;i<52;i++) {
+        const mid=(low+high)/2;
+        if(evaluate(mid).theoreticalRtp>targetRtp)low=mid;else high=mid;
+      }
+      return evaluate((low+high)/2);
+    }
+    const valueExponent=options.valueExponent;
+    const reweight=s=>{
+      if(!valueWeighted)return s;
+      const numeric=s.entries.filter(e=>!e.pool[0].kind);
+      const mass=numeric.reduce((sum,e)=>sum+e.probability,0);
+      const denominator=numeric.reduce((sum,e)=>sum+e.pool[0].value**-valueExponent,0);
+      return {...s,entries:s.entries.map(e=>e.pool[0].kind?e:{...e,
+        probability:mass*e.pool[0].value**-valueExponent/denominator})};
+    };
     const p = v2 ? freeze({ ...baseline,
       pockets: [.05, baseline.pockets[1], .018, .003],
       mainRed: fireChance(rules.centerMultipliers[lines]),
+      ...(lines === 5 ? {micro:{'.1':1}} : {}),
       ...(lines === 9 ? {micro:{'.1':.5,'.2':.35,'1.1':.15},releaseMicro:{blue:{'1.1':1}}}: {})
     }) : baseline;
     if (!p) throw Error(`Unsupported MVP lines ${lines}`);
@@ -140,13 +166,13 @@
       const available = kinds.filter(next => next !== kind && items.some(item => item.kind === next));
       const sum = available.reduce((total, next) => total + chainMix[next], 0);
       for (const next of available) weights[`pocket:${next}`] = chainProbability * chainMix[next] / sum;
-      release[kind] = stage(items, weights);
+      release[kind] = reweight(stage(items, weights));
     }
     for (const id of ['bottom-left', 'bottom-right']) {
       const items = flatten(catalog.rooms[id], `${lines}/room/${id}`, id);
       const chance = v2 ? fireChance(rules.roomMultipliers[lines][id]) / (p.pockets[2] / 2) : p.roomCenter;
-      rooms[id] = stage(items, { [`pay:${rules.roomMultipliers[lines][id]}`]: chance,
-        [`pay:${rules.roomSideMultipliers[lines][id][0]}`]: 1 - chance });
+      rooms[id] = reweight(stage(items, { [`pay:${rules.roomMultipliers[lines][id]}`]: chance,
+        [`pay:${rules.roomSideMultipliers[lines][id][0]}`]: 1 - chance }));
     }
     const room = { entries: Object.values(rooms).flatMap(s => s.entries.map(entry => ({ ...entry, probability: entry.probability / 2 }))) };
     const states = [false, true].flatMap(purple => kinds.map(kind => ({ kind, purple: purple || kind === 'diamond' })));
@@ -188,15 +214,22 @@
     const pocketProbability = p.pockets.reduce((sum, value) => sum + value, 0);
     const bonusContribution = p.pockets.reduce((sum, probability, i) => sum + probability * mean[index(kinds[i], false)], 0);
     const greenMean = Object.entries(p.micro).reduce((sum, [value, share]) => sum + Number(value) * share, 0);
-    const yellowProbability = ((targetRtp - bonusContribution) / (1 - pocketProbability)
+    let yellowProbability = valueWeighted ? 0 : ((targetRtp - bonusContribution) / (1 - pocketProbability)
       - p.mainRed * rules.centerMultipliers[lines] - (1 - p.mainRed) * greenMean)
       / (rules.rings[lines][1] - greenMean);
-    if (!(yellowProbability > 0 && yellowProbability < 1 - p.mainRed)) throw Error('RTP target outside allowed outcomes');
+    if (!valueWeighted && !(yellowProbability > 0 && yellowProbability < 1 - p.mainRed)) throw Error('RTP target outside allowed outcomes');
     const weights = {};
-    for (const [value, share] of Object.entries(p.micro)) weights[`pay:${Number(value)}`] =
-      (1 - pocketProbability) * (1 - p.mainRed - yellowProbability) * share;
-    weights[`pay:${rules.rings[lines][1]}`] = (1 - pocketProbability) * yellowProbability;
-    weights[`pay:${rules.centerMultipliers[lines]}`] = (1 - pocketProbability) * p.mainRed;
+    if(valueWeighted) {
+      const values=[...new Set(neutralItems.filter(p=>!p.kind).map(p=>p.value))].sort((a,b)=>a-b);
+      const denominator=values.reduce((sum,value)=>sum+value**-valueExponent,0);
+      for(const value of values)weights[`pay:${value}`]=(1-pocketProbability)*value**-valueExponent/denominator;
+      yellowProbability=weights[`pay:${rules.rings[lines][1]}`]/(1-pocketProbability);
+    } else {
+      for (const [value, share] of Object.entries(p.micro)) weights[`pay:${Number(value)}`] =
+        (1 - pocketProbability) * (1 - p.mainRed - yellowProbability) * share;
+      weights[`pay:${rules.rings[lines][1]}`] = (1 - pocketProbability) * yellowProbability;
+      weights[`pay:${rules.centerMultipliers[lines]}`] = (1 - pocketProbability) * p.mainRed;
+    }
     const items = [...neutralItems];
     for (const [i, kind] of kinds.entries()) {
       const cell = rules.pocketCells(lines)[kind];
@@ -211,7 +244,8 @@
       + p.pockets.reduce((sum, probability, i) => sum + probability * second[index(kinds[i], false)], 0);
     return { lines, version: rules.mathVersion || 'v1', targetRtp, main, release, rooms, room, states, matrix, terminal, mean, second, maxPocketVisits, inheritsYellow: v2,
       theoreticalRtp, secondMoment, variance: secondMoment - theoreticalRtp * theoreticalRtp,
-      yellowProbability, pocketProbability, bonusContribution, parameters: p, maximum };
+      yellowProbability, pocketProbability, bonusContribution, parameters: p, maximum,
+      ...(valueWeighted?{valueWeighting:{rule:'probability per unique base multiplier proportional to value^-alpha',alpha:valueExponent}}:{}) };
   }
   // Acyclic dynamic program: every transition consumes one remaining pocket
   // entry. Renormalisation is the SAME operation used by runtime saved paths.

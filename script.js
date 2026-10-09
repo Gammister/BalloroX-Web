@@ -55,7 +55,8 @@ const V4_PURPLE_FIELD_ENTER_MS = MULTI_PLUS_NEON_DURATION_MS / 2;
 const V4_PURPLE_FIELD_EXIT_MS = MULTI_PLUS_NEON_DURATION_MS / 2;
 const MULTI_PLUS_NEON_STEP_MS = 250;
 const MULTI_PLUS_NEON_STOP_FLASH_MS = 320;
-const YELLOW_FIELD_RETURN_MS = V4_PURPLE_FIELD_EXIT_MS;
+const YELLOW_FIELD_RETURN_MS = 320;
+const YELLOW_FIELD_RETURN_PEAK_MS = 64;
 const FIELD_POCKET_PULL_MAX_DURATION_SECONDS = 0.32;
 const MULTI_PLUS_REVEAL_DURATION_MS = MULTI_PLUS_NEON_DURATION_MS + MULTI_PLUS_NEON_STOP_FLASH_MS;
 const MAX_RESULT_SOUND_LEVELS = 9;
@@ -325,7 +326,7 @@ function getCarriedYellowCells() {
   const candidates = [state.v3BonusPuck, ...state.pucks, ...(playControls?.pause.winners || [])];
   const owner = candidates.find(puck => puck?.v3YellowCells?.length
     && (!puck.stopped || playControls?.pause.winners.has(puck)
-      || (puck.result && hasUnfinishedV3FieldReward(puck))));
+      || (puck.result && hasUnfinishedV3YellowReward(puck))));
   return owner?.v3YellowCells || [];
 }
 
@@ -351,21 +352,25 @@ function isYellowCellReturning(col, row) {
   const restoring = state.yellowFieldReturn;
   if (!restoring || restoring.startedAt === null) return false;
   const now = window.BalloroGameLifecycle?.now() ?? performance.now();
-  return now - restoring.startedAt < YELLOW_FIELD_RETURN_MS / 2
+  return now - restoring.startedAt < YELLOW_FIELD_RETURN_PEAK_MS
     && restoring.cells.some(cell => cell.col === col && cell.row === row);
 }
 
 function drawYellowFieldReturn(now) {
   const restoring = state.yellowFieldReturn;
   if (!restoring || restoring.startedAt === null) return;
-  const progress = clamp((now - restoring.startedAt) / YELLOW_FIELD_RETURN_MS, 0, 1);
-  const pulse = Math.sin(Math.PI * progress);
+  const age = clamp(now - restoring.startedAt, 0, YELLOW_FIELD_RETURN_MS);
+  // Fast attack and a short, sharp release: switch the label at the green peak.
+  const pulse = age < YELLOW_FIELD_RETURN_PEAK_MS
+    ? age / YELLOW_FIELD_RETURN_PEAK_MS
+    : Math.pow(1 - (age - YELLOW_FIELD_RETURN_PEAK_MS)
+      / (YELLOW_FIELD_RETURN_MS - YELLOW_FIELD_RETURN_PEAK_MS), 2);
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.globalAlpha = pulse;
   for (const cell of restoring.cells) {
-    drawCell(cell.col, cell.row, 'rgba(255, 214, 52, 0.34)',
-      'rgba(255, 214, 52, 0.98)', 4);
+    drawCell(cell.col, cell.row, 'rgba(66, 238, 133, 0.34)',
+      'rgba(66, 238, 133, 0.98)', 4);
   }
   ctx.restore();
 }
@@ -5273,13 +5278,20 @@ function getV3MultiplierFade(puck, now = (window.BalloroGameLifecycle?.now() ?? 
 }
 
 function hasUnfinishedV3FieldReward(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
-  // Yellow and purple boards share the same shortened reward hold. This does
-  // not speed up the floating multiplier, ball fade or victory music itself.
+  // Purple retains its shortened reward hold. Floating labels, ball fades
+  // and victory music keep their own timing independently of field returns.
   const fieldRewardNow = window.BalloroBonusUI?.isV4 && puck.resultRevealStartedAt
     ? puck.resultRevealStartedAt + (now - puck.resultRevealStartedAt) * 2 : now;
   return puck.result.multiplier > 0
     ? getV3MultiplierFade(puck, fieldRewardNow) > 0
     : getV3PuckFade(puck, fieldRewardNow) > 0;
+}
+
+function hasUnfinishedV3YellowReward(puck, now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {
+  if (!window.BalloroBonusUI?.isV4) return hasUnfinishedV3FieldReward(puck, now);
+  // Restore as soon as the result hold/victory cue ends, without waiting for
+  // the floating multiplier to fade. Photo-held winners are retained above.
+  return getV3ResultFadeElapsed(puck, now) < 0;
 }
 
 function hasUnfinishedV3PurpleReward(now = (window.BalloroGameLifecycle?.now() ?? performance.now())) {

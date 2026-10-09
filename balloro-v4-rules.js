@@ -7,7 +7,7 @@ function createVersion() {
   const mathVersion = 'v2';
   const centerMultipliers = Object.freeze({ 5: 10, 7: 60, 9: 85 });
   const rings = Object.freeze({
-    5: Object.freeze([centerMultipliers[5], 2, 0.3]),
+    5: Object.freeze([centerMultipliers[5], 1.2, 0.1]),
     7: Object.freeze([centerMultipliers[7], 5, 0.3, 0.1]),
     9: Object.freeze([centerMultipliers[9], 10, 1.1, 0.2, 0.1])
   });
@@ -56,11 +56,12 @@ function createVersion() {
   }
 
   const roomSideMultipliers = Object.freeze({ ...base.roomSideMultipliers,
-    5: Object.freeze({ "bottom-left": Object.freeze([2]), "bottom-right": Object.freeze([7]) }),
+    5: Object.freeze({ "bottom-left": Object.freeze([2]), "bottom-right": Object.freeze([5]) }),
     7: Object.freeze({ "bottom-left": Object.freeze([5]), "bottom-right": Object.freeze([10]) }),
     9: Object.freeze({ "bottom-left": Object.freeze([10, 10]), "bottom-right": Object.freeze([15, 15]) }) });
   const roomMultipliers = Object.freeze({
     ...base.roomMultipliers,
+    5: Object.freeze({ ...base.roomMultipliers[5], 'bottom-right': 100 }),
     7: Object.freeze({ ...base.roomMultipliers[7], 'bottom-left': 30 }),
     9: Object.freeze({ ...base.roomMultipliers[9], 'bottom-left': 45 })
   });
