@@ -88,9 +88,9 @@ function setupSlotUi() {
   els.autoPlayToggle.className = 'slot-circle'; els.autoPlayToggle.setAttribute('aria-label', 'Автоигра');
   els.autoPlayToggle.innerHTML = slotIcon('<g class="auto-start-icon"><path d="M24 8a16 16 0 1 1-11.3137 4.6863M7.5 12.6863h5.1863v5.1863"/><path d="m21 17 10 7-10 7z" fill="currentColor"/></g><rect class="auto-stop-icon" x="15" y="15" width="18" height="18" rx="2" fill="currentColor" stroke="none"/>') + '<b id="autoRemaining"></b>';
   const controls = document.createElement('nav'); controls.className = 'slot-controls'; controls.setAttribute('aria-label', 'Управление игрой');
-  // DOM order also sets the keyboard order: Stake left, Auto/Stop right.
+  // DOM order also sets the keyboard order: Auto/Stop left, Stake right.
   // Keep the action inside the bet-slot in the unchanged centre track.
-  controls.append(els.menuButton, betOpen, slot, els.autoPlayToggle, info);
+  controls.append(els.menuButton, els.autoPlayToggle, slot, betOpen, info);
   panel.append(controls);
   slot.querySelector('.bet-side-controls').remove();
   document.querySelector('.bet-slots').remove();

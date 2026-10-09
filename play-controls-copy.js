@@ -33,7 +33,7 @@ const playControlCopy = {
     "autoStop_balance": "недостаточно средств",
     "autoStop_policy": "ограничение оператора",
     "resumeAutoplay": "Продолжить\nавтоигру",
-    "autoPlaying": "Автоигра · остановка кнопкой справа",
+    "autoPlaying": "Автоигра · остановка кнопкой слева",
     "winPauseFinishing": "Пауза на крупном выигрыше"
   },
   "en": {
@@ -69,7 +69,7 @@ const playControlCopy = {
     "autoStop_balance": "insufficient balance",
     "autoStop_policy": "operator restriction",
     "resumeAutoplay": "Resume\nautoplay",
-    "autoPlaying": "Autoplay · stop with the button on the right",
+    "autoPlaying": "Autoplay · stop with the button on the left",
     "winPauseFinishing": "Paused on a big win"
   },
   "es": {
@@ -105,7 +105,7 @@ const playControlCopy = {
     "autoStop_balance": "saldo insuficiente",
     "autoStop_policy": "restricción del operador",
     "resumeAutoplay": "Continuar\nautomático",
-    "autoPlaying": "Juego automático · detener con el botón derecho",
+    "autoPlaying": "Juego automático · detener con el botón izquierdo",
     "winPauseFinishing": "Pausa por un gran premio"
   },
   "pt": {
@@ -141,7 +141,7 @@ const playControlCopy = {
     "autoStop_balance": "saldo insuficiente",
     "autoStop_policy": "restrição do operador",
     "resumeAutoplay": "Continuar\nautomático",
-    "autoPlaying": "Jogo automático · parar com o botão à direita",
+    "autoPlaying": "Jogo automático · parar com o botão à esquerda",
     "winPauseFinishing": "Pausa por um grande prêmio"
   },
   "de": {
@@ -177,7 +177,7 @@ const playControlCopy = {
     "autoStop_balance": "zu wenig Guthaben",
     "autoStop_policy": "Betreiberbeschränkung",
     "resumeAutoplay": "Autoplay\nfortsetzen",
-    "autoPlaying": "Autoplay · mit der rechten Taste stoppen",
+    "autoPlaying": "Autoplay · mit der linken Taste stoppen",
     "winPauseFinishing": "Pause bei großem Gewinn"
   },
   "fr": {
@@ -213,17 +213,17 @@ const playControlCopy = {
     "autoStop_balance": "solde insuffisant",
     "autoStop_policy": "restriction opérateur",
     "resumeAutoplay": "Reprendre\nl’automatique",
-    "autoPlaying": "Jeu automatique · arrêter avec le bouton à droite",
+    "autoPlaying": "Jeu automatique · arrêter avec le bouton à gauche",
     "winPauseFinishing": "Pause sur un gros gain"
   }
 };
 for (const [language, [resumeAutoplay, autoPlaying]] of Object.entries({
-  ru: ['Продолжить\nавтоигру', 'Автоигра · остановка кнопкой справа'],
-  en: ['Resume\nautoplay', 'Autoplay · stop with the button on the right'],
-  es: ['Continuar\nautomático', 'Juego automático · detener con el botón derecho'],
-  pt: ['Continuar\nautomático', 'Jogo automático · parar com o botão à direita'],
-  de: ['Autoplay\nfortsetzen', 'Autoplay · mit der rechten Taste stoppen'],
-  fr: ['Reprendre\nl’automatique', 'Jeu automatique · arrêter avec le bouton à droite']
+  ru: ['Продолжить\nавтоигру', 'Автоигра · остановка кнопкой слева'],
+  en: ['Resume\nautoplay', 'Autoplay · stop with the button on the left'],
+  es: ['Continuar\nautomático', 'Juego automático · detener con el botón izquierdo'],
+  pt: ['Continuar\nautomático', 'Jogo automático · parar com o botão à esquerda'],
+  de: ['Autoplay\nfortsetzen', 'Autoplay · mit der linken Taste stoppen'],
+  fr: ['Reprendre\nl’automatique', 'Jeu automatique · arrêter avec le bouton à gauche']
 })) Object.assign(playControlCopy[language], { resumeAutoplay, autoPlaying,
   winPauseFinishing: playControlCopy[language].winPauseReady });
 for (const [language, copy] of Object.entries(playControlCopy)) Object.assign(window.BalloroPlayerCopy[language], copy);

@@ -33,6 +33,9 @@ const PURPLE_NEON_RENDERED_PIXEL_HARD_LIMIT = 1400000;
 const COLLECTIBLE_IDLE_FRAME_INTERVAL_MS = 50;
 const COUNTER_PICKUP_HOLD_DURATION_MS = 500;
 const COUNTER_FLY_IN_DURATION_MS = 562;
+// Presentation-only experiment: false restores the original pocket-to-counter
+// flight and arrival flash. Bonus activation and counter reset clocks are retained.
+const POCKET_SYMBOL_FLOAT_ENABLED = false;
 const RESULT_BOOST_REVEAL_DURATION_MS = 240;
 const BLUE_POCKET_WAVE_TIME_SCALE_MS = 72.5;
 const V2_CACTUS_POST_ACTIVATION_HOLD_MS = 350;
@@ -4506,22 +4509,20 @@ function getMultiPlusCounterTargetPoint(index = 0) {
 
 function recordV2PocketPickup(kind, x, y, radius, onArrival = null) {
   if (!window.BalloroBonusUI?.isV2) return false;
+  const floating = POCKET_SYMBOL_FLOAT_ENABLED && window.BalloroBonusUI?.isV4;
   const previous = state.v2BonusProgress[kind];
   const target = kind === "diamond" ? getCrownCounterTargetPoint(previous)
     : kind === "lemon" ? getMultiPlusCounterTargetPoint(previous)
       : kind === "blue" ? getCanvasRelativeCenter(els.pocketBonusCounter?.querySelector(".v2-blue-symbol"))
         : getCanvasRelativeCenter(els.chanceBonusCounter?.querySelectorAll(".v2-crown-slots .v2-crown")[previous]);
   const activated = previous + 1 >= V2_BONUS_THRESHOLDS[kind];
-  let arrived = false;
-  const complete = () => {
-    if (arrived) return;
-    arrived = true;
-    const awarded = claimV2BonusSymbol(kind);
-    onArrival?.(awarded);
+  const refreshCounters = () => {
     updateCrownCounter();
     updateChanceBonusCounter();
     updateMultiPlusCounter();
     updatePocketBonusCounter();
+  };
+  const flashCounter = () => {
     const counter = kind === "diamond" ? els.crownCounter?.closest(".crown-bonus-counter")
       : kind === "lemon" ? els.multiPlusCounter
         : kind === "crown" ? els.chanceBonusCounter : els.pocketBonusCounter;
@@ -4532,7 +4533,23 @@ function recordV2PocketPickup(kind, x, y, radius, onArrival = null) {
       setTimeout(() => counter.classList.remove("v2-meter-arrival"), 430);
     }
   };
-  if (!spawnCounterFlyIn(kind, toScreen(x, y), target, radius, complete)) complete();
+  let arrived = false;
+  const complete = () => {
+    if (arrived) return;
+    arrived = true;
+    const awarded = claimV2BonusSymbol(kind);
+    onArrival?.(awarded);
+    refreshCounters();
+    if (!floating) flashCounter();
+  };
+  if (floating) {
+    // Visual meter state only: the original activation callback still runs
+    // on its existing clock, independently of this longer floating symbol.
+    state.v2BonusArrivedActive[kind] = true;
+    refreshCounters();
+    flashCounter();
+  }
+  if (!spawnCounterFlyIn(kind, toScreen(x, y), target, radius, complete, { floating })) complete();
   spawnStarBurst({ x, y, radius }, kind === "lemon" ? "yellow"
     : kind === "blue" ? "green" : kind === "crown" ? "red" : "purple");
   return activated;
@@ -4582,15 +4599,15 @@ function clearCounterFlyIns(kind = null) {
   });
 }
 
-function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) {
-  if (!state.animationsEnabled || !source || !target) {
+function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null, { floating = false } = {}) {
+  if (!state.animationsEnabled || !source || (!target && !floating)) {
     return null;
   }
   const targetSize = kind === "diamond" ? 13 : 12;
   const flyIn = {
     kind,
     source,
-    target,
+    target: target || source,
     sourceSize,
     // The yellow pocket uses a smaller collision token. Grow its star during
     // the lift so the flight starts at the same visual size as other symbols.
@@ -4605,6 +4622,18 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
     element: createCounterFlyInElement(kind),
     onComplete
   };
+  if (floating) {
+    const rules = window.BalloroV3Rules;
+    const greenMultiplier = window.BalloroV4Rules.rings[GRID_SIZE].at(-1);
+    flyIn.floating = true;
+    flyIn.completionDelay = flyIn.duration;
+    // Use an ordinary green result's clock, never the winner's bonus/music hold.
+    flyIn.floatResult = { stopped: true, resultRevealStartedAt: flyIn.startedAt,
+      result: { multiplier: greenMultiplier } };
+    flyIn.duration = rules.resultDelayMs + rules.resultFadeMs
+      * (0.9 + 0.13 * Math.log2(1 + greenMultiplier));
+    flyIn.element?.classList.add('is-pocket-float');
+  }
   syncCounterFlyInElement(flyIn, flyIn.startedAt);
   state.counterFlyIns.push(flyIn);
   startCounterFlyInAnimation();
@@ -4612,6 +4641,7 @@ function spawnCounterFlyIn(kind, source, target, sourceSize, onComplete = null) 
 }
 
 function getCounterFlyInMotion(flyIn, now) {
+  if (flyIn.floating) return getPocketSymbolFloatMotion(flyIn, now);
   const source = flyIn.source;
   const elapsed = Math.max(0, now - flyIn.startedAt);
   const v2Icon = window.BalloroBonusUI?.isV2;
@@ -4650,6 +4680,20 @@ function getCounterFlyInMotion(flyIn, now) {
     size: size * pop,
     alpha: progress < 0.9 ? 1 : clamp(1 - (progress - 0.9) / 0.1, 0, 1),
     rotationDegrees: flyIn.kind === "multiPlus" ? progress * 44 : 0
+  };
+}
+
+function getPocketSymbolFloatMotion(symbol, now) {
+  const elapsed = Math.max(0, now - symbol.startedAt);
+  const progress = clamp(elapsed / RESULT_BOOST_REVEAL_DURATION_MS, 0, 1);
+  const eased = 1 - Math.pow(1 - progress, 3);
+  const rise = Math.max(0, elapsed - window.BalloroV3Rules.resultDelayMs) * 0.012;
+  return {
+    x: symbol.source.x,
+    y: symbol.source.y - 34 + (1 - eased) * 26 - rise,
+    size: 18 * (state.field.width <= 720 ? 1.16 : 1),
+    alpha: progress * getV3MultiplierFade(symbol.floatResult, now),
+    rotationDegrees: 0
   };
 }
 
@@ -4762,13 +4806,16 @@ function animateCounterFlyIns() {
   let completedFlyIn = false;
   state.counterFlyIns.forEach((flyIn) => syncCounterFlyInElement(flyIn, now));
   state.counterFlyIns = state.counterFlyIns.filter((flyIn) => {
-    const active = now - flyIn.startedAt < flyIn.duration;
+    const elapsed = now - flyIn.startedAt;
+    const active = elapsed < flyIn.duration;
+    if (elapsed >= (flyIn.completionDelay ?? flyIn.duration)
+      && typeof flyIn.onComplete === "function") {
+      callbacks.push(flyIn.onComplete);
+      flyIn.onComplete = null;
+    }
     if (!active) {
       completedFlyIn = true;
       removeCounterFlyInElement(flyIn);
-      if (typeof flyIn.onComplete === "function") {
-        callbacks.push(flyIn.onComplete);
-      }
     }
     return active;
   });

@@ -12,6 +12,10 @@ Updated 2026-10-09: latest tested five-line profile and a faster, sharper green
 flash when the yellow bonus ends (320ms return, 64ms peak). The field no longer
 waits for the floating multiplier's fade; victory music and photo pause remain.
 Mobile controls, background/resize pause and the PLAY loading screen are retained.
+Latest controls update: Auto/Stop is left of Spin and Stake is right, matching
+keyboard navigation and the stop-button hint. Pocket icons retain their original
+flight into the counters, which illuminate on arrival; the floating-icon
+experiment is disabled. Bonus activation and reset timing remain unchanged.
 Maximum theoretical paid-ball returns are 1000x / 6000x / 8500x on
 5 / 7 / 9 lines respectively. This animation release did not recalibrate or
 repeat the mathematics audit of the previously tested profile.
